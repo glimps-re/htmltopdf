@@ -741,9 +741,14 @@ func TestTableTrackCompressionKeepsTheColumnWidths(t *testing.T) {
 	// 4 columns, spacing 10: 400 - 50 = 350 for the columns, 100 specified, 3 auto of 83.33.
 	auto := 250.0 / 3
 	want := []struct{ x, w float64 }{
-		{10, 100}, {120, auto}, {120 + auto + 10, auto}, {120 + 2*auto + 20, auto},
-		{10, 100 + 2*auto + 20}, {120 + 2*auto + 20, auto},
-		{10, 100}, {120, 3*auto + 20},
+		{10, 100},
+		{120, auto},
+		{120 + auto + 10, auto},
+		{120 + 2*auto + 20, auto},
+		{10, 100 + 2*auto + 20},
+		{120 + 2*auto + 20, auto},
+		{10, 100},
+		{120, 3*auto + 20},
 	}
 	if len(tds) != len(want) {
 		t.Fatalf("%d cells", len(tds))
