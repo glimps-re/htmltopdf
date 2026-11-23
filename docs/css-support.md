@@ -85,3 +85,8 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 
 | Feature | Status | Notes |
 |---|---|---|
+| `<a href>` | supported | Only `http`, `https` and `mailto` targets are drawn as links; the scheme is lowercased, spaces and non-ASCII are percent-encoded, a target over 2 KiB or with a control character inside is dropped. Any other scheme, a relative target and `javascript:` are reported as `blocked-link`. `#fragment` is ignored until internal links arrive. |
+| `<br>`, white space | supported | Collapsible white space collapses across inline boxes and is dropped at the start and end of a line; `white-space: pre` keeps spaces and turns newlines into line breaks. In preserved text a tab moves to the next multiple of 8 characters (counted in characters, not in widths). |
+| Block elements inside inline elements | supported | The inline box is split around the block, as in CSS 2.1 §9.2.1.1; loose inline content next to blocks gets an anonymous block. |
+| `<svg>` and `<math>` | ignored | The subtree is skipped and reported as `unsupported-element`. |
+| `<table>` and its parts | approximated | Until tables are implemented they are laid out as ordinary blocks. |
