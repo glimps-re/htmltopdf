@@ -119,6 +119,8 @@ func (bd *builder) block(e int32, cs *style.Computed, href string) (*Box, error)
 		return bx, bd.fixTable(bx)
 	case style.DisplayTableCell:
 		bd.cellSpans(el, bx)
+	case style.DisplayTableColumn, style.DisplayTableColumnGroup:
+		bd.spanAttr(el, bx, "span")
 	}
 	if !isTableContainer(cs.Display) {
 		return bx, bd.wrapOrphans(bx)

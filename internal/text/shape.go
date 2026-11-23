@@ -161,8 +161,15 @@ func extendsCluster(prev, r rune) bool {
 		return false
 	}
 	return prev == 0x200d || r == 0x200d || (r >= 0x1f3fb && r <= 0x1f3ff) ||
-		unicode.In(r, unicode.Mn, unicode.Me, unicode.Mc)
+		unicode.In(r, unicode.Mn, unicode.Me, unicode.Mc) ||
+		hangulJoins(prev, r) || (unicode.IsLetter(r) && isVirama(prev))
 }
+
+// ExtendsCluster reports whether r continues the cluster that ends with prev:
+// marks, joiners, emoji modifiers, conjoining Hangul jamo and a letter after a
+// virama. It is the cluster rule of the shaper, for the callers that must not
+// split what it keeps together.
+func ExtendsCluster(prev, r rune) bool { return extendsCluster(prev, r) }
 
 // Shape appends to dst the runs of text in logical order. Characters are
 // drawn by the first face of the spec's chain that covers their cluster; a

@@ -139,6 +139,17 @@ type OverflowWrap uint8
 const (
 	WrapNormal OverflowWrap = iota
 	WrapBreakWord
+	WrapAnywhere
+)
+
+// WordBreak is the computed word-break.
+type WordBreak uint8
+
+// Word break values: break-all adds a break opportunity between letters and
+// digits (CSS Text 3 §5.2).
+const (
+	WordBreakNormal WordBreak = iota
+	WordBreakAll
 )
 
 // WhiteSpace is the computed white-space.
@@ -206,6 +217,7 @@ type Computed struct {
 	TextAlign      TextAlign
 	LetterSpacing  float64
 	OverflowWrap   OverflowWrap
+	WordBreak      WordBreak
 	WhiteSpace     WhiteSpace
 	TextDecoration TextDecoration
 	VerticalAlign  VerticalAlign

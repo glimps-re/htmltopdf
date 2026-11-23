@@ -86,6 +86,25 @@ func (s *shapedText) width(a, b int) float64 {
 	return w
 }
 
+// widthWithin is width(a, b) stopped as soon as it exceeds limit: ok is false
+// then and w is only a lower bound. A long word is never measured past the
+// room of a line.
+func (s *shapedText) widthWithin(a, b int, limit float64) (w float64, ok bool) {
+	ga, gb := s.glyphIndex(a), s.glyphIndex(b)
+	for g := ga; g < gb; {
+		r, i := s.locate(g)
+		gl := s.runs[r].Glyphs
+		end := min(len(gl), i+gb-g)
+		for _, gly := range gl[i:end] {
+			if w += float64(gly.Advance) + s.ls; w > limit {
+				return w, false
+			}
+		}
+		g += end - i
+	}
+	return w, true
+}
+
 // glyph returns the global glyph g.
 func (s *shapedText) glyph(g int) text.Glyph {
 	r, i := s.locate(g)
@@ -333,10 +352,16 @@ func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 	if err := l.b.Charge(budget.Work, int64(len(l.breaks))); err != nil {
 		return err
 	}
-	sh.ends = make([]int32, 0, len(l.breaks)+1)
-	for _, br := range l.breaks {
-		if br.Offset > 0 && br.Offset < len(c.Text) && (len(sh.ends) == 0 || int(sh.ends[len(sh.ends)-1]) < br.Offset) {
-			sh.ends = append(sh.ends, clamp32(br.Offset))
+	if wrap && st.WordBreak == style.WordBreakAll {
+		// One end per rune at most.
+		if err := l.b.Charge(budget.Work, int64(len(c.Text))); err != nil {
+			return err
+		}
+		sh.ends = appendBreakAll(make([]int32, 0, len(c.Text)+1), c.Text, l.breaks)
+	} else {
+		sh.ends = make([]int32, 0, len(l.breaks)+1)
+		for _, br := range l.breaks {
+			sh.ends = appendEnd(sh.ends, br.Offset, len(c.Text))
 		}
 	}
 	sh.ends = append(sh.ends, clamp32(len(c.Text)))
@@ -419,12 +444,12 @@ loop:
 			continue
 		}
 		canBreak := !last || st.lastBreak
-		full := st.width(a, end)
 		trailW := 0.0
 		if t := min(trailingSpaces(st.text, start, end), end-a); p.collapsible && t > 0 {
 			trailW = st.width(end-t, end)
 		}
-		if w+full-trailW <= avail+1e-6 {
+		full, fits := st.widthWithin(a, end, avail+1e-6-w+trailW)
+		if fits {
 			segs = append(segs, seg{un: un, a: a, b: end, w: full})
 			w += full
 			hasText = true
@@ -452,6 +477,7 @@ loop:
 			break loop
 		}
 		// No break opportunity: the word overflows the line.
+		full = st.width(a, end)
 		segs = append(segs, seg{un: un, a: a, b: end, w: full})
 		w += full
 		hasText = true

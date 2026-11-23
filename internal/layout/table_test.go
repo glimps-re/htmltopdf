@@ -759,3 +759,109 @@ func TestTableTrackCompressionKeepsTheColumnWidths(t *testing.T) {
 		}
 	}
 }
+
+func TestTableColumnWidths(t *testing.T) {
+	html := `<table style="width:400px"><colgroup><col style="width:50px"><col style="width:25%"><col></colgroup><tr><td style="width:300px">a<td>b<td>c<td>d</table>`
+	r := newRun(t, html, opts{css: tableDoc})
+	tds := fragsOf(r.all(t), "td")
+	// col widths win over the cell width; the fourth column (no col) and the
+	// third (auto col) share what is left: 400 - 50 - 100 = 250.
+	want := []struct{ x, w float64 }{{0, 50}, {50, 100}, {150, 125}, {275, 125}}
+	if len(tds) != 4 {
+		t.Fatalf("%d cells", len(tds))
+	}
+	for i, w := range want {
+		if !near(tds[i].rect.X, w.x) || !near(tds[i].rect.W, w.w) {
+			t.Errorf("cell %d at %v width %v, want %v %v", i, tds[i].rect.X, tds[i].rect.W, w.x, w.w)
+		}
+	}
+}
+
+func TestTableColgroupWithoutColsAndSpan(t *testing.T) {
+	html := `<table style="width:200px"><colgroup span=2 style="width:50px"></colgroup><colgroup><col span=1 style="width:100px"></colgroup><tr><td>a<td>b<td>c</table>`
+	r := newRun(t, html, opts{css: tableDoc})
+	tds := fragsOf(r.all(t), "td")
+	if len(tds) != 3 || !near(tds[0].rect.W, 50) || !near(tds[1].rect.W, 50) || !near(tds[2].rect.W, 100) {
+		t.Fatalf("cells %s", rects(tds))
+	}
+}
+
+func TestTableColumnsWithoutCells(t *testing.T) {
+	r := newRun(t, `<table style="width:400px"><col style="width:100px"><col><tr><td>a</table>`, opts{css: tableDoc})
+	tds := fragsOf(r.all(t), "td")
+	if len(tds) != 1 || !near(tds[0].rect.W, 100) {
+		t.Fatalf("cells %s", rects(tds))
+	}
+}
+
+func TestTableHostileColumns(t *testing.T) {
+	for name, html := range map[string]string{
+		"huge span":      `<table style="width:400px"><col span=99999999 style="width:1px"><tr><td>a</table>`,
+		"100k cols":      `<table style="width:400px">` + strings.Repeat(`<col style="width:1px">`, 100_000) + `<tr><td>a</table>`,
+		"colgroup+cols":  `<table style="width:400px"><colgroup span=500><col span=700><col span=700></colgroup><tr><td>a<td>b</table>`,
+		"nested":         `<table style="width:400px"><colgroup><colgroup><col span=3></colgroup></colgroup><tr><td>a</table>`,
+		"zero and junk":  `<table style="width:400px"><col span=0><col span=x style="width:50%"><tr><td>a</table>`,
+		"percent over 1": `<table style="width:400px"><col style="width:900%"><col style="width:900%"><tr><td>a<td>b</table>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newRun(t, html, opts{css: tableDoc, limits: func(l *budget.Limits) { l[budget.Nodes] = 1 << 20 }})
+			start := time.Now()
+			pages := r.all(t)
+			if d := time.Since(start); d > 2*time.Second && !raceEnabled {
+				t.Errorf("took %v", d)
+			}
+			for _, td := range fragsOf(pages, "td") {
+				if math.IsNaN(td.rect.W) || math.IsInf(td.rect.W, 0) || td.rect.W < 0 {
+					t.Fatalf("cell %v", td.rect)
+				}
+			}
+			if len(r.pag.l.tables) > 0 {
+				t.Fatal("table layout kept")
+			}
+		})
+	}
+}
+
+func TestTableColumnRuns(t *testing.T) {
+	r := newRun(t, `<table><colgroup><col span=3 style="width:10px"><col></colgroup><colgroup span=2 style="width:5%"></colgroup><col span=2000></table>`, opts{css: tableDoc})
+	var tb *box.Box
+	var find func(b *box.Box)
+	find = func(b *box.Box) {
+		if b.Tag.String() == "table" {
+			tb = b
+		}
+		for _, c := range b.Children {
+			find(c)
+		}
+	}
+	find(r.root)
+	runs, total := columnRuns(tb)
+	if total != maxTableCols {
+		t.Fatalf("total %d, runs %+v", total, runs)
+	}
+	want := []colRun{{start: 0, n: 3}, {start: 3, n: 1}, {start: 4, n: 2}, {start: 6, n: 994}}
+	if len(runs) != len(want) {
+		t.Fatalf("runs %+v", runs)
+	}
+	for i, w := range want {
+		if runs[i].start != w.start || runs[i].n != w.n {
+			t.Errorf("run %d: %+v, want start %d n %d", i, runs[i], w.start, w.n)
+		}
+	}
+	if !runs[0].sized() || runs[1].sized() || !runs[2].sized() {
+		t.Errorf("sized flags %+v", runs)
+	}
+}
+
+func TestTableManyColumnTablesStayInBudget(t *testing.T) {
+	html := strings.Repeat(`<table><col span=1000 style="width:1px"><tr><td>x</table>`, 5000)
+	runtime.GC()
+	stop, peak := make(chan struct{}), make(chan uint64, 1)
+	go heapMax(stop, peak)
+	r := newRun(t, html, opts{css: tableDoc})
+	r.all(t)
+	close(stop)
+	if heap := <-peak; heap > 128<<20 && !raceEnabled {
+		t.Errorf("heap max %d MiB", heap>>20)
+	}
+}

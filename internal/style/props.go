@@ -54,6 +54,7 @@ const (
 	pTextAlign
 	pLetterSpacing
 	pOverflowWrap
+	pWordBreak
 	pWhiteSpace
 	pTextDecoration
 	pVerticalAlign
@@ -67,7 +68,7 @@ const (
 var inherited = [numProps]bool{
 	pBorderCollapse: true, pBorderSpacing: true, pFontFamily: true, pFontSize: true, pFontWeight: true,
 	pFontStyle: true, pLineHeight: true, pColor: true, pTextAlign: true, pLetterSpacing: true,
-	pOverflowWrap: true, pWhiteSpace: true, pListStyleType: true,
+	pOverflowWrap: true, pWordBreak: true, pWhiteSpace: true, pListStyleType: true,
 }
 
 // longhands maps a property name to the longhand properties it sets: one for a
@@ -117,6 +118,7 @@ var longhands = map[string][]prop{
 	"letter-spacing":             {pLetterSpacing},
 	"overflow-wrap":              {pOverflowWrap},
 	"word-wrap":                  {pOverflowWrap},
+	"word-break":                 {pWordBreak},
 	"white-space":                {pWhiteSpace},
 	"text-decoration":            {pTextDecoration},
 	"text-decoration-line":       {pTextDecoration},
@@ -324,6 +326,8 @@ func parseLonghand(p prop, toks []css.Token) (spec, bool) {
 		return parseLetterSpacing(toks)
 	case pOverflowWrap:
 		return keyword(toks, overflowWrapKeywords)
+	case pWordBreak:
+		return keyword(toks, wordBreakKeywords)
 	case pWhiteSpace:
 		return keyword(toks, whiteSpaceKeywords)
 	case pTextDecoration:
@@ -349,7 +353,8 @@ var (
 		"left": int32(AlignLeft), "start": int32(AlignLeft), "right": int32(AlignRight), "end": int32(AlignRight),
 		"center": int32(AlignCenter),
 	}
-	overflowWrapKeywords  = map[string]int32{"normal": int32(WrapNormal), "break-word": int32(WrapBreakWord)}
+	overflowWrapKeywords  = map[string]int32{"normal": int32(WrapNormal), "break-word": int32(WrapBreakWord), "anywhere": int32(WrapAnywhere)}
+	wordBreakKeywords     = map[string]int32{"normal": int32(WordBreakNormal), "break-all": int32(WordBreakAll)}
 	whiteSpaceKeywords    = map[string]int32{"normal": int32(WhiteSpaceNormal), "pre": int32(WhiteSpacePre)}
 	verticalAlignKeywords = map[string]int32{
 		"baseline": int32(VAlignBaseline), "top": int32(VAlignTop), "middle": int32(VAlignMiddle), "bottom": int32(VAlignBottom),

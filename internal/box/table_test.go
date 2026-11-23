@@ -60,9 +60,12 @@ func TestTableFixUp(t *testing.T) {
         text "c"`,
 		},
 		{
-			"columns are dropped",
-			`<table><colgroup><col><col></colgroup><tr><td>a</table>`,
+			"columns are kept for layout",
+			`<table><colgroup><col><col span=3></colgroup><tr><td>a</table>`,
 			`block table
+  block colgroup
+    block col
+    block col colspan=3
   block tbody
     block tr
       block td
@@ -185,5 +188,28 @@ func TestOrphanColumnsAreLeftAlone(t *testing.T) {
 	got, _ := buildHTML(t, `<div><span style="display:table-column"></span><span style="display:table-column"></span>x</div>`)
 	if strings.Count(got, "anon-block") != 1 || !strings.Contains(got, `text "x"`) {
 		t.Fatalf("columns alone must not make an anonymous table:\n%s", got)
+	}
+}
+
+func TestColumnSpanAttribute(t *testing.T) {
+	for _, tc := range []struct {
+		attr string
+		want string
+		warn bool
+	}{
+		{"", "", false},
+		{"span=3", " colspan=3", false},
+		{"span=0", "", false},
+		{"span=1001", " colspan=1000", true},
+		{"span=1000", " colspan=1000", false},
+		{"span=junk", "", false},
+	} {
+		got, b := buildHTML(t, "<table><colgroup><col "+tc.attr+"></colgroup><tr><td>a</table>")
+		if !strings.Contains(got, "block col"+tc.want+"\n") {
+			t.Errorf("%q:\n%s", tc.attr, got)
+		}
+		if has := strings.Contains(strings.Join(warnings(b), ","), "clamped:span"); has != tc.warn {
+			t.Errorf("%q: warning %v, want %v", tc.attr, has, tc.warn)
+		}
 	}
 }

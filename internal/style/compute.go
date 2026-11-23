@@ -93,7 +93,7 @@ func (c *Computed) inheritFrom(p *Computed) {
 	c.BorderCollapse, c.BorderSpacing = p.BorderCollapse, p.BorderSpacing
 	c.FontFamily, c.FontSize, c.FontWeight, c.FontStyle = p.FontFamily, p.FontSize, p.FontWeight, p.FontStyle
 	c.LineHeight, c.Color, c.TextAlign, c.LetterSpacing = p.LineHeight, p.Color, p.TextAlign, p.LetterSpacing
-	c.OverflowWrap, c.WhiteSpace, c.ListStyleNone = p.OverflowWrap, p.WhiteSpace, p.ListStyleNone
+	c.OverflowWrap, c.WordBreak, c.WhiteSpace, c.ListStyleNone = p.OverflowWrap, p.WordBreak, p.WhiteSpace, p.ListStyleNone
 	c.rootFont, c.vars = p.rootFont, p.vars
 }
 
@@ -157,6 +157,8 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 		c.LetterSpacing = src.LetterSpacing
 	case pOverflowWrap:
 		c.OverflowWrap = src.OverflowWrap
+	case pWordBreak:
+		c.WordBreak = src.WordBreak
 	case pWhiteSpace:
 		c.WhiteSpace = src.WhiteSpace
 	case pTextDecoration:
@@ -261,6 +263,8 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 		}
 	case pOverflowWrap:
 		c.OverflowWrap = OverflowWrap(u8(s.n))
+	case pWordBreak:
+		c.WordBreak = WordBreak(u8(s.n))
 	case pWhiteSpace:
 		c.WhiteSpace = WhiteSpace(u8(s.n))
 	case pTextDecoration:

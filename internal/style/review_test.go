@@ -113,8 +113,9 @@ func TestKeywordsBeyondM1AreDroppedAndWarned(t *testing.T) {
 		{"border-style: dotted", "border-style", func(c *Computed) bool { return c.Border[Top].Style == BorderNone }},
 		{"border: 1px dashed red", "border", func(c *Computed) bool { return c.Border[Top].Width == 0 }},
 		{"border-top: 2px dotted", "border-top", func(c *Computed) bool { return c.Border[Top].Width == 0 }},
-		{"overflow-wrap: anywhere", "overflow-wrap", func(c *Computed) bool { return c.OverflowWrap == WrapNormal }},
-		{"word-wrap: anywhere", "word-wrap", func(c *Computed) bool { return c.OverflowWrap == WrapNormal }},
+		{"overflow-wrap: nowhere", "overflow-wrap", func(c *Computed) bool { return c.OverflowWrap == WrapNormal }},
+		{"word-break: break-word", "word-break", func(c *Computed) bool { return c.WordBreak == WordBreakNormal }},
+		{"word-break: keep-all", "word-break", func(c *Computed) bool { return c.WordBreak == WordBreakNormal }},
 		{"white-space: nowrap", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
 		{"white-space: pre-wrap", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
 		{"white-space: pre-line", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
@@ -148,7 +149,7 @@ func TestKeywordsBeyondM1AreDroppedAndWarned(t *testing.T) {
 func TestInheritedPropertiesAreConsistent(t *testing.T) {
 	x := resolve(t, `<div><p>x</p></div>`, `div {
 		border-collapse: collapse; border-spacing: 3px; font-family: Foo; font-size: 22px; font-weight: 700; font-style: italic;
-		line-height: 2; color: #123456; text-align: right; letter-spacing: 2px; overflow-wrap: break-word; white-space: pre;
+		line-height: 2; color: #123456; text-align: right; letter-spacing: 2px; overflow-wrap: break-word; word-break: break-all; white-space: pre;
 		list-style-type: none; display: block; margin: 5px; padding: 6px; width: 50px; max-width: 70px; box-sizing: border-box;
 		border: 1px solid #fedcba; border-radius: 4px; background: #010203; overflow: hidden; table-layout: fixed;
 		text-decoration: underline; vertical-align: top

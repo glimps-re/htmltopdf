@@ -12,17 +12,23 @@ import (
 // MaxColSpan is the largest colspan, also the largest number of table columns.
 const MaxColSpan = 1000
 
-// cellSpans sets ColSpan from the colspan attribute: [1, MaxColSpan], 1 when
-// absent or invalid. A rowspan above 1 is rendered as 1 and warned.
-func (bd *builder) cellSpans(el *dom.Element, bx *Box) {
+// spanAttr sets bx.ColSpan from the attribute name of el: [1, MaxColSpan], 1
+// when absent or invalid; clamped values are warned.
+func (bd *builder) spanAttr(el *dom.Element, bx *Box, name string) {
 	bx.ColSpan = 1
-	if v, ok := el.Attr("colspan"); ok {
+	if v, ok := el.Attr(name); ok {
 		n, clamped := parseSpan(v)
 		bx.ColSpan = n
 		if clamped {
-			bd.b.Warn(budget.WarnClamped, "colspan")
+			bd.b.Warn(budget.WarnClamped, name)
 		}
 	}
+}
+
+// cellSpans sets ColSpan from the colspan attribute. A rowspan above 1 is
+// rendered as 1 and warned.
+func (bd *builder) cellSpans(el *dom.Element, bx *Box) {
+	bd.spanAttr(el, bx, "colspan")
 	if v, ok := el.Attr("rowspan"); ok {
 		if n, _ := parseSpan(v); n > 1 {
 			bd.b.Warn(budget.WarnClamped, "rowspan")
@@ -106,7 +112,7 @@ func isColumn(c *Box) bool {
 }
 
 // fixTable repairs the children of a table box (CSS 2.1 §17.2.1): row groups,
-// rows and captions stay, columns are dropped (widths come in M2), anything
+// rows, captions and columns stay (layout reads the column widths), anything
 // else is wrapped in anonymous rows; every row holds cells only and every row
 // group rows only. Cell contents are not touched.
 func (bd *builder) fixTable(tb *Box) error {
@@ -134,11 +140,7 @@ func (bd *builder) fixTable(tb *Box) error {
 			return err
 		}
 		switch {
-		case isColumn(c):
-			if err := flush(); err != nil {
-				return err
-			}
-		case isPart(c, style.DisplayTableCaption):
+		case isColumn(c), isPart(c, style.DisplayTableCaption):
 			if err := flush(); err != nil {
 				return err
 			}

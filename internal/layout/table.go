@@ -50,6 +50,10 @@ type tableLayout struct {
 	// cur is the row being laid out over several pages, if any. The width of a
 	// table is the same on every page of M1, so the cache key can include it.
 	cur *rowState
+	// colRuns are the widths given by col elements, in runs of equal columns;
+	// colTotal is the number of columns they define.
+	colRuns  []colRun
+	colTotal int
 	// hdr is the header as laid out once.
 	hdr headerState
 }
@@ -155,6 +159,7 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 			body = append(body, tableRow{box: c})
 		}
 	}
+	tl.colRuns, tl.colTotal = columnRuns(b)
 	tl.rows = make([]tableRow, 0, len(caps)+len(hdr)+len(body)+len(ftr))
 	tl.rows = append(tl.rows, caps...)
 	tl.hdrStart = len(tl.rows)
@@ -185,7 +190,10 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 	if err := l.b.Charge(budget.Work, int64(cellCount+ncols)); err != nil {
 		return nil, err
 	}
-	tl.columns(ncols)
+	if err := l.b.Charge(budget.Work, int64(len(tl.colRuns))); err != nil {
+		return nil, err
+	}
+	tl.columns(max(ncols, tl.colTotal))
 	if tl.collapse {
 		tl.resolveBorders(st)
 	} else {
@@ -213,6 +221,11 @@ func (tl *tableLayout) columns(n int) {
 	}
 	mark := make([]bool, n+1)
 	mark[0], mark[n] = true, true
+	for _, run := range tl.colRuns {
+		if run.sized() {
+			mark[run.start], mark[run.start+run.n] = true, true
+		}
+	}
 	for r := tl.firstRow; r < len(tl.rows); r++ {
 		for _, c := range tl.rows[r].cells {
 			mark[c.col], mark[c.col+c.span] = true, true
@@ -251,6 +264,16 @@ func (tl *tableLayout) columns(n int) {
 			for t := c.t0; t < c.t1; t++ {
 				spec[t] = per
 			}
+		}
+	}
+	// The width of a col element wins over the cells.
+	for _, run := range tl.colRuns {
+		if !run.sized() {
+			continue
+		}
+		w := math.Max(0, px(run.width, tl.width))
+		for t := sort.SearchInts(bounds, run.start); t < sort.SearchInts(bounds, run.start+run.n); t++ {
+			spec[t] = w
 		}
 	}
 	sum, auto := 0.0, 0.0
@@ -833,4 +856,45 @@ func recolorBorder(out display.List, colors *[4]css.Color) display.List {
 		out[len(out)-1] = b
 	}
 	return out
+}
+
+// colRun is n consecutive columns of the same width, from column start.
+type colRun struct {
+	width    style.Dim
+	start, n int
+}
+
+func (r colRun) sized() bool { return r.width.Kind == style.DimPx || r.width.Kind == style.DimPercent }
+
+// columnRuns returns the widths of the columns defined by the col and colgroup
+// children of a table (a colgroup with col children is defined by them), up to
+// maxTableCols columns.
+func columnRuns(b *box.Box) (runs []colRun, total int) {
+	add := func(c *box.Box) {
+		if n := min(c.ColSpan, maxTableCols-total); n > 0 {
+			runs = append(runs, colRun{c.Style.Width, total, n})
+			total += n
+		}
+	}
+	for _, c := range b.Children {
+		if c.Kind != box.KindBlock {
+			continue
+		}
+		switch c.Style.Display {
+		case style.DisplayTableColumn:
+			add(c)
+		case style.DisplayTableColumnGroup:
+			cols := false
+			for _, cc := range c.Children {
+				if cc.Kind == box.KindBlock && cc.Style.Display == style.DisplayTableColumn {
+					add(cc)
+					cols = true
+				}
+			}
+			if !cols {
+				add(c)
+			}
+		}
+	}
+	return runs, total
 }

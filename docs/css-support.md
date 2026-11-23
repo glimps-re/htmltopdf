@@ -11,6 +11,9 @@ Status values: **supported**, **approximated** (rendered differently from a
 browser, with the difference stated), **ignored** (dropped with a warning),
 **never** (not planned).
 
+Output PDFs are not tagged: they have no structure tree and do not conform to PDF/UA
+(Chrome's are tagged); text remains extractable through ToUnicode.
+
 ## Syntax, cascade and selectors
 
 | Feature | Status | Notes |
@@ -69,7 +72,7 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 | Feature | Status | Notes |
 |---|---|---|
 | `font-family` (names, strings, generic families), `font-size` (lengths, `%`, keywords, `smaller`, `larger`), `font-weight` (1 to 1000, `bold`, `bolder`, `lighter`), `font-style`, `line-height`, `color`, `letter-spacing`, `text-align`, `vertical-align` (`baseline`, `top`, `middle`, `bottom`) | supported | At most 32 font families are kept; font sizes are clamped to 10 000 px. `text-align: justify` is dropped with `invalid-value`. `font` (shorthand): `unsupported-property` until M2. |
-| `white-space`: `normal`, `pre`; `overflow-wrap` and `word-wrap`: `normal`, `break-word` | supported | `nowrap`, `pre-wrap`, `pre-line` and `overflow-wrap: anywhere` are dropped with `invalid-value` until M2. |
+| `white-space`: `normal`, `pre`; `overflow-wrap` and `word-wrap`: `normal`, `break-word`, `anywhere`; `word-break`: `normal`, `break-all` | supported | `anywhere` places like `break-word`; `break-all` adds a break opportunity between letters, digits and the symbols Chrome treats like them (`_`, `#`, `@`...), after `. , : ; / -` and around `(` and `)`; never inside a grapheme (marks, joiners, Hangul jamo, Indic conjuncts), not under `white-space: pre`, and not between two adjacent inline boxes (`a<b>b</b>`). Their min-content effect (one grapheme) is not implemented: M1 has no min-content consumer (fixed table layout), it comes with auto table layout in M3. `nowrap`, `pre-wrap`, `pre-line` and the other `word-break` values are dropped with `invalid-value` until M2. |
 | `text-decoration` (`underline`, `line-through`, `none`) | supported | Not inherited; the box stage propagates it. `overline` is dropped with `invalid-value`. |
 | `list-style`, `list-style-type` | approximated | Only `none` is kept; markers are never drawn. |
 | UA sheet | supported | Chrome's values for the HTML subset (headings, lists, tables, `a[href]` blue and underlined, `pre`, `code`...). `img`, `object`, `iframe`, `video`, `canvas`, `input`... are `display: none` with `unsupported-element`. |
@@ -94,7 +97,8 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 | `<br>`, white space | supported | Collapsible white space collapses across inline boxes and is dropped at the start and end of a line; `white-space: pre` keeps spaces and turns newlines into line breaks. In preserved text a tab moves to the next multiple of 8 characters (counted in characters, not in widths). |
 | Block elements inside inline elements | supported | The inline box is split around the block, as in CSS 2.1 §9.2.1.1; loose inline content next to blocks gets an anonymous block. |
 | `<svg>` and `<math>` | ignored | The subtree is skipped and reported as `unsupported-element`. |
-| `<table>` and its parts | approximated | Missing rows, groups and cells are added as anonymous boxes; `col` and `colgroup` are dropped (widths come in M2). `colspan` is clamped to [1, 1000] (`clamped`), cells past column 1000 are dropped and a colspan that reaches past it is shortened (both `clamped`), `rowspan` is rendered as 1 (`clamped`). A row that does not fit breaks between the line boxes of its cells (all cells continue on the next page); a row of single lines moves whole; a row taller than an empty page is sliced, each line staying in the slice that holds its baseline (`clamped`, only for the sliced case). The first `thead` repeats on each continuation page. `caption` is drawn above the table; `tfoot` comes after the body and is not repeated. `vertical-align` on cells: top, middle, bottom, baseline. |
+| `<table>` and its parts | approximated | Missing rows, groups and cells are added as anonymous boxes; `colspan` is clamped to [1, 1000] (`clamped`), cells past column 1000 are dropped and a colspan that reaches past it is shortened (both `clamped`), `rowspan` is rendered as 1 (`clamped`). A row that does not fit breaks between the line boxes of its cells (all cells continue on the next page); a row of single lines moves whole; a row taller than an empty page is sliced, each line staying in the slice that holds its baseline (`clamped`, only for the sliced case). The first `thead` repeats on each continuation page. `caption` is drawn above the table; `tfoot` comes after the body and is not repeated. `vertical-align` on cells: top, middle, bottom, baseline. |
+| `col` and `colgroup` widths | supported | Fixed layout: the width (px, mm or %) of a `col` wins over the width of the first-row cells; `span` is honoured (clamped to 1,000). A column no cell uses still takes its width. |
 
 ## Limits worth knowing
 
