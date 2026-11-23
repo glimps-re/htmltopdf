@@ -1,0 +1,62 @@
+# Licenses
+
+Licenses are verified on the `LICENSE` files of the module cache and audited with
+`go-licenses`:
+
+```
+GOROOT=$(go env GOROOT) go-licenses check ./...
+```
+
+Project license: MIT (LICENSE).
+
+Accepted dependency licenses: MIT, BSD, Apache-2.0, ISC. `GOROOT` must be set
+explicitly, otherwise `go-licenses` fails on standard-library packages.
+
+## Library dependencies
+
+| Module | Version | License | Use |
+|---|---|---|---|
+| `golang.org/x/net` | v0.63.0 | BSD-3-Clause | `html` tokenizer and parser |
+| `golang.org/x/text` | v0.44.0 | BSD-3-Clause | indirect (`unicode/bidi` via go-text) |
+| `golang.org/x/image` | v0.48.0 | BSD-3-Clause | `font/gofont` (embedded Go fonts) |
+| `github.com/go-text/typesetting` | v0.3.5 | Unlicense OR BSD-3-Clause, used under BSD-3-Clause | font parsing, shaping, segmenter, language |
+| `github.com/go-text/typesetting/harfbuzz` | v0.3.5 | MIT | shaping engine (subpackage with its own LICENSE) |
+| `github.com/tdewolff/parse/v2` | v2.25.0 | MIT | CSS lexer, through `parse.NewInputBytes` only |
+
+## Test-only dependencies
+
+| Module | Version | License | Use |
+|---|---|---|---|
+| `github.com/pdfcpu/pdfcpu` | v0.16.4 | Apache-2.0 | independent validation of generated PDFs |
+| `github.com/clipperhouse/uax29/v2`, `github.com/mattn/go-runewidth`, `go.yaml.in/yaml/v3` | via pdfcpu | MIT (yaml: MIT and Apache-2.0) | linked by pdfcpu `pkg/api` |
+| `github.com/hhrutter/tiff`, `golang.org/x/crypto` | via pdfcpu | BSD-3-Clause | linked by pdfcpu `pkg/api` |
+| `github.com/xdg-go/stringprep` | via pdfcpu | Apache-2.0 | linked by pdfcpu `pkg/api` |
+| `github.com/go-text/typesetting-utils`, `github.com/tdewolff/test` | transitive | Unlicense OR BSD-3-Clause; MIT | transitive |
+
+pdfcpu and its dependencies must never be imported by library code:
+`go list -deps ./pkg/... | grep pdfcpu` must be empty.
+
+## Test-only font exception
+
+`testdata/fonts/` holds fonts under licenses that are not in the allowed list. The
+exception was approved by the project owner (design decision Q8) on these conditions:
+the fonts are used by tests only, are never embedded in the library or imported by
+library code (enforced by `TestNoLibraryCodeUsesTestFonts`), and travel with their
+license texts. Fonts are copied unmodified.
+
+Source: Debian packages `fonts-liberation` 1:2.1.5-3 and `fonts-dejavu-core` 2.37-8,
+files taken from `/usr/share/fonts/truetype/`; license texts from the packages'
+`/usr/share/doc/*/copyright`.
+
+| File | Font | License | SHA-256 |
+|---|---|---|---|
+| `LiberationSans-Regular.ttf` | Liberation Sans 2.1.5 | SIL OFL 1.1 (`LICENSE-Liberation.txt`) | `bade59d822652f76e6941aa87b40a87c13d1cc70db98ededb5011127efafd1d3` |
+| `LiberationSans-Bold.ttf` | Liberation Sans 2.1.5 | SIL OFL 1.1 | `1b5f2da6f4cadce4c05b9ecebe3a6fcd374eb95ae443605e799f4c3287978939` |
+| `LiberationSans-Italic.ttf` | Liberation Sans 2.1.5 | SIL OFL 1.1 | `93ff5260834141b6f9d8f2b846d427f3a5dc492dbdce8ebdad406e38a38f34bb` |
+| `LiberationSans-BoldItalic.ttf` | Liberation Sans 2.1.5 | SIL OFL 1.1 | `352e9dc2be89f210dbd3c0fd5dfaf97135de70e0beb5f22378601861462493a7` |
+| `DejaVuSans.ttf` | DejaVu Sans 2.37 | Bitstream Vera (`LICENSE-DejaVu.txt`) | `57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e` |
+| `DejaVuSans-Bold.ttf` | DejaVu Sans Bold 2.37 | Bitstream Vera | `a4c5bc453ca281d90ea079e596da7ae0dfeb5777497c29ec254e76d97ff6f890` |
+| `DejaVuSansMono.ttf` | DejaVu Sans Mono 2.37 | Bitstream Vera | `54bf827eb99404e8f430c330ad30f063334f637eba0109b6a18d4f566a8e9dd8` |
+
+The Liberation fonts are the 2.x family under SIL OFL 1.1, not the GPL-licensed
+Liberation Sans Narrow.

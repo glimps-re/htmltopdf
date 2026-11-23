@@ -1,0 +1,390 @@
+{{ define "extractedFilesRows" }}
+{{ $files := index . 0 }}
+{{ $depth := index . 1 }}
+{{ range $file := $files }}
+<tr class="lvl{{ min $depth 6 }}">
+    <td class="idx"></td>
+    <td class="path"><span class="indent" style="width: {{ mul (min $depth 6) 4 }}mm"></span>{{ if gt $depth 0 }}<span class="branch">↳</span>{{ end }}{{ .Name }}</td>
+    <td class="mono">{{ .SHA256 }}</td>
+    <td class="r">{{ .Size }}</td>
+    <td>{{ range $i, $m := .Malwares }}{{ if $i }}<br>{{ end }}<span class="sig">{{ $m }}</span>{{ end }}</td>
+    <td>{{ .MitigationReason }}</td>
+    <td>{{ if eq .GMalwareURL "" }}<span class="dim">n/a</span>{{ else }}<a href="{{ .GMalwareURL }}">GMalware</a>{{ end }}</td>
+</tr>
+{{ if gt (len .ExtractedFiles) 0 }}
+{{ template "extractedFilesRows" (mergeArgsIntoSlice .ExtractedFiles (add $depth 1)) }}
+{{ end }}
+{{ end }}
+{{ end }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Rapport technique — {{ .ScanID }}</title>
+<style>
+    @page {
+        size: A4 landscape;
+        margin: 14mm 10mm 14mm;
+
+        @top-left {
+            content: "RAPPORT TECHNIQUE · " string(scan);
+            font: 7pt "DejaVu Sans Mono", monospace;
+            color: #6e7781;
+        }
+        @top-right {
+            content: "TLP:AMBER";
+            font: bold 7pt "DejaVu Sans Mono", monospace;
+            color: #a36f00;
+            letter-spacing: 0.08em;
+        }
+        @bottom-right {
+            content: counter(page) "/" counter(pages);
+            font: 7pt "DejaVu Sans Mono", monospace;
+            color: #6e7781;
+        }
+    }
+
+    :root {
+        --bg-head: #0d1117;
+        --fg-head: #e6edf3;
+        --line: #d0d7de;
+        --zebra: #f6f8fa;
+        --dim: #6e7781;
+        --red: #d1242f;
+        --orange: #ea5b0c;
+        --yellow: #bf8700;
+        --green: #1a7f37;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+        font: 8pt/1.35 "DejaVu Sans", Arial, sans-serif;
+        color: #1f2328;
+    }
+
+    body { margin: 0; }
+
+    .watermark {
+        position: fixed;
+        top: 45%;
+        left: 0;
+        right: 0;
+        z-index: -1;
+        text-align: center;
+        font: 700 70pt "DejaVu Sans", Arial, sans-serif;
+        color: rgba(209, 36, 47, 0.05);
+        transform: rotate(-18deg);
+    }
+
+    .masthead {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: end;
+        padding-bottom: 3mm;
+        border-bottom: 2pt solid var(--bg-head);
+    }
+
+    .masthead h1 {
+        margin: 0;
+        font: 700 15pt "DejaVu Sans", Arial, sans-serif;
+        letter-spacing: -0.01em;
+    }
+
+    .masthead h1 .scan {
+        string-set: scan content();
+        font: 400 10pt "DejaVu Sans Mono", monospace;
+        color: var(--dim);
+    }
+
+    .status {
+        padding: 1.5mm 3mm;
+        font: 700 8pt "DejaVu Sans Mono", monospace;
+        text-transform: uppercase;
+        color: #fff;
+    }
+
+    .status.bad { background: var(--red); }
+    .status.good { background: var(--green); }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        margin: 3mm 0 5mm;
+        border: 0.5pt solid var(--line);
+    }
+
+    .stat {
+        padding: 2mm 2.5mm;
+        border-right: 0.5pt solid var(--line);
+    }
+
+    .stat:last-child { border-right: 0; }
+
+    .stat b {
+        display: block;
+        font: 700 11pt "DejaVu Sans Mono", monospace;
+    }
+
+    .stat small {
+        font-size: 6.5pt;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--dim);
+    }
+
+    .stat.alert b { color: var(--red); }
+    .stat.warn b { color: var(--yellow); }
+
+    .note {
+        display: flex;
+        gap: 3mm;
+        margin: 0 0 5mm;
+        padding: 2mm 3mm;
+        border: 0.5pt solid var(--line);
+        background: var(--zebra);
+    }
+
+    .note::before {
+        content: "i";
+        flex: none;
+        width: 4mm;
+        height: 4mm;
+        border-radius: 50%;
+        background: var(--bg-head);
+        color: #fff;
+        font: italic 700 7pt/4mm Georgia, serif;
+        text-align: center;
+    }
+
+    .note p { margin: 0; }
+
+    h2 {
+        display: flex;
+        align-items: baseline;
+        gap: 3mm;
+        margin: 5mm 0 2mm;
+        font: 700 10pt "DejaVu Sans", Arial, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        break-after: avoid;
+    }
+
+    h2 .count {
+        font: 400 8pt "DejaVu Sans Mono", monospace;
+        color: var(--dim);
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    h2::after {
+        content: "";
+        flex: 1;
+        border-bottom: 0.5pt dashed var(--line);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        counter-reset: row;
+    }
+
+    thead { display: table-header-group; }
+
+    th {
+        padding: 1.4mm 1.8mm;
+        background: var(--bg-head);
+        color: var(--fg-head);
+        font: 600 7pt "DejaVu Sans", Arial, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        text-align: left;
+    }
+
+    td {
+        padding: 1.2mm 1.8mm;
+        border-bottom: 0.5pt solid var(--line);
+        vertical-align: top;
+        overflow-wrap: anywhere;
+    }
+
+    tr { break-inside: avoid; }
+    tbody tr:nth-child(odd) { background: var(--zebra); }
+
+    td.idx {
+        width: 8mm;
+        color: var(--dim);
+        font-family: "DejaVu Sans Mono", monospace;
+        text-align: right;
+    }
+
+    tbody tr { counter-increment: row; }
+    td.idx::before { content: counter(row, decimal-leading-zero); }
+
+    .mono, td.mono {
+        font: 6.8pt/1.35 "DejaVu Sans Mono", monospace;
+        word-break: break-all;
+    }
+
+    td.r { text-align: right; white-space: nowrap; }
+
+    .path { font-family: "DejaVu Sans Mono", monospace; font-size: 7pt; }
+    .indent { display: inline-block; }
+    .branch { color: var(--orange); margin-right: 1mm; }
+    tr.lvl1 .path, tr.lvl2 .path, tr.lvl3 .path { color: #3d444d; }
+
+    .sig {
+        font: 600 7pt "DejaVu Sans Mono", monospace;
+        color: var(--red);
+    }
+
+    .dim { color: var(--dim); }
+    a { color: #0969da; text-decoration: underline; text-decoration-thickness: 0.5pt; }
+
+    .archive {
+        margin: 4mm 0 0;
+        break-inside: auto;
+    }
+
+    .archive-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1mm 6mm;
+        padding: 1.5mm 2mm;
+        border-left: 2pt solid var(--orange);
+        background: #fff4ec;
+        font-size: 7.5pt;
+        break-after: avoid;
+    }
+
+    .archive-head strong { font-family: "DejaVu Sans Mono", monospace; }
+    .archive-head span { color: var(--dim); }
+    .archive-head span code { color: #1f2328; }
+
+    .more {
+        margin: 1.5mm 0 0;
+        font-style: italic;
+        color: var(--dim);
+    }
+
+    .columns {
+        columns: 2;
+        column-gap: 8mm;
+        column-rule: 0.5pt solid var(--line);
+    }
+
+    .columns table { break-inside: auto; }
+
+    col.w-idx { width: 8mm; }
+    col.w-path { width: 25%; }
+    col.w-hash { width: 22%; }
+    col.w-size { width: 7%; }
+    col.w-sig { width: 17%; }
+    col.w-reason { width: 12%; }
+    col.w-link { width: 8%; }
+</style>
+</head>
+<body>
+
+<div class="watermark" aria-hidden="true">TLP:AMBER</div>
+
+<header class="masthead">
+    <h1>Rapport technique d'analyse <span class="scan">{{ .ScanID }}</span></h1>
+    {{ if gt .TotalMitigated 0 }}<span class="status bad">Menaces bloquées</span>{{ else }}<span class="status good">Sain</span>{{ end }}
+</header>
+
+<div class="stats">
+    <div class="stat"><b>{{ .NbFileSubmitted }}</b><small>Listés</small></div>
+    <div class="stat"><b>{{ .NbFileAnalyzed }}</b><small>Analysés</small></div>
+    <div class="stat warn"><b>{{ .NbFileNotAnalyzed }}</b><small>Non analysés</small></div>
+    <div class="stat alert"><b>{{ .TotalMitigated }}</b><small>Bloqués</small></div>
+    <div class="stat alert"><b>{{ .TotalMalware }}</b><small>Malveillants</small></div>
+    <div class="stat"><b>{{ .TotalErrors }}</b><small>Erreurs</small></div>
+    <div class="stat"><b>{{ .FileVolume }}</b><small>Volume total</small></div>
+    <div class="stat"><b>{{ .AnalyzedVolume }}</b><small>Analysé</small></div>
+    <div class="stat"><b>{{ .FilteredVolume }}</b><small>Filtré</small></div>
+    <div class="stat"><b>{{ .Duration }}</b><small>Durée</small></div>
+</div>
+
+<div class="note">
+    <p>
+        Début de session {{ .ScanStartTime }}.
+        {{ if gt .TotalMitigated 0 }}Un ou plusieurs fichiers ont été bloqués par les moteurs d'analyse.{{ else }}Aucun comportement suspect ou malveillant n'a été détecté.{{ end }}
+        Seuls les fichiers analysés comme sains ont été déplacés sur le support de destination.
+        {{ if gt .NbFileNotAnalyzed 0 }}Des fichiers non analysés ont pu être transmis selon <code class="mono">unanalyzable_policy</code>.{{ end }}
+    </p>
+</div>
+
+{{ if gt (len .MitigatedFiles) 0 }}
+<section id="threat-files">
+    <h2>Fichiers bloqués <span class="count">{{ len .MitigatedFiles }}{{ if gt .MoreMitigatedFiles 0 }} + {{ .MoreMitigatedFiles }}{{ end }}</span></h2>
+    <table>
+        <colgroup><col class="w-idx"><col class="w-path"><col class="w-hash"><col class="w-size"><col class="w-sig"><col class="w-reason"><col class="w-link"></colgroup>
+        <thead><tr><th>#</th><th>Chemin</th><th>SHA-256</th><th>Taille</th><th>Signatures</th><th>Raison</th><th>Analyse</th></tr></thead>
+        <tbody>
+        {{ template "extractedFilesRows" (mergeArgsIntoSlice .MitigatedFiles 0) }}
+        </tbody>
+    </table>
+    {{ if gt .MoreMitigatedFiles 0 }}<p class="more">… et {{ others .MoreMitigatedFiles "" "" }}</p>{{ end }}
+</section>
+{{ end }}
+
+{{ if gt (len .MitigatedArchives) 0 }}
+<section id="threat-archive">
+    <h2>Archives bloquées <span class="count">{{ len .MitigatedArchives }}{{ if gt .MoreMitigatedArchives 0 }} + {{ .MoreMitigatedArchives }}{{ end }}</span></h2>
+    {{ range $index, $a := .MitigatedArchives }}
+    <div class="archive" id="threat-archive-{{ $index }}">
+        <div class="archive-head">
+            <strong>{{ .Name }}</strong>
+            <span>membres <code>{{ .FileCount }}</code></span>
+            <span>taille <code>{{ .Size }}</code></span>
+            <span>sha256 <code class="mono">{{ .SHA256 }}</code></span>
+            <span>quarantaine <code class="mono">{{ .QuarantineLocation }}</code></span>
+        </div>
+        <table>
+            <colgroup><col class="w-idx"><col class="w-path"><col class="w-hash"><col class="w-size"><col class="w-sig"><col class="w-reason"><col class="w-link"></colgroup>
+            <thead><tr><th>#</th><th>Membre</th><th>SHA-256</th><th>Taille</th><th>Signatures</th><th>Raison</th><th>Analyse</th></tr></thead>
+            <tbody>
+            {{ template "extractedFilesRows" (mergeArgsIntoSlice .ExtractedFiles 0) }}
+            </tbody>
+        </table>
+        {{ if gt .MoreExtracted 0 }}<p class="more">… et {{ others .MoreExtracted " fichier de l'archive" " fichiers de l'archive" }}</p>{{ end }}
+    </div>
+    {{ end }}
+    {{ if gt .MoreMitigatedArchives 0 }}<p class="more">… et {{ others .MoreMitigatedArchives " archive" " archives" }}</p>{{ end }}
+</section>
+{{ end }}
+
+{{ if or (gt .NbFileNotAnalyzed 0) (gt (len .ErrorFiles) 0) }}
+<div class="columns">
+    {{ if gt .NbFileNotAnalyzed 0 }}
+    <section id="not-analyzed-files">
+        <h2>Non analysés <span class="count">{{ .NbFileNotAnalyzed }}</span></h2>
+        <table>
+            <thead><tr><th style="width:38%">Fichier</th><th style="width:14%">Taille</th><th>Raison</th><th>Origine</th></tr></thead>
+            <tbody>
+            {{ range .NotAnalyzedFiles }}<tr><td class="path">{{ .Name }}</td><td class="r">{{ .Size }}</td><td>{{ .Reason }}</td><td class="path">{{ if .Origin }}{{ .Origin }}{{ else }}<span class="dim">—</span>{{ end }}</td></tr>{{ end }}
+            </tbody>
+        </table>
+        {{ if gt .MoreNotAnalyzed 0 }}<p class="more">… et {{ others .MoreNotAnalyzed "" "" }}</p>{{ end }}
+    </section>
+    {{ end }}
+
+    {{ if gt (len .ErrorFiles) 0 }}
+    <section id="error-files">
+        <h2>Erreurs <span class="count">{{ len .ErrorFiles }}</span></h2>
+        <table>
+            <thead><tr><th style="width:40%">Fichier</th><th>Erreur</th></tr></thead>
+            <tbody>
+            {{ range .ErrorFiles }}<tr><td class="path">{{ .Name }}</td><td class="mono">{{ .Error }}</td></tr>{{ end }}
+            </tbody>
+        </table>
+        {{ if gt .MoreErrorFiles 0 }}<p class="more">… et {{ others .MoreErrorFiles "" "" }}</p>{{ end }}
+    </section>
+    {{ end }}
+</div>
+{{ end }}
+
+</body>
+</html>

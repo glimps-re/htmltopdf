@@ -1,0 +1,268 @@
+// Package testcorpus generates the deterministic test fixtures of the
+// converter: the report templates filled with fake data, hostile documents and
+// the host-connector reference configuration. Nothing is read from the network
+// and no generated file is committed; the SHA-256 of every fixture is pinned by
+// the package tests.
+//
+// It is test support: only _test.go files and benchmarks may import it.
+package testcorpus
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"html/template"
+	"io"
+	"io/fs"
+	"math"
+	"path"
+	"sort"
+	"strings"
+)
+
+// Size selects the amount of fake data of a report fixture.
+type Size string
+
+// Report sizes. Large is about 250 files and 10 archives.
+const (
+	Small Size = "small"
+	Large Size = "large"
+)
+
+// HostConnectorPageCSS is the print stylesheet of the host-connector reference
+// configuration. It is also appended to templates that carry no @page rule.
+const HostConnectorPageCSS = `@page {
+            size: A4;
+            margin: 1in 0.3in 1.3in 0.3in;
+            @bottom-left { content: "TLP:AMBER"; background: #000; color: #FFC000; font-size: 10px; }
+            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 10px; }
+        }`
+
+const reportPrintCSS = "\n        " + HostConnectorPageCSS + "\n    </style>"
+
+type file struct {
+	Name, SHA256, Size, MitigationReason, QuarantineLocation, GMalwareURL string
+	Malwares                                                              []string
+	ExtractedFiles                                                        []file
+}
+
+type archive struct {
+	Name, SHA256, Size, QuarantineLocation string
+	FileCount, MoreExtracted               int
+	ExtractedFiles                         []file
+}
+
+type (
+	notAnalyzed struct{ Name, Size, Reason, Origin string }
+	errorFile   struct{ Name, Error string }
+)
+
+func sha(i int) string { return fmt.Sprintf("%064x", uint64(i&math.MaxInt32)*0x9e3779b97f4a7c15) }
+
+func mkFile(i int) file {
+	f := file{
+		Name:             fmt.Sprintf("C:\\Users\\victim\\Downloads\\invoice_%04d_très_urgent_à_ouvrir.pdf.exe", i),
+		SHA256:           sha(i),
+		Size:             fmt.Sprintf("%d.%d MiB", i%50, i%10),
+		Malwares:         []string{"Trojan.GenericKD.4821", "Win32/Emotet.AB"},
+		MitigationReason: "malware détecté",
+	}
+	if i%3 != 0 {
+		f.GMalwareURL = "https://gmalware.example/analysis/" + sha(i)[:16]
+	}
+	return f
+}
+
+const archiveMembers = 4
+
+func reportData(nFiles, nArchives int) map[string]any {
+	files := make([]file, nFiles)
+	for i := range files {
+		files[i] = mkFile(i)
+	}
+	archives := make([]archive, nArchives)
+	for a := range archives {
+		members := make([]file, archiveMembers)
+		for m := range members {
+			members[m] = mkFile(1000*a + m)
+			if m == 0 {
+				members[m].ExtractedFiles = []file{mkFile(9999), mkFile(9998)}
+				members[m].ExtractedFiles[0].ExtractedFiles = []file{mkFile(9997)}
+			}
+		}
+		archives[a] = archive{
+			Name: fmt.Sprintf("dump_%d.zip", a), SHA256: sha(a + 77), Size: "12 MiB",
+			QuarantineLocation: "/var/quarantine/" + sha(a)[:12], FileCount: archiveMembers, ExtractedFiles: members, MoreExtracted: 3,
+		}
+	}
+	return map[string]any{
+		"ScanID": "a1b2c3d4-e5f6", "NbFileSubmitted": 1234, "NbFileAnalyzed": 1200, "NbFileNotAnalyzed": 4,
+		"FileVolume": "3.2 GiB", "AnalyzedVolume": "3.0 GiB", "FilteredVolume": "200 MiB",
+		"TotalMitigated": nFiles, "TotalMalware": nFiles, "TotalErrors": 2,
+		"ScanStartTime": "2026-11-23 10:42:00", "Duration": "4m12s",
+		"MitigatedFiles": files, "MoreMitigatedFiles": 12,
+		"MitigatedArchives": archives, "MoreMitigatedArchives": 1,
+		"NotAnalyzedFiles": []notAnalyzed{
+			{"secret.7z", "1 MiB", "chiffré", "dump_0.zip"},
+			{"x.bin", "0 B", "vide", ""},
+			{"y.iso", "4 GiB", "trop gros", ""},
+			{"z.rar", "2 MiB", "corrompu", "dump_1.zip"},
+		},
+		"MoreNotAnalyzed": 0,
+		"ErrorFiles":      []errorFile{{"a.doc", "timeout"}, {"b.xls", "parse error: unexpected EOF"}},
+		"MoreErrorFiles":  0,
+	}
+}
+
+var templateFuncs = template.FuncMap{
+	"mergeArgsIntoSlice": func(a ...any) []any { return a },
+	"others": func(n int, s, p string) string {
+		if n == 1 {
+			return "1 autre" + s
+		}
+		return fmt.Sprintf("%d autres%s", n, p)
+	},
+	"add": func(a, b int) int { return a + b },
+	"mul": func(a, b int) int { return a * b },
+	"min": func(a, b int) int { return min(a, b) },
+}
+
+// ReportNames returns the sorted names of the report templates found in
+// templates, a directory holding files named <name>.html.tmpl.
+func ReportNames(templates fs.FS) ([]string, error) {
+	paths, err := fs.Glob(templates, "*.html.tmpl")
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return nil, errors.New("testcorpus: no *.html.tmpl template found")
+	}
+	names := make([]string, len(paths))
+	for i, p := range paths {
+		names[i] = strings.TrimSuffix(path.Base(p), ".html.tmpl")
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// Report executes the template name with the fake data of size. The print
+// stylesheet is injected into templates that have no @page rule.
+func Report(templates fs.FS, name string, size Size) ([]byte, error) {
+	var data map[string]any
+	switch size {
+	case Small:
+		data = reportData(5, 1)
+	case Large:
+		data = reportData(250, 10)
+	default:
+		return nil, fmt.Errorf("testcorpus: unknown size %q", size)
+	}
+	raw, err := readCapped(templates, name+".html.tmpl", maxTemplateBytes)
+	if err != nil {
+		return nil, err
+	}
+	t, err := template.New(name).Funcs(templateFuncs).Parse(string(raw))
+	if err != nil {
+		return nil, err
+	}
+	var b bytes.Buffer
+	if err := t.Execute(&b, data); err != nil {
+		return nil, err
+	}
+	out := b.String()
+	if !strings.Contains(out, "@page") {
+		out = strings.Replace(out, "</style>", reportPrintCSS, 1)
+	}
+	return []byte(out), nil
+}
+
+// FixtureName returns the stable fixture name of a report, e.g.
+// "report_00-host-connector_small".
+func FixtureName(name string, size Size) string {
+	return "report_" + name + "_" + string(size)
+}
+
+// Read caps: templates are small; fonts follow the 32 MiB cap of design §6.1.
+const (
+	maxTemplateBytes = 1 << 20
+	maxFontBytes     = 32 << 20
+)
+
+func readCapped(fsys fs.FS, name string, limit int64) ([]byte, error) {
+	f, err := fsys.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(io.LimitReader(f, limit+1))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return nil, err
+	}
+	if int64(buf.Len()) > limit {
+		return nil, fmt.Errorf("testcorpus: %s exceeds %d bytes", name, limit)
+	}
+	return buf.Bytes(), nil
+}
+
+// FontFile names a font file and its family.
+type FontFile struct{ Name, Family string }
+
+// HostConnectorFontFiles returns, relative to the test font directory, the
+// explicit font file list of the host-connector reference configuration with
+// the family each file belongs to.
+func HostConnectorFontFiles() []FontFile {
+	return []FontFile{
+		{"LiberationSans-Regular.ttf", "Liberation Sans"},
+		{"LiberationSans-Bold.ttf", "Liberation Sans"},
+		{"LiberationSans-Italic.ttf", "Liberation Sans"},
+		{"LiberationSans-BoldItalic.ttf", "Liberation Sans"},
+		{"DejaVuSans.ttf", "DejaVu Sans"},
+		{"DejaVuSans-Bold.ttf", "DejaVu Sans"},
+		{"DejaVuSansMono.ttf", "DejaVu Sans Mono"},
+	}
+}
+
+// HostConnectorConfig is the reference configuration of design §4.1 expressed
+// without the public types, which this package cannot import (cycle with
+// in-package tests). The public-API tests map it to htmltopdf.Options.
+type HostConnectorConfig struct {
+	SansSerif, Monospace string
+	Fallback             []string
+	Scale                float64
+	ExtraCSS             string
+}
+
+// HostConnector returns a fresh copy of the reference configuration.
+func HostConnector() HostConnectorConfig {
+	return HostConnectorConfig{
+		SansSerif: "Liberation Sans",
+		Monospace: "DejaVu Sans Mono",
+		Fallback:  []string{"DejaVu Sans"},
+		Scale:     0.9,
+		ExtraCSS:  HostConnectorPageCSS,
+	}
+}
+
+// LoadedFont is the bytes of a reference font and its family.
+type LoadedFont struct {
+	Data   []byte
+	Family string
+}
+
+// ReadHostConnectorFonts reads the reference font files from fonts, a
+// directory holding the test fonts.
+func ReadHostConnectorFonts(fonts fs.FS) ([]LoadedFont, error) {
+	files := HostConnectorFontFiles()
+	out := make([]LoadedFont, 0, len(files))
+	for _, f := range files {
+		data, err := readCapped(fonts, f.Name, maxFontBytes)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, LoadedFont{Data: data, Family: f.Family})
+	}
+	return out, nil
+}

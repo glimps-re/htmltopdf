@@ -1,0 +1,70 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - gosec
+    - revive
+    - unused
+    - ineffassign
+    - unconvert
+    - misspell
+    - unparam
+    - gocritic
+    - nolintlint
+    - errorlint
+    - depguard
+    - forbidigo
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: errorf
+        - name: indent-error-flow
+        - name: var-naming
+        - name: unexported-return
+        - name: unused-parameter
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: os/exec
+              desc: no external tool (project rules)
+            - pkg: io/ioutil
+              desc: deprecated
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^io\.ReadAll$
+          msg: stream with bounded reads (project rules)
+        - pattern: ^os\.ReadFile$
+          msg: stream with bounded reads (project rules)
+        - pattern: ^fs\.ReadFile$
+          msg: stream with bounded reads (project rules)
+        - pattern: ^parse\.NewInput$
+          pkg: ^github\.com/tdewolff/parse/v2$
+          msg: use parse.NewInputBytes on bounded bytes (design section 12)
+  exclusions:
+    paths:
+      - ^tmp/
+    rules:
+      - path: _test\.go
+        linters: [forbidigo]
+        text: (os|fs)\.ReadFile
