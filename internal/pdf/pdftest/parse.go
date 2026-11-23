@@ -50,12 +50,16 @@ type Page struct {
 	MediaBox [4]float64
 	Content  []byte
 	Links    []Link
+	// Text is the text of each BT...ET block, decoded with the ToUnicode map
+	// of the font in use.
+	Text []string
 }
 
 // Doc is a structurally valid document.
 type Doc struct {
 	Pages []Page
-
+	// Fonts are the embedded fonts, by resource name (F1, F2...).
+	Fonts map[string]*Font
 	// Title is the decoded /Title, empty when absent.
 	Title string
 	// ID is the first element of the trailer /ID, hex encoded.
@@ -262,7 +266,7 @@ func Parse(data []byte) (*Doc, error) {
 	if !bytes.HasPrefix(data, []byte("%PDF-1.7\n%")) || !bytes.HasSuffix(data, []byte("\n%%EOF\n")) {
 		return nil, errors.New("bad header or trailer marker")
 	}
-	r := &reader{data: data, cache: map[int]any{}, seen: map[int]bool{}}
+	r := &reader{data: data, cache: map[int]any{}, seen: map[int]bool{}, fontCache: map[string]*Font{}}
 	if err := r.readXref(); err != nil {
 		return nil, fmt.Errorf("xref: %w", err)
 	}
@@ -275,6 +279,7 @@ func Parse(data []byte) (*Doc, error) {
 			return nil, fmt.Errorf("object %d unreachable from the trailer", n)
 		}
 	}
+	doc.Fonts = r.allFonts
 	doc.Objects = len(r.offsets) - 1
 	return doc, nil
 }
@@ -285,6 +290,9 @@ type reader struct {
 	trailer Dict
 	cache   map[int]any
 	seen    map[int]bool
+
+	fontCache map[string]*Font
+	allFonts  map[string]*Font
 }
 
 func (r *reader) readXref() error {
@@ -487,21 +495,20 @@ func (r *reader) page(k, parent any) (*Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	so, err := r.resolve(d["Contents"])
-	if err != nil {
-		return nil, err
-	}
-	st, ok := so.(*Stream)
-	if !ok || st.Dict["Filter"] != Name("FlateDecode") {
-		return nil, errors.New("/Contents is not a Flate stream")
-	}
-	if pg.Content, err = inflate(st.Raw); err != nil {
+	if pg.Content, err = r.contents(d["Contents"]); err != nil {
 		return nil, err
 	}
 	if err := checkContent(pg.Content, res, r); err != nil {
 		return nil, err
 	}
-
+	fonts, err := r.fonts(res)
+	if err != nil {
+		return nil, err
+	}
+	if pg.Text, err = extractText(pg.Content, fonts); err != nil {
+		return nil, err
+	}
+	r.allFonts = fonts
 	if annots, ok := d["Annots"].([]any); ok {
 		for _, a := range annots {
 			l, err := r.link(a)
@@ -512,6 +519,38 @@ func (r *reader) page(k, parent any) (*Page, error) {
 		}
 	}
 	return pg, nil
+}
+
+// contents returns the decoded content of a page: one Flate stream, or an
+// array of them joined by a newline, as a viewer concatenates them.
+func (r *reader) contents(v any) ([]byte, error) {
+	refs := []any{v}
+	if arr, ok := v.([]any); ok {
+		refs = arr
+	}
+	if len(refs) == 0 || len(refs) > 2 {
+		return nil, errors.New("/Contents holds no or too many streams")
+	}
+	var all []byte
+	for i, ref := range refs {
+		so, err := r.resolve(ref)
+		if err != nil {
+			return nil, err
+		}
+		st, ok := so.(*Stream)
+		if !ok || st.Dict["Filter"] != Name("FlateDecode") {
+			return nil, errors.New("/Contents is not a Flate stream")
+		}
+		c, err := inflate(st.Raw)
+		if err != nil {
+			return nil, err
+		}
+		if i > 0 {
+			all = append(all, '\n')
+		}
+		all = append(all, c...)
+	}
+	return all, nil
 }
 
 func (r *reader) link(a any) (*Link, error) {
@@ -569,6 +608,22 @@ func checkContent(content []byte, res Dict, r *reader) error {
 			return err
 		}
 	}
+	shs := Dict{}
+	if v, ok := res["Shading"]; ok {
+		var err error
+		if shs, err = r.dict(v); err != nil {
+			return err
+		}
+		for name, ref := range shs {
+			sd, err := r.dict(ref)
+			if err != nil {
+				return fmt.Errorf("shading %s: %w", name, err)
+			}
+			if err := r.checkShading(sd); err != nil {
+				return fmt.Errorf("shading %s: %w", name, err)
+			}
+		}
+	}
 	depth := 0
 	toks := bytes.Fields(content)
 	for i, t := range toks {
@@ -579,12 +634,13 @@ func checkContent(content []byte, res Dict, r *reader) error {
 			if depth--; depth < 0 {
 				return errors.New("content: Q without q")
 			}
-		case "gs":
-			if i == 0 || !bytes.HasPrefix(toks[i-1], []byte("/")) {
-				return errors.New("content: gs without a name")
+		case "sh":
+			if err := nameBefore(toks, i, "sh", "shading", shs); err != nil {
+				return err
 			}
-			if _, ok := gs[string(toks[i-1][1:])]; !ok {
-				return fmt.Errorf("content: ExtGState %s missing from resources", toks[i-1])
+		case "gs":
+			if err := nameBefore(toks, i, "gs", "ExtGState", gs); err != nil {
+				return err
 			}
 		}
 	}
@@ -607,4 +663,44 @@ func decodeText(s string) (string, error) {
 		units[i] = uint16(b[2*i])<<8 | uint16(b[2*i+1])
 	}
 	return string(utf16.Decode(units)), nil
+}
+
+// nameBefore checks that the operand of the operator at toks[i] is a name
+// listed in the resource dictionary res.
+func nameBefore(toks [][]byte, i int, op, what string, res Dict) error {
+	if i == 0 || !bytes.HasPrefix(toks[i-1], []byte("/")) {
+		return fmt.Errorf("content: %s without a name", op)
+	}
+	if _, ok := res[string(toks[i-1][1:])]; !ok {
+		return fmt.Errorf("content: %s %s missing from resources", what, toks[i-1])
+	}
+	return nil
+}
+
+// checkShading verifies the function of an axial shading: for a stitching
+// function, the bounds strictly increase inside the domain (PDF 32000-1
+// section 7.10.4) and the functions and encodings match them.
+func (r *reader) checkShading(sd Dict) error {
+	fn, err := r.dict(sd["Function"])
+	if err != nil {
+		return fmt.Errorf("function: %w", err)
+	}
+	if t, _ := fn["FunctionType"].(float64); t != 3 {
+		return nil
+	}
+	bounds, _ := fn["Bounds"].([]any)
+	funcs, _ := fn["Functions"].([]any)
+	enc, _ := fn["Encode"].([]any)
+	if len(funcs) != len(bounds)+1 || len(enc) != 2*len(funcs) {
+		return fmt.Errorf("stitching: %d functions, %d bounds, %d encodes", len(funcs), len(bounds), len(enc))
+	}
+	prev := 0.0
+	for _, b := range bounds {
+		v, ok := b.(float64)
+		if !ok || !(v > prev) || !(v < 1) {
+			return fmt.Errorf("stitching bounds %v are not strictly increasing inside (0, 1)", bounds)
+		}
+		prev = v
+	}
+	return nil
 }

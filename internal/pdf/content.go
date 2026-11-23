@@ -51,6 +51,9 @@ type Content struct {
 	transparency uint8
 	stack        [MaxSaveDepth]uint8
 	opacities    opacitySet
+	fonts        []fontUse
+	shadings     []*shadingEntry
+	tmp          []byte
 }
 
 // Bytes returns the operators written so far. It is valid until the next

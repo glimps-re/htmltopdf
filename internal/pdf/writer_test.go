@@ -470,3 +470,39 @@ func TestSanitizeTitleIsBounded(t *testing.T) {
 		t.Fatalf("allocs = %v", allocs)
 	}
 }
+
+func TestDeferredPageKeepsItsBody(t *testing.T) {
+	var buf bytes.Buffer
+	w := newTestWriter(&buf)
+	page, err := w.AddPage(300, 200, sampleContent(), true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.WriteDeferred(page, sampleContent()); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(Info{}); err != nil {
+		t.Fatal(err)
+	}
+	doc := pdftest.Validate(t, buf.Bytes())
+	one := pdftest.Validate(t, buildOne(t))
+	if want := 2*len(one.Pages[0].Content) + 1; len(doc.Pages) != 1 || len(doc.Pages[0].Content) != want {
+		t.Errorf("content %d bytes, want the body and the deferred stream joined (%d)", len(doc.Pages[0].Content), want)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("/Contents [")) {
+		t.Error("/Contents is not an array of two streams")
+	}
+}
+
+func buildOne(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := newTestWriter(&buf)
+	if _, err := w.AddPage(300, 200, sampleContent(), false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(Info{}); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}

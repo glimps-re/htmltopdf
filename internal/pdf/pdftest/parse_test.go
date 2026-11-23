@@ -7,8 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
+	"math"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/go-text/typesetting/font"
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/pdf"
@@ -190,5 +195,90 @@ func TestParseTrailerNotDict(t *testing.T) {
 	copy(doc[i:], "[ ")
 	if _, err := pdftest.Parse(doc); err == nil || !strings.Contains(err.Error(), "xref") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func fontDoc(tb testing.TB) []byte {
+	tb.Helper()
+	root, err := os.OpenRoot("../../../testdata/fonts")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			tb.Error(err)
+		}
+	}()
+	data, err := fs.ReadFile(root.FS(), "LiberationSans-Regular.ttf")
+	if err != nil {
+		tb.Fatal(err)
+	}
+	face, err := font.ParseTTF(bytes.NewReader(data))
+	if err != nil {
+		tb.Fatal(err)
+	}
+	var buf bytes.Buffer
+	w := pdf.NewWriter(&buf, budget.New(context.Background(), budget.Defaults(), nil))
+	id, err := w.AddFont(&pdf.FontProgram{Data: data, Name: "LiberationSans-Regular"})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	var run []pdf.Glyph
+	for _, r := range "Bonjour" {
+		gid, _ := face.NominalGlyph(r)
+		run = append(run, pdf.Glyph{ID: uint16(min(uint32(gid), math.MaxUint16)), Advance: 6, Text: string(r)})
+	}
+	c := &pdf.Content{}
+	c.Glyphs(id, 10, 0, 0, run)
+	if _, err := w.AddPage(100, 100, c, false, nil); err != nil {
+		tb.Fatal(err)
+	}
+	if err := w.Close(pdf.Info{}); err != nil {
+		tb.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestFontDocument(t *testing.T) {
+	doc := pdftest.Validate(t, fontDoc(t))
+	f := doc.Fonts["F1"]
+	if f == nil || f.BaseFont[6] != '+' || len(doc.Pages[0].Text) != 1 || doc.Pages[0].Text[0] != "Bonjour" || len(f.Widths) != 6 {
+		t.Fatalf("doc = %+v, text %q", f, doc.Pages[0].Text)
+	}
+	got, err := pdftest.PDFCPUContent(fontDoc(t))
+	if err != nil || !bytes.Equal(got[1], doc.Pages[0].Content) {
+		t.Fatalf("pdfcpu content: %v", err)
+	}
+	if _, err := pdftest.PDFCPUContent([]byte("junk")); err == nil {
+		t.Fatal("accepted junk")
+	}
+}
+
+func TestFontStructureIsChecked(t *testing.T) {
+	valid := fontDoc(t)
+	rep := func(old, new string) []byte {
+		if len(old) != len(new) || !bytes.Contains(valid, []byte(old)) {
+			t.Fatalf("bad fixture edit %q", old)
+		}
+		return bytes.Replace(valid, []byte(old), []byte(new), 1)
+	}
+	// Edits that keep the length keep the xref valid; the ones above that
+	// change it are rejected earlier, which is the point too.
+	for name, doc := range map[string][]byte{
+		"vertical encoding": rep("/Identity-H", "/Identity-V"),
+		"not a CID type 2":  rep("/CIDFontType2", "/CIDFontType0"),
+		"cid to gid map":    rep("/CIDToGIDMap /Identity", "/CIDToGIDMap /Identiti"),
+		"descriptor type":   rep("/Type /FontDescriptor", "/Type /FontDescriptoR"),
+		"length1":           rep("/Length1 ", "/Length2 "),
+		"no subset tag":     rep("+LiberationSans-Regular", "-LiberationSans-Regular"),
+		"type0 subtype":     rep("/Subtype /Type0", "/Subtype /Type1"),
+		"no embedded font":  rep("/FontFile2", "/FontFile3"),
+		"widths not array":  rep("/W [", "/W <"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := pdftest.Parse(doc); err == nil {
+				t.Fatal("accepted")
+			}
+		})
 	}
 }

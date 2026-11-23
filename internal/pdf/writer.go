@@ -103,6 +103,9 @@ type Writer struct {
 	pages    []Ref
 	deferred map[Ref]Ref // page -> reserved content stream
 	opacity  opacitySet
+	fonts    []*fontEntry
+	fontRefs []nameRef
+	shadings shadingSet
 	started  bool
 	closed   bool
 }
@@ -176,7 +179,7 @@ func (w *Writer) emit(ref Ref, body []byte) error {
 
 // emitStream compresses data and writes it as stream object ref. The
 // compressed bytes are written from w.z without another copy.
-func (w *Writer) emitStream(ref Ref, data []byte) error {
+func (w *Writer) emitStream(ref Ref, data []byte, extra string) error {
 	w.z.Reset()
 	zw, ok := zlibPool.Get().(*zlib.Writer)
 	if !ok {
@@ -196,7 +199,9 @@ func (w *Writer) emitStream(ref Ref, data []byte) error {
 	if err := w.mark(ref); err != nil {
 		return err
 	}
-	w.frame = append(w.frame, "<< /Filter /FlateDecode /Length "...)
+	w.frame = append(w.frame, "<< /Filter /FlateDecode "...)
+	w.frame = append(w.frame, extra...)
+	w.frame = append(w.frame, "/Length "...)
 	w.frame = strconv.AppendInt(w.frame, int64(w.z.Len()), 10)
 	w.frame = append(w.frame, " >>\nstream\n"...)
 	if err := w.out.write(w.frame); err != nil {
@@ -254,8 +259,10 @@ func validContent(c *Content) error {
 
 // AddPage writes a page of widthPt x heightPt points with its link
 // annotations and returns its reference. When deferred is false body is
-// written now; when true body is ignored and the content stream must later be
-// supplied with WriteDeferred. Nothing is written when an argument is
+// written now. When true the page gets a second content stream, supplied
+// later with WriteDeferred: a non-nil body is written now as the first one
+// (/Contents [body deferred]), a nil body leaves the deferred stream the only one.
+// The content cap applies to each stream. Nothing is written when an argument is
 // invalid. After a write or budget error the Writer is unusable: the error is
 // sticky.
 func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool, links []Link) (Ref, error) {
@@ -265,8 +272,11 @@ func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool
 	if !(widthPt > 0 && widthPt <= MaxPageSize && heightPt > 0 && heightPt <= MaxPageSize) {
 		return 0, ErrPageSize
 	}
-	if !deferred {
+	if !deferred || body != nil {
 		if err := validContent(body); err != nil {
+			return 0, err
+		}
+		if err := w.mergeFonts(body); err != nil {
 			return 0, err
 		}
 	}
@@ -287,8 +297,15 @@ func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool
 		annots = append(annots, ref)
 	}
 	page, contents := w.reserve(), w.reserve()
+	var first Ref
 	if deferred {
 		w.deferred[page] = contents
+		if body != nil {
+			first = w.reserve()
+			if err := w.writeContent(first, body); err != nil {
+				return 0, err
+			}
+		}
 	} else if err := w.writeContent(contents, body); err != nil {
 		return 0, err
 	}
@@ -306,7 +323,15 @@ func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool
 	w.obj = append(w.obj, "] /Resources "...)
 	w.obj = appendRef(w.obj, resourcesRef)
 	w.obj = append(w.obj, " /Contents "...)
-	w.obj = appendRef(w.obj, contents)
+	if first != 0 {
+		w.obj = append(w.obj, '[')
+		w.obj = appendRef(w.obj, first)
+		w.obj = append(w.obj, ' ')
+		w.obj = appendRef(w.obj, contents)
+		w.obj = append(w.obj, ']')
+	} else {
+		w.obj = appendRef(w.obj, contents)
+	}
 	if len(annots) > 0 {
 		w.obj = append(w.obj, " /Annots ["...)
 		for i, a := range annots {
@@ -327,7 +352,7 @@ func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool
 
 func (w *Writer) writeContent(ref Ref, c *Content) error {
 	w.opacity.merge(c.opacities)
-	return w.emitStream(ref, c.buf)
+	return w.emitStream(ref, c.buf, "")
 }
 
 // WriteDeferred writes the content stream of a page added with deferred set.
@@ -341,6 +366,9 @@ func (w *Writer) WriteDeferred(ref Ref, c *Content) error {
 		return ErrNotDeferred
 	}
 	if err := validContent(c); err != nil {
+		return err
+	}
+	if err := w.mergeFonts(c); err != nil {
 		return err
 	}
 	delete(w.deferred, ref)
@@ -361,6 +389,13 @@ func (w *Writer) Close(info Info) error {
 		return ErrPendingContent
 	}
 	infoRef := w.reserve()
+	var err error
+	if w.fontRefs, err = w.closeFonts(); err != nil {
+		return err
+	}
+	if err = w.closeShadings(); err != nil {
+		return err
+	}
 	if err := w.closeResources(); err != nil {
 		return err
 	}
@@ -423,6 +458,8 @@ func (w *Writer) closeResources() error {
 	if !first {
 		w.obj = append(w.obj, " >>"...)
 	}
+	w.obj = appendNameDict(w.obj, "Shading", w.shadings.refs)
+	w.obj = appendNameDict(w.obj, "Font", w.fontRefs)
 	w.obj = append(w.obj, " >>"...)
 	return w.emit(resourcesRef, w.obj)
 }
@@ -488,4 +525,22 @@ func appendXrefEntry(dst []byte, off int64) []byte {
 	}
 	dst = append(dst, d...)
 	return append(dst, " 00000 n \n"...)
+}
+
+// appendNameDict appends " /key << /name ref ... >>" to a resource dictionary;
+// nothing when refs is empty.
+func appendNameDict(dst []byte, key string, refs []nameRef) []byte {
+	if len(refs) == 0 {
+		return dst
+	}
+	dst = append(dst, " /"...)
+	dst = append(dst, key...)
+	dst = append(dst, " <<"...)
+	for _, r := range refs {
+		dst = append(dst, " /"...)
+		dst = append(dst, r.name...)
+		dst = append(dst, ' ')
+		dst = appendRef(dst, r.ref)
+	}
+	return append(dst, " >>"...)
 }

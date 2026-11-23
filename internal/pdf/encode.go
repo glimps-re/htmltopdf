@@ -46,6 +46,14 @@ func appendNum(dst []byte, v float64) ([]byte, error) {
 	return dst, nil
 }
 
+// hexDigits are the upper-case digits of PDF hex strings.
+const hexDigits = "0123456789ABCDEF"
+
+// appendHex16 appends v as four hexadecimal digits.
+func appendHex16(dst []byte, v uint16) []byte {
+	return append(dst, hexDigits[v>>12], hexDigits[v>>8&0xf], hexDigits[v>>4&0xf], hexDigits[v&0xf])
+}
+
 func isPrintableASCII(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] < 0x20 || s[i] > 0x7e {
@@ -70,12 +78,11 @@ func appendString(dst []byte, s string) []byte {
 		}
 		return append(dst, ')')
 	}
-	const hexDigits = "0123456789ABCDEF"
 	dst = append(dst, "<FEFF"...)
 	var units [2]uint16
 	for _, r := range s {
 		for _, u := range utf16.AppendRune(units[:0], r) {
-			dst = append(dst, hexDigits[u>>12], hexDigits[u>>8&0xf], hexDigits[u>>4&0xf], hexDigits[u&0xf])
+			dst = appendHex16(dst, u)
 		}
 	}
 	return append(dst, '>')
