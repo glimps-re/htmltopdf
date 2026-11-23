@@ -2,6 +2,7 @@ package layout
 
 import (
 	"github.com/glimps-re/htmltopdf/internal/box"
+	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/display"
 )
 
@@ -17,6 +18,7 @@ type frag struct {
 	border, padding [4]float64
 	// first and last tell whether this is the first and last fragment of the box.
 	first, last bool
+	borderColor *[4]css.Color
 	children    []*frag
 	lines       []*lineFrag
 }

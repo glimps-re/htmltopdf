@@ -38,6 +38,7 @@ type layouter struct {
 	segs      []seg
 	primaries map[*style.Computed]primary
 	ext       map[extKey]extVal
+	tables    map[*box.Box]*tableLayout
 }
 
 func newLayouter(root *box.Box, cfg Config, width, height float64) *layouter {
@@ -151,6 +152,15 @@ func (l *layouter) block(b *box.Box, in []level, cb cbox, decor style.TextDecora
 	)
 	switch {
 	case lv.childrenDone:
+	case b.Style.Display == style.DisplayTable:
+		var err error
+		stat, tok, err = l.tableRows(b, f, lv, inner, childDecor, resuming, emptyAtEntry)
+		if err != nil {
+			return result{}, err
+		}
+		if stat == nothing {
+			return result{status: nothing}, nil
+		}
 	case hasInlineChildren(b):
 		var err error
 		stat, tok, err = l.lines(b, f, lv, inner, childDecor, resuming, emptyAtEntry)

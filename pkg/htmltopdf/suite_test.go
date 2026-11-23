@@ -103,8 +103,7 @@ var variants = []variant{
 // not complete yet; they still run (no panic, bounded heap, valid PDF) and
 // their outcome is logged, not asserted. Each entry names what is missing.
 var robustAnyway = map[string]string{
-	"boxes_pseudo_over":  "::before/::after boxes are generated from M3",
-	"table_columns_over": "table layout is M1-16",
+	"boxes_pseudo_over": "::before/::after boxes are generated from M3",
 }
 
 type suiteOutcome struct {

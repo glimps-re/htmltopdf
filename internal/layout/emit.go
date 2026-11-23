@@ -20,7 +20,11 @@ func emit(f *frag, out display.List) display.List {
 	if !f.last {
 		widths[style.Bottom] = 0
 	}
+	n := len(out)
 	out = appendBorder(out, st, r, rad, widths)
+	if f.borderColor != nil && len(out) > n {
+		out = recolorBorder(out, f.borderColor)
+	}
 	clip := st.OverflowHidden && r.W > 0 && r.H > 0
 	if clip {
 		out = append(out, display.PushClip{Rect: paddingBox(f), Radii: innerRadii(rad, f)})
