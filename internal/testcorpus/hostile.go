@@ -39,6 +39,10 @@ type Case struct {
 	// Twin is the name of the Over/Under counterpart, empty if none.
 	Twin string
 	Want Outcome
+	// Limits, when not nil, adjusts the default limits the case runs with (the
+	// twin of a stress document raises one limit instead of shrinking the
+	// document).
+	Limits func(*budget.Limits)
 	// HTML generates the document. It is deterministic.
 	HTML func() []byte
 }
@@ -328,16 +332,17 @@ func layoutCases(l budget.Limits) []Case {
 	cs = append(cs, pair("boxes_pseudo", "MaxBoxes", LimitOrDegraded,
 		pseudo(l[budget.Nodes]*9/10), pseudo(l[budget.Boxes]/6))...)
 
-	// A blank block taller than the pages: A4 with 1 in margins holds 930 px,
-	// so the twin fills Pages-1 pages and the over case far more than Pages.
+	// A blank block taller than the pages (padding: M1 does not support height):
+	// A4 with 1 in margins holds 930 px and the body margin takes 16 px, so the
+	// twin fills Pages-1 pages and the over case far more than Pages.
 	tall := func(px int64) func() []byte {
 		return func() []byte {
-			return doc(style("@page{size:A4;margin:1in}"), fmt.Sprintf(`<div style="height:%dpx"></div>`, px))
+			return doc(style("@page{size:A4;margin:1in}"), fmt.Sprintf(`<div style="padding-top:%dpx"></div>`, px))
 		}
 	}
 	maxPages := l[budget.Pages]
 	cs = append(cs, pair("pages_tall_block", "MaxPages", Limit,
-		tall((maxPages+10)*1123), tall((maxPages-1)*930))...)
+		tall((maxPages+10)*1123), tall((maxPages-1)*930-16))...)
 
 	rows := func(n int64) func() []byte {
 		return func() []byte {
@@ -350,10 +355,32 @@ func layoutCases(l budget.Limits) []Case {
 			return doc("", b.String())
 		}
 	}
-	// Row height depends on the UA stylesheet (18 to 30 px): a third of the
-	// rows stays under MaxPages whatever it is.
-	overRows := l[budget.Nodes] * 9 / 10 / 3
-	cs = append(cs, pair("pages_table_rows", "MaxPages", Limit, rows(overRows), rows(overRows/3))...)
+	// Row-stress pair: about 90k nodes, under MaxNodes. The over case ends in
+	// LimitPages; the twin is the same document with only MaxPages raised to
+	// 1000, which must render within the same time and memory bounds.
+	stressRows := l[budget.Nodes] * 9 / 10 / 3
+	stress := pair("pages_table_rows", "MaxPages", Limit, rows(stressRows), rows(stressRows))
+	stress[1].Limits = func(lim *budget.Limits) { lim[budget.Pages] = 2 * maxPages }
+	cs = append(cs, stress...)
+
+	// Page-limit pair with tall rows: every row is 200 px (padding and a fixed
+	// line height; height is unsupported in M1) and A4 without margins holds 5
+	// of them, so Pages+1 pages need 5*(Pages+1) rows and the twin fills
+	// exactly Pages-1 pages.
+	tallRows := func(n int64) func() []byte {
+		return func() []byte {
+			var b strings.Builder
+			b.WriteString("<table>")
+			for range n {
+				b.WriteString("<tr><td>1</td></tr>")
+			}
+			b.WriteString("</table>")
+			return doc(style("@page{size:A4;margin:0}body{margin:0}table{border-collapse:collapse;border-spacing:0}"+
+				"td{padding:90px 0;font-size:10px;line-height:20px}"), b.String())
+		}
+	}
+	cs = append(cs, pair("pages_table_tall_rows", "MaxPages", Limit,
+		tallRows(5*(maxPages+1)), tallRows(5*(maxPages-1)))...)
 
 	// The rightmost compound selects every <i>; "~" then scans the previous
 	// siblings once per selector: about n²/2 units per selector.

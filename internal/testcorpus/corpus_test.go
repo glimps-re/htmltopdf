@@ -482,7 +482,7 @@ func TestPaginationCasesStraddleMaxPages(t *testing.T) {
 	height := func(name string) int64 {
 		var h int64
 		s := string(m[name])
-		i := strings.Index(s, "height:") + 7
+		i := strings.Index(s, "padding-top:") + 12
 		if _, err := fmt.Sscanf(s[i:], "%dpx", &h); err != nil {
 			t.Fatal(err)
 		}
@@ -492,7 +492,7 @@ func TestPaginationCasesStraddleMaxPages(t *testing.T) {
 	if p := height("pages_tall_block_over") / pagePx; p < l[budget.Pages] {
 		t.Errorf("over: at most %d pages of the tallest possible content, want > %d", p, l[budget.Pages])
 	}
-	if p := (height("pages_tall_block_under") + contentPx - 1) / contentPx; p != l[budget.Pages]-1 {
+	if p := (height("pages_tall_block_under") + 16 + contentPx - 1) / contentPx; p != l[budget.Pages]-1 {
 		t.Errorf("under: %d pages, want exactly %d", p, l[budget.Pages]-1)
 	}
 	if h := height("pages_tall_block_over"); h > 1e7 {
@@ -775,6 +775,63 @@ func BenchmarkGenerateReports(b *testing.B) {
 	for b.Loop() {
 		if _, err := Report(templatesFS(), "00-host-connector", Large); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+func TestTableRowCases(t *testing.T) {
+	l := budget.Defaults()
+	m := hostileByName(t, l)
+	rows := func(name string) int64 { return int64(strings.Count(string(m[name]), "<tr>")) }
+	maxPages := l[budget.Pages]
+	if got := rows("pages_table_tall_rows_over"); got != 5*(maxPages+1) {
+		t.Errorf("tall rows over: %d rows, want %d", got, 5*(maxPages+1))
+	}
+	if got := rows("pages_table_tall_rows_under"); got != 5*(maxPages-1) {
+		t.Errorf("tall rows under: %d rows, want %d", got, 5*(maxPages-1))
+	}
+	for _, name := range []string{"pages_table_tall_rows_over", "pages_table_tall_rows_under"} {
+		for _, want := range []string{"@page{size:A4;margin:0}", "padding:90px 0", "line-height:20px"} {
+			if !strings.Contains(string(m[name]), want) {
+				t.Errorf("%s lacks %q", name, want)
+			}
+		}
+	}
+	over, under := string(m["pages_table_rows_over"]), string(m["pages_table_rows_under"])
+	if over != under {
+		t.Error("the row-stress twin must be the same document: only MaxPages is raised")
+	}
+	if got := rows("pages_table_rows_over"); got != l[budget.Nodes]*9/10/3 {
+		t.Errorf("stress rows: %d", got)
+	}
+	if nodes := 3*rows("pages_table_rows_over") + 10; nodes >= l[budget.Nodes] {
+		t.Errorf("about %d nodes, over MaxNodes %d", nodes, l[budget.Nodes])
+	}
+	for _, c := range Hostile(l) {
+		switch c.Name {
+		case "pages_table_rows_under":
+			lim := l
+			if c.Limits == nil {
+				t.Fatal("the stress twin raises MaxPages")
+			}
+			c.Limits(&lim)
+			if lim[budget.Pages] != 1000 {
+				t.Errorf("MaxPages = %d, want 1000", lim[budget.Pages])
+			}
+			for k := budget.Kind(0); k < budget.NumKinds; k++ {
+				if k != budget.Pages && lim[k] != l[k] {
+					t.Errorf("the twin changes %s", k)
+				}
+			}
+		case "pages_table_rows_over":
+			if c.Limits != nil || c.Want != Limit {
+				t.Errorf("stress over: Limits %v, Want %v", c.Limits != nil, c.Want)
+			}
+		}
+	}
+	for _, c := range SpikeHostile() {
+		if c.Name == "hostile_50k_rows" && (c.Want != Limit || c.Limit != "MaxInputBytes") {
+			t.Errorf("hostile_50k_rows: %v %s", c.Want, c.Limit)
 		}
 	}
 }
