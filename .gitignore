@@ -4,3 +4,4 @@ coverage.out
 CLAUDE.md
 .claude/
 docs/design/
+*.test

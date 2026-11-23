@@ -58,19 +58,22 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 | `border-radius` (1 to 4 values, `/`, `%`) and the four corner longhands | supported | |
 | `background`, `background-color`, `background-image` | approximated | A color and/or a `linear-gradient()`; positions, sizes and repeats are not supported. |
 | `overflow` | approximated | `hidden` and `clip` clip; `auto`, `scroll` and `visible` do not. |
-| `border-collapse`, `border-spacing`, `table-layout` | supported | Stored by the style stage; the table layout itself is a later task, until then table parts are laid out as blocks. |
+| `border-collapse`, `border-spacing`, `table-layout` | supported | Fixed layout: `table-layout: auto` is laid out as fixed, with an `unsupported-property` warning. Column widths come from the cells of the first row. Collapsed borders: the wider wins, the left or top cell on a tie, `hidden` removes the edge; row and group borders are ignored. Separated model: each cell draws its own borders, `border-spacing` applies. |
+| Block layout: margin collapsing (siblings, parent and first or last child, empty boxes), auto margins, `%` of the containing block, `box-sizing` | supported | The root element and boxes with `overflow: hidden` keep the margins of their children inside. |
+| Fragmentation | approximated | Pages break between blocks and between lines; there is no orphans/widows control and `break-*` is ignored until M2. Margins next to a break are truncated. A border or padding that does not fit a page is sliced over the following pages. |
+| `Options.Scale` | supported | The page area is laid out at 1/Scale of its size and drawn at Scale; margin boxes are not scaled. |
 | `box-shadow`, `position`, `float`, `z-index`, `transform`, `opacity`, `flex*`, `grid*` | ignored | `unsupported-property`. |
 
 ## Text and fonts
 
 | Feature | Status | Notes |
 |---|---|---|
-| Mark positioning (GPOS offsets) | Not supported (M1-M4) | Shaped glyphs keep their advance but not their X/Y offsets, so combining marks are not repositioned: precomposed characters render correctly, stacked or detached marks may overlap their base. |
 | `font-family` (names, strings, generic families), `font-size` (lengths, `%`, keywords, `smaller`, `larger`), `font-weight` (1 to 1000, `bold`, `bolder`, `lighter`), `font-style`, `line-height`, `color`, `letter-spacing`, `text-align`, `vertical-align` (`baseline`, `top`, `middle`, `bottom`) | supported | At most 32 font families are kept; font sizes are clamped to 10 000 px. `text-align: justify` is dropped with `invalid-value`. `font` (shorthand): `unsupported-property` until M2. |
 | `white-space`: `normal`, `pre`; `overflow-wrap` and `word-wrap`: `normal`, `break-word` | supported | `nowrap`, `pre-wrap`, `pre-line` and `overflow-wrap: anywhere` are dropped with `invalid-value` until M2. |
 | `text-decoration` (`underline`, `line-through`, `none`) | supported | Not inherited; the box stage propagates it. `overline` is dropped with `invalid-value`. |
 | `list-style`, `list-style-type` | approximated | Only `none` is kept; markers are never drawn. |
 | UA sheet | supported | Chrome's values for the HTML subset (headings, lists, tables, `a[href]` blue and underlined, `pre`, `code`...). `img`, `object`, `iframe`, `video`, `canvas`, `input`... are `display: none` with `unsupported-element`. |
+| Mark positioning (GPOS offsets) | Not supported (M1-M4) | Shaped glyphs keep their advance but not their X/Y offsets, so combining marks are not repositioned: precomposed characters render correctly, stacked or detached marks may overlap their base. |
 
 ## Paged media
 
@@ -80,6 +83,7 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 | `@page` margins: `margin` and `margin-*` | supported | Margins that leave less than 1 in of page area are scaled down together (`clamped`). Other descriptors: `unsupported-property`. |
 | `@page` selectors (`:first`, `:left`, named pages) | ignored | The rule is dropped with `unsupported-at-rule` until M2/M3. |
 | Margin boxes `@top-left|center|right`, `@bottom-left|center|right` | supported | Font, color, background, padding, `text-align`, `vertical-align`, `content`. Their text is aligned and vertically centered by default. |
+| Margin text containing `counter()` | approximation | The text is not wrapped: it stays on one line, clipped to its box, starting at the box start when it overflows. A text without counter wraps in its box. No warning. |
 | `content` of a margin box: strings, `counter(page)`, `counter(pages)`, `none`, `normal` | supported | Strings go through the text sanitation of design section 8.4. |
 
 ## HTML elements and attributes
@@ -90,4 +94,11 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 | `<br>`, white space | supported | Collapsible white space collapses across inline boxes and is dropped at the start and end of a line; `white-space: pre` keeps spaces and turns newlines into line breaks. In preserved text a tab moves to the next multiple of 8 characters (counted in characters, not in widths). |
 | Block elements inside inline elements | supported | The inline box is split around the block, as in CSS 2.1 §9.2.1.1; loose inline content next to blocks gets an anonymous block. |
 | `<svg>` and `<math>` | ignored | The subtree is skipped and reported as `unsupported-element`. |
-| `<table>` and its parts | approximated | Until tables are implemented they are laid out as ordinary blocks. |
+| `<table>` and its parts | approximated | Missing rows, groups and cells are added as anonymous boxes; `col` and `colgroup` are dropped (widths come in M2). `colspan` is clamped to [1, 1000] (`clamped`), cells past column 1000 are not drawn, `rowspan` is rendered as 1 (`clamped`). Rows are never split across pages and the first `thead` repeats on each continuation page; a row taller than a page is placed alone and overflows (`clamped`). `caption` is drawn above the table; `tfoot` comes after the body and is not repeated. `vertical-align` on cells: top, middle, bottom, baseline. |
+
+## Limits worth knowing
+
+| Limit | Notes |
+|---|---|
+| Content of one page | 16 MiB of drawing operators per page. A single line whose drawing operators exceed 16 MiB fails with `LimitOutputBytes` (about 1.2 M glyphs with letter-spacing; plain text up to `MaxGlyphs` fits). |
+| Gradients | At most 64 stops per gradient and 4,096 distinct gradients per document; further ones are drawn as a solid color (`clamped`). Translucent stops are drawn opaque (`unsupported-property`). |
