@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/glimps-re/htmltopdf/internal/budget"
+
 	"github.com/glimps-re/htmltopdf/internal/css"
 )
 
@@ -99,7 +101,7 @@ func TestVarBomb(t *testing.T) {
 	}
 	found := false
 	for k := range x.warnings() {
-		if strings.HasPrefix(k, WarnVarBudget) {
+		if strings.HasPrefix(k, string(budget.WarnVarBudget)) {
 			found = true
 		}
 	}

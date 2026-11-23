@@ -109,7 +109,7 @@ func (x *doc) warnings() map[string]bool {
 	w, _ := x.b.Warnings()
 	out := make(map[string]bool, len(w))
 	for _, v := range w {
-		out[v.Code+": "+v.Detail] = true
+		out[string(v.Code)+": "+v.Detail] = true
 	}
 	return out
 }

@@ -197,7 +197,7 @@ func TestWarnSorted(t *testing.T) {
 	w, _ := b.Warnings()
 	var got []string
 	for _, x := range w {
-		got = append(got, x.Code+"/"+x.Detail)
+		got = append(got, string(x.Code)+"/"+x.Detail)
 	}
 	if want := "a/z,b/a,b/z"; strings.Join(got, ",") != want {
 		t.Fatalf("got %v, want %s", got, want)

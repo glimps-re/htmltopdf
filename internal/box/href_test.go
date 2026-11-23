@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/net/html/atom"
 
+	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/dom"
 )
 
@@ -133,7 +134,7 @@ func TestBuildDropsDangerousLinks(t *testing.T) {
 			}
 			var blocked bool
 			for _, w := range warnings(b) {
-				blocked = blocked || strings.HasPrefix(w, WarnBlockedLink+":")
+				blocked = blocked || strings.HasPrefix(w, string(budget.WarnBlockedLink)+":")
 			}
 			if !blocked {
 				t.Fatalf("no blocked-link warning: %v", warnings(b))

@@ -77,13 +77,13 @@ func ParseMediaQuery(prelude []Token, b *budget.Budget) MediaQuery {
 	var q MediaQuery
 	for lo, hi := range commaRanges(prelude) {
 		if len(q.alts) == maxMediaQueries {
-			b.Warn(WarnInvalidValue, "more than 32 media queries")
+			b.Warn(budget.WarnInvalidValue, "more than 32 media queries")
 			break
 		}
 		part := trimSpace(prelude[lo:hi])
 		alt := parseMediaAlt(part)
 		if alt.invalid {
-			b.Warn(WarnInvalidValue, "media query: "+describe(part))
+			b.Warn(budget.WarnInvalidValue, "media query: "+describe(part))
 		}
 		q.alts = append(q.alts, alt)
 	}

@@ -145,7 +145,7 @@ func TestCorpusIsWarningFreeExceptBoxShadow(t *testing.T) {
 		t.Errorf("want the box-shadow warning only, got %+v", w)
 	}
 	for _, v := range w {
-		if v.Code == WarnUnsupportedProperty && v.Detail == "box-shadow" {
+		if v.Code == budget.WarnUnsupportedProperty && v.Detail == "box-shadow" {
 			continue
 		}
 		t.Errorf("unexpected warning %+v", v)

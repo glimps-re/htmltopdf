@@ -111,7 +111,7 @@ var unsupportedElements = map[string]bool{
 func (r *Resolver) Element(d *dom.Document, e int32, parent *Computed) (*Computed, error) {
 	el := &d.Elements[e]
 	if el.NS == dom.NSHTML && el.Tag != 0 && unsupportedElements[el.Tag.String()] {
-		r.b.Warn(WarnUnsupportedElement, el.Tag.String())
+		r.b.Warn(budget.WarnUnsupportedElement, el.Tag.String())
 	}
 	m, err := r.match(d, e)
 	if err != nil {
@@ -354,6 +354,7 @@ func (r *Resolver) applyDecl(d *decl, lookup func(string) ([]css.Token, lookupRe
 		return nil
 	}
 	warnTruncated(r.b, specs)
+	warnClampedLength(r.b, toks)
 	for _, ps := range specs {
 		r.set(ps.prop, ps.spec)
 	}

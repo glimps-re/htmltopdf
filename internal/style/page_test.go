@@ -83,7 +83,7 @@ func TestPageSizeInvalid(t *testing.T) {
 		if _, err := Compile(ss, b); err != nil {
 			t.Fatal(err)
 		}
-		if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != WarnInvalidValue {
+		if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != budget.WarnInvalidValue {
 			t.Errorf("%s: warnings %+v", src, w)
 		}
 	}
@@ -94,7 +94,7 @@ func TestPageSizeClamp(t *testing.T) {
 	if ps.Width != MaxPageSidePx || ps.Height != MinPageSidePx {
 		t.Errorf("size %v x %v", ps.Width, ps.Height)
 	}
-	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != WarnClamped {
+	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != budget.WarnClamped {
 		t.Errorf("warnings %+v", w)
 	}
 	// Exactly at the bounds: no warning.
@@ -124,7 +124,7 @@ func TestPageMargins(t *testing.T) {
 	if !nearPx(ps.Margin[Left]+ps.Margin[Right], 9*96) || !nearPx(ps.Margin[Top]+ps.Margin[Bottom], 9*96) || !nearPx(ps.Margin[Left], ps.Margin[Right]) {
 		t.Errorf("margins %v", ps.Margin)
 	}
-	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != WarnClamped {
+	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != budget.WarnClamped {
 		t.Errorf("warnings %+v", w)
 	}
 	// Exactly 1 in left: not clamped.
@@ -227,7 +227,7 @@ func TestMarginBoxWarnings(t *testing.T) {
 	w, _ := b.Warnings()
 	got := map[string]bool{}
 	for _, v := range w {
-		got[v.Code+": "+v.Detail] = true
+		got[string(v.Code)+": "+v.Detail] = true
 	}
 	for _, want := range []string{
 		"unsupported-at-rule: @top-left-corner", "unsupported-at-rule: @left-top", "invalid-value: content: attr(title)",
@@ -249,7 +249,7 @@ func TestPageSelectorsAreWarned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != WarnUnsupportedAtRule || w[0].Count != 2 {
+	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != budget.WarnUnsupportedAtRule || w[0].Count != 2 {
 		t.Errorf("warnings %+v", w)
 	}
 	ps := NewResolver(ua(), s, nil, printEnv, b).Page(PageContext{})

@@ -9,10 +9,6 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/css"
 )
 
-// WarnVarBudget is the warning code recorded when var() substitution reaches
-// the VarBytes limit.
-const WarnVarBudget = "var-budget"
-
 // maxVarChain is the number of varSets walked by a lookup before a new set
 // copies the chain into one map.
 const maxVarChain = 16
@@ -114,7 +110,7 @@ func (r *Resolver) charge(toks []css.Token) (budgetHit bool, err error) {
 	if err := r.b.Charge(budget.VarBytes, bytes); err != nil {
 		var le *budget.LimitError
 		if errors.As(err, &le) && le.Kind == budget.VarBytes {
-			r.b.Warn(WarnVarBudget, "var() substitution limit reached")
+			r.b.Warn(budget.WarnVarBudget, "var() substitution limit reached")
 			return true, nil
 		}
 		return false, err

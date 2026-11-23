@@ -309,7 +309,7 @@ func (x *computeCtx) fontSize(s *spec) float64 {
 	}
 	clamped := math.Max(0, math.Min(MaxFontSizePx, clampPx(v)))
 	if clamped != v && x.b != nil {
-		x.b.Warn(WarnClamped, "font-size")
+		x.b.Warn(budget.WarnClamped, "font-size")
 	}
 	return clamped
 }

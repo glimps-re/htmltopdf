@@ -203,7 +203,7 @@ func TestMarginBoxContentIsCapped(t *testing.T) {
 	if total > MaxContentBytes {
 		t.Errorf("%d bytes kept", total)
 	}
-	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != WarnClamped || w[0].Count != 1 {
+	if w, _ := b.Warnings(); len(w) != 1 || w[0].Code != budget.WarnClamped || w[0].Count != 1 {
 		t.Errorf("warnings %+v", w)
 	}
 	// At the limit: kept whole, no warning.

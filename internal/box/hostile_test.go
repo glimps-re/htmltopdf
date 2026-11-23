@@ -9,8 +9,6 @@ import (
 	"time"
 	"weak"
 
-	"github.com/glimps-re/htmltopdf/internal/style"
-
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/dom"
 )
@@ -71,7 +69,7 @@ func TestDangerousLinksThroughBuild(t *testing.T) {
 			}
 			found := false
 			for _, w := range warnings(b) {
-				found = found || strings.HasPrefix(w, WarnBlockedLink+":")
+				found = found || strings.HasPrefix(w, string(budget.WarnBlockedLink)+":")
 			}
 			if !found && name != "unicode whitespace" {
 				t.Errorf("no blocked-link warning: %v", warnings(b))
@@ -303,7 +301,7 @@ func TestForeignContentIsSkippedWithAWarning(t *testing.T) {
 			ws := warnings(b)
 			found := false
 			for _, w := range ws {
-				found = found || strings.HasPrefix(w, style.WarnUnsupportedElement+":")
+				found = found || strings.HasPrefix(w, string(budget.WarnUnsupportedElement)+":")
 			}
 			if !found {
 				t.Errorf("no unsupported-element warning: %v", ws)

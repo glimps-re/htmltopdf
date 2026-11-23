@@ -116,14 +116,41 @@ func (e *LimitError) Error() string {
 	return fmt.Sprintf("budget: %s exceeded (max %d)", e.Kind, e.Max)
 }
 
+// Code classifies a warning. The values are the public warning codes of the
+// converter (design §4): the single source of the strings.
+type Code string
+
+// Warning codes.
+const (
+	WarnUnsupportedProperty Code = "unsupported-property"
+	WarnInvalidValue        Code = "invalid-value"
+	WarnUnsupportedAtRule   Code = "unsupported-at-rule"
+	WarnUnsupportedSelector Code = "unsupported-selector"
+	WarnUnsupportedElement  Code = "unsupported-element"
+	WarnBlockedLink         Code = "blocked-link"
+	WarnMissingGlyph        Code = "missing-glyph"
+	WarnClamped             Code = "clamped"
+	WarnVarBudget           Code = "var-budget"
+	WarnShapingFallback     Code = "shaping-fallback"
+)
+
+// WarningCodes lists every code, for the tests that compare it with the public list.
+var WarningCodes = [...]Code{
+	WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
+	WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback,
+}
+
 // Warning is a deduplicated warning with its number of occurrences.
 type Warning struct {
-	Code   string
+	Code   Code
 	Detail string
 	Count  int
 }
 
-type warnKey struct{ code, detail string }
+type warnKey struct {
+	code   Code
+	detail string
+}
 
 // slot holds the running total of a Kind and the total up to which Charge
 // needs no slow path: the limit, or for Work the end of the polling interval.
@@ -225,7 +252,7 @@ func (b *Budget) Checkpoint(stage string) {
 // to MaxDetailBytes before deduplication. At most MaxWarnings distinct
 // warnings are kept. A repeat of a kept warning always increments its Count; an
 // occurrence that would create a further entry only increments the dropped count.
-func (b *Budget) Warn(code, detail string) {
+func (b *Budget) Warn(code Code, detail string) {
 	key := warnKey{code: code, detail: sanitizeDetail(detail)}
 	if i, ok := b.warnIndex[key]; ok {
 		b.warnings[i].Count++

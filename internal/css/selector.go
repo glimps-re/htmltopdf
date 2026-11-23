@@ -21,9 +21,6 @@ const (
 	MaxSimple = 32
 )
 
-// WarnUnsupportedSelector is the warning code of a dropped selector list.
-const WarnUnsupportedSelector = "unsupported-selector"
-
 // Combinator links a compound selector to the one on its left.
 type Combinator uint8
 
@@ -200,7 +197,7 @@ func ParseSelectors(prelude []Token, b *budget.Budget) ([]*Selector, error) {
 		}
 	}
 	if reason != "" {
-		b.Warn(WarnUnsupportedSelector, reason+": "+describe(prelude))
+		b.Warn(budget.WarnUnsupportedSelector, reason+": "+describe(prelude))
 		return nil, nil
 	}
 	return out, nil

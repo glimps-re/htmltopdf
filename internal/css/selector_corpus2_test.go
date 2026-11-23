@@ -62,7 +62,7 @@ func TestHostileCorpusSelectors(t *testing.T) {
 					if len(sels) != 1 || w != "" {
 						t.Fatalf("at the limit: %d selectors, warnings %q", len(sels), w)
 					}
-				} else if len(sels) != 0 || !strings.Contains(w, WarnUnsupportedSelector) {
+				} else if len(sels) != 0 || !strings.Contains(w, string(budget.WarnUnsupportedSelector)) {
 					t.Fatalf("over the limit: %d selectors, warnings %q", len(sels), w)
 				}
 			}
@@ -78,7 +78,7 @@ func warnText2(b *budget.Budget) string {
 	ws, _ := b.Warnings()
 	var sb strings.Builder
 	for _, w := range ws {
-		sb.WriteString(w.Code + ":" + w.Detail + "\n")
+		sb.WriteString(string(w.Code) + ":" + w.Detail + "\n")
 	}
 	return sb.String()
 }

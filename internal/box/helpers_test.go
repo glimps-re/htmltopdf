@@ -111,7 +111,7 @@ func warnings(b *budget.Budget) []string {
 	ws, _ := b.Warnings()
 	var out []string
 	for _, w := range ws {
-		out = append(out, w.Code+":"+w.Detail)
+		out = append(out, string(w.Code)+":"+w.Detail)
 	}
 	return out
 }

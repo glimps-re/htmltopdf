@@ -73,6 +73,9 @@ type Box struct {
 	Href string
 	// Text is the text of a text box: no newline, white space processed.
 	Text string
+	// ColSpan is the colspan of a table cell, in [1, MaxColSpan]; 0 on every
+	// other box.
+	ColSpan int
 	// Children are the boxes inside. A block has either block children only or
 	// inline-level children only.
 	Children []*Box
@@ -102,6 +105,9 @@ func dump(w io.Writer, b *Box, depth int) error {
 	}
 	if b.Href != "" {
 		sb.WriteString(" href=" + strconv.Quote(b.Href))
+	}
+	if b.ColSpan > 1 {
+		sb.WriteString(" colspan=" + strconv.Itoa(b.ColSpan))
 	}
 	if b.Continuation {
 		sb.WriteString(" (cont)")

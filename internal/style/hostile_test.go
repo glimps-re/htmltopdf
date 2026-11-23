@@ -243,17 +243,17 @@ func TestCorpusVarAndStyleCases(t *testing.T) {
 				}
 				found := false
 				for _, w := range ws {
-					found = found || w.Code == WarnVarBudget
+					found = found || w.Code == budget.WarnVarBudget
 				}
 				if !found {
-					t.Errorf("no %s warning: %v", WarnVarBudget, ws)
+					t.Errorf("no %s warning: %v", budget.WarnVarBudget, ws)
 				}
 			case "var_doubling_under":
 				if err != nil {
 					t.Fatal(err)
 				}
 				for _, w := range ws {
-					if w.Code == WarnVarBudget {
+					if w.Code == budget.WarnVarBudget {
 						t.Errorf("the under twin hits the var budget: %v", w)
 					}
 				}

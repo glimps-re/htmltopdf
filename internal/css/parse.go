@@ -16,10 +16,7 @@ import (
 // dropped with a warning.
 const MaxNesting = 64
 
-// Warning codes recorded in the budget (the public WarningCode values).
 const (
-	WarnInvalidValue       = "invalid-value"
-	WarnUnsupportedAtRule  = "unsupported-at-rule"
 	detailNesting          = "nesting too deep"
 	detailUnclosedBlock    = "unclosed block"
 	detailRuleWithoutBlock = "rule without a block"
@@ -474,7 +471,7 @@ func (p *parser) makeDecl(start int) (Declaration, bool) {
 	end := len(p.arena)
 	drop := func(detail string) (Declaration, bool) {
 		p.arena = p.arena[:start]
-		p.b.Warn(WarnInvalidValue, detail)
+		p.b.Warn(budget.WarnInvalidValue, detail)
 		return Declaration{}, false
 	}
 	i := start
@@ -593,7 +590,7 @@ func (p *parser) parseDeclBlock(margins bool) (decls []Declaration, boxes []Rule
 	for {
 		switch {
 		case !p.peek():
-			p.b.Warn(WarnInvalidValue, detailUnclosedBlock)
+			p.b.Warn(budget.WarnInvalidValue, detailUnclosedBlock)
 			decls = takeFrom(p.declStack, base)
 			p.declStack = p.declStack[:base]
 			return decls, boxes
@@ -637,7 +634,7 @@ func (p *parser) parseNestedAtRule(margins bool) (Rule, bool) {
 	case p.cur.Type == TLBrace:
 		p.skipBlock(false)
 	}
-	p.b.Warn(WarnUnsupportedAtRule, "@"+short(name))
+	p.b.Warn(budget.WarnUnsupportedAtRule, "@"+short(name))
 	return Rule{}, false
 }
 
@@ -647,7 +644,7 @@ func (p *parser) parseRules(top bool) []Rule {
 		switch {
 		case !p.peek():
 			if !top {
-				p.b.Warn(WarnInvalidValue, detailUnclosedBlock)
+				p.b.Warn(budget.WarnInvalidValue, detailUnclosedBlock)
 			}
 			return p.takeRules(base)
 		case p.cur.Type == TWhitespace || (top && (p.cur.Type == TCDO || p.cur.Type == TCDC)):
@@ -684,14 +681,14 @@ func (p *parser) parseQualified(nested bool) (Rule, bool) {
 	pa, pb := p.prelude(start)
 	if !p.peek() || p.cur.Type != TLBrace {
 		p.arena = p.arena[:start]
-		p.b.Warn(WarnInvalidValue, detailRuleWithoutBlock)
+		p.b.Warn(budget.WarnInvalidValue, detailRuleWithoutBlock)
 		return Rule{}, false
 	}
 	p.advance()
 	decls, _ := p.parseDeclBlock(false)
 	if deep {
 		p.arena = p.arena[:start]
-		p.b.Warn(WarnInvalidValue, detailNesting+" in selector")
+		p.b.Warn(budget.WarnInvalidValue, detailNesting+" in selector")
 		return Rule{}, false
 	}
 	if len(decls) == 0 {
@@ -718,7 +715,7 @@ func (p *parser) parseAtRule(nested bool) (Rule, bool) {
 	if p.have && !hasBlock && p.cur.Type == TSemicolon {
 		p.advance()
 	}
-	drop := func(code, detail string) (Rule, bool) {
+	drop := func(code budget.Code, detail string) (Rule, bool) {
 		p.arena = p.arena[:start]
 		p.b.Warn(code, detail)
 		return Rule{}, false
@@ -734,12 +731,12 @@ func (p *parser) parseAtRule(nested bool) (Rule, bool) {
 			p.arena = p.arena[:start]
 			return Rule{}, false
 		}
-		return drop(WarnUnsupportedAtRule, "@charset")
+		return drop(budget.WarnUnsupportedAtRule, "@charset")
 	}
 	if hasBlock {
 		p.skipBlock(false)
 	}
-	return drop(WarnUnsupportedAtRule, "@"+short(name))
+	return drop(budget.WarnUnsupportedAtRule, "@"+short(name))
 }
 
 // parseBlockRule parses the block of an @media or @page rule; the current token
@@ -747,7 +744,7 @@ func (p *parser) parseAtRule(nested bool) (Rule, bool) {
 func (p *parser) parseBlockRule(name string, hasBlock, deep bool, start int, pa, pb int32) (Rule, bool) {
 	drop := func(detail string) (Rule, bool) {
 		p.arena = p.arena[:start]
-		p.b.Warn(WarnInvalidValue, detail)
+		p.b.Warn(budget.WarnInvalidValue, detail)
 		return Rule{}, false
 	}
 	switch {

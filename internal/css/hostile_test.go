@@ -29,7 +29,7 @@ func warnText(b *budget.Budget) string {
 	ws, _ := b.Warnings()
 	var s strings.Builder
 	for _, w := range ws {
-		s.WriteString(w.Code + ":" + w.Detail + "\n")
+		s.WriteString(string(w.Code) + ":" + w.Detail + "\n")
 	}
 	return s.String()
 }

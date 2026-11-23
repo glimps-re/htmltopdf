@@ -4,6 +4,8 @@ import (
 	"math"
 	"unicode/utf8"
 
+	"github.com/glimps-re/htmltopdf/internal/budget"
+
 	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/dom"
 )
@@ -117,13 +119,18 @@ func (r *Resolver) pageSequence(box string) []*decl {
 	return r.seq
 }
 
-func (r *Resolver) buildPage() *PageStyle {
+// DefaultPage returns the page style when no @page rule applies: A4 with 10 mm margins.
+func DefaultPage() *PageStyle {
 	a4 := namedSizes["a4"]
-	ps := &PageStyle{
+	return &PageStyle{
 		Width:  a4[0],
 		Height: a4[1],
 		Margin: [4]float64{10 * mmPx, 10 * mmPx, 10 * mmPx, 10 * mmPx},
 	}
+}
+
+func (r *Resolver) buildPage() *PageStyle {
+	ps := DefaultPage()
 	r.touched = r.touched[:0]
 	for _, d := range r.pageSequence("") {
 		r.applyPageDecl(d)
@@ -193,7 +200,7 @@ func (r *Resolver) clampSize(ps *PageStyle) {
 		}
 	}
 	if clamped {
-		r.b.Warn(WarnClamped, "page size")
+		r.b.Warn(budget.WarnClamped, "page size")
 	}
 }
 
@@ -213,7 +220,7 @@ func (r *Resolver) clampMargins(ps *PageStyle) {
 		}
 	}
 	if clamped {
-		r.b.Warn(WarnClamped, "page margins")
+		r.b.Warn(budget.WarnClamped, "page margins")
 	}
 }
 
@@ -322,7 +329,7 @@ func (r *Resolver) capContent(items []ContentItem) []ContentItem {
 		if it.Kind == ContentText {
 			if len(it.Text) > left {
 				if !cut {
-					r.b.Warn(WarnClamped, "margin box content")
+					r.b.Warn(budget.WarnClamped, "margin box content")
 					cut = true
 				}
 				end := left

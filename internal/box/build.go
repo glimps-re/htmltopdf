@@ -11,9 +11,6 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/style"
 )
 
-// WarnBlockedLink is the warning code of a link that is not drawn.
-const WarnBlockedLink = "blocked-link"
-
 // tabSize is the width of a tab in a preserved white space, in characters.
 const tabSize = 8
 
@@ -114,7 +111,16 @@ func (bd *builder) block(e int32, cs *style.Computed, href string) (*Box, error)
 	if err := bd.walk(f, el.FirstChild, cs, href); err != nil {
 		return nil, err
 	}
-	return bx, bd.finish(f)
+	if err := bd.finish(f); err != nil {
+		return nil, err
+	}
+	switch cs.Display {
+	case style.DisplayTable:
+		return bx, bd.fixTable(bx)
+	case style.DisplayTableCell:
+		bd.cellSpans(el, bx)
+	}
+	return bx, nil
 }
 
 // walk adds the nodes of a sibling list, children of an element whose style is
@@ -141,7 +147,7 @@ func (bd *builder) walk(f *flow, first dom.NodeRef, parent *style.Computed, href
 func (bd *builder) element(f *flow, e int32, parent *style.Computed, href string) error {
 	el := &bd.d.Elements[e]
 	if el.NS != dom.NSHTML {
-		bd.b.Warn(style.WarnUnsupportedElement, foreignName(el.NS))
+		bd.b.Warn(budget.WarnUnsupportedElement, foreignName(el.NS))
 		return nil
 	}
 	cs, err := bd.st.Element(bd.d, e, parent)
@@ -188,7 +194,7 @@ func (bd *builder) linkOf(el *dom.Element, outer string) string {
 	}
 	href, why := cleanHref(v)
 	if why != "" {
-		bd.b.Warn(WarnBlockedLink, why)
+		bd.b.Warn(budget.WarnBlockedLink, why)
 	}
 	return href
 }

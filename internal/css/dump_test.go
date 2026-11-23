@@ -128,7 +128,7 @@ func warnings(b *budget.Budget) []string {
 	}
 	out := make([]string, len(ws))
 	for i, w := range ws {
-		out[i] = w.Code + ":" + w.Detail
+		out[i] = string(w.Code) + ":" + w.Detail
 	}
 	return out
 }

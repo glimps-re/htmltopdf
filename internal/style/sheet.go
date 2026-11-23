@@ -5,15 +5,6 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/css"
 )
 
-// Warning codes recorded by this package (the public WarningCode values).
-const (
-	WarnUnsupportedProperty = "unsupported-property"
-	WarnUnsupportedElement  = "unsupported-element"
-	WarnClamped             = "clamped"
-	WarnInvalidValue        = css.WarnInvalidValue
-	WarnUnsupportedAtRule   = css.WarnUnsupportedAtRule
-)
-
 // decl is a compiled declaration.
 type decl struct {
 	important bool
@@ -127,7 +118,7 @@ func (c *compiler) styleRule(r *css.Rule, media []css.MediaQuery) error {
 
 func (c *compiler) pageRule(r *css.Rule, media []css.MediaQuery) {
 	if len(trim(r.Prelude)) != 0 {
-		c.b.Warn(WarnUnsupportedAtRule, "@page selector")
+		c.b.Warn(budget.WarnUnsupportedAtRule, "@page selector")
 		return
 	}
 	p := cpage{decls: c.decls(r.Decls, ctxPage), media: media}
@@ -137,7 +128,7 @@ func (c *compiler) pageRule(r *css.Rule, media []css.MediaQuery) {
 			continue
 		}
 		if !supportedMarginBoxes[box.Name] {
-			c.b.Warn(WarnUnsupportedAtRule, "@"+box.Name)
+			c.b.Warn(budget.WarnUnsupportedAtRule, "@"+box.Name)
 			continue
 		}
 		if p.boxes == nil {
@@ -163,7 +154,7 @@ func (c *compiler) decl(in *css.Declaration, ctx declCtx) (decl, bool) {
 	name := in.Name
 	if len(name) > 2 && name[:2] == "--" {
 		if ctx != ctxElement {
-			c.b.Warn(WarnUnsupportedProperty, name)
+			c.b.Warn(budget.WarnUnsupportedProperty, name)
 			return decl{}, false
 		}
 		d := decl{important: in.Important, custom: true, name: name, toks: trim(in.Value)}
@@ -184,11 +175,11 @@ func (c *compiler) decl(in *css.Declaration, ctx declCtx) (decl, bool) {
 		if ctx != ctxElement {
 			// var() needs the custom properties of an element: it is invalid
 			// here, and never silently.
-			c.b.Warn(WarnInvalidValue, name+": "+describe(in.Value))
+			c.b.Warn(budget.WarnInvalidValue, name+": "+describe(in.Value))
 			return decl{}, false
 		}
 		if _, ok := propsOf(name, ctx); !ok {
-			c.b.Warn(WarnUnsupportedProperty, name)
+			c.b.Warn(budget.WarnUnsupportedProperty, name)
 			return decl{}, false
 		}
 		return decl{important: in.Important, name: name, deferred: true, ctx: ctx, toks: in.Value}, true
@@ -196,13 +187,16 @@ func (c *compiler) decl(in *css.Declaration, ctx declCtx) (decl, bool) {
 	specs, st := parseDecl(name, in.Value, ctx)
 	switch st {
 	case parseUnsupported:
-		c.b.Warn(WarnUnsupportedProperty, name)
+		c.b.Warn(budget.WarnUnsupportedProperty, name)
 		return decl{}, false
 	case parseInvalid:
-		c.b.Warn(WarnInvalidValue, name+": "+describe(in.Value))
+		c.b.Warn(budget.WarnInvalidValue, name+": "+describe(in.Value))
 		return decl{}, false
 	}
 	warnTruncated(c.b, specs)
+	if ctx == ctxElement {
+		warnClampedLength(c.b, in.Value)
+	}
 	return decl{important: in.Important, name: name, specs: specs}, true
 }
 
@@ -210,7 +204,15 @@ func (c *compiler) decl(in *css.Declaration, ctx declCtx) (decl, bool) {
 func warnTruncated(b *budget.Budget, specs []propSpec) {
 	for i := range specs {
 		if specs[i].prop == pFontFamily && specs[i].spec.n == familiesCut {
-			b.Warn(WarnClamped, "font-family")
+			b.Warn(budget.WarnClamped, "font-family")
 		}
+	}
+}
+
+// warnClampedLength records a length of the declaration value that parsing
+// clamped to ±css.MaxLengthPx.
+func warnClampedLength(b *budget.Budget, toks []css.Token) {
+	if css.HasClampedLength(toks) {
+		b.Warn(budget.WarnClamped, "length beyond 1e7 px")
 	}
 }
