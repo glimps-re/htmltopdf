@@ -115,3 +115,11 @@ func TestWarnRepeatDoesNotAllocate(t *testing.T) {
 		t.Fatalf("repeat allocs = %v, want 0", n)
 	}
 }
+
+func TestWarnDetailReplacesZeroWidthJoiners(t *testing.T) {
+	b := newBudget(Limits{})
+	b.Warn("c", "a\u200Cb\u200Dc")
+	if w, _ := b.Warnings(); w[0].Detail != "a?b?c" {
+		t.Fatalf("got %q", w[0].Detail)
+	}
+}

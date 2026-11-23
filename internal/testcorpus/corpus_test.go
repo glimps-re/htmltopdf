@@ -660,7 +660,7 @@ func TestTextCasesCoverEveryFamily(t *testing.T) {
 	}
 	for _, n := range []string{
 		"bidi_LRE", "bidi_RLE", "bidi_PDF", "bidi_LRO", "bidi_RLO", "bidi_LRI", "bidi_RLI", "bidi_FSI", "bidi_PDI",
-		"rlo_filename", "dropped_U+200B", "dropped_U+200F", "dropped_U+2060", "dropped_U+2064", "dropped_U+FEFF",
+		"rlo_filename", "dropped_U+200B", "kept_U+200C", "kept_U+200D", "dropped_U+200F", "dropped_U+2060", "dropped_U+2064", "dropped_U+FEFF",
 		"dropped_U+00AD", "control_U+0001", "control_U+001F", "control_U+0080", "control_U+009F", "control_U+000B",
 		"control_U+000C", "control_U+007F", "whitespace_controls_kept", "invalid_lone_continuation", "valid_untouched",
 	} {

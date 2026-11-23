@@ -489,7 +489,7 @@ type TextCase struct {
 }
 
 // TextCases covers each family of design §8.4: the nine bidi controls drawn as
-// markers, dropped zero-width and format characters, C0 and C1 controls and
+// markers, dropped zero-width and format characters (ZWNJ and ZWJ kept), C0 and C1 controls and
 // invalid UTF-8 replaced by U+FFFD, tab, LF and CR kept. Only single invalid
 // bytes are listed: the number of U+FFFD for a malformed multi-byte sequence
 // is not fixed by the design (the invalid_utf8_document case covers those).
@@ -515,6 +515,11 @@ func TextCases() []TextCase {
 	cs = append(cs, TextCase{"rlo_filename", "invoice" + string(rune(0x202e)) + "txt.exe", "invoice\u27e8RLO\u27e9txt.exe"})
 
 	for _, r := range runeRange([2]rune{0x200b, 0x200f}, [2]rune{0x2060, 0x2064}, [2]rune{0xfeff, 0xfeff}, [2]rune{0xad, 0xad}) {
+		if r == 0x200c || r == 0x200d {
+			// ZWNJ and ZWJ shape Persian, Indic and emoji sequences: kept.
+			cs = append(cs, TextCase{fmt.Sprintf("kept_U+%04X", r), "a" + string(r) + "b", "a" + string(r) + "b"})
+			continue
+		}
 		cs = append(cs, TextCase{fmt.Sprintf("dropped_U+%04X", r), "a" + string(r) + "b", "ab"})
 	}
 	for _, r := range runeRange([2]rune{0x01, 0x08}, [2]rune{0x0b, 0x0c}, [2]rune{0x0e, 0x1f}, [2]rune{0x7f, 0x9f}) {
