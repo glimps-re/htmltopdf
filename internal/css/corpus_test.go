@@ -103,7 +103,7 @@ func oracle(src string) counts {
 // Pinned counts of the four corpus stylesheets (rules with declarations,
 // declarations, @media, @page); the grammar-level oracle must agree.
 var corpusCounts = map[string]counts{
-	"00-host-connector": {style: 19, decls: 83, media: 1, page: 1, margin: 6},
+	"00-host-connector": {style: 19, decls: 75, media: 1, page: 0, margin: 0},
 	"01-modern":         {style: 54, decls: 167, media: 0, page: 2, margin: 15},
 	"02-executive":      {style: 61, decls: 230, media: 0, page: 2, margin: 18},
 	"03-analyst":        {style: 57, decls: 164, media: 0, page: 1, margin: 10},

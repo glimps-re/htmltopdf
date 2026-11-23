@@ -120,23 +120,24 @@ func TestFixturesAreDeterministic(t *testing.T) {
 	}
 }
 
+// The 13 spike files that are still byte for byte the spike's. The two
+// report_00 files are no longer: the spike injected a @page rule that
+// production HTML does not have (design §4.1).
 func TestSpikeSumsMatchSpike(t *testing.T) {
 	spike := map[string]string{
-		"hostile_50k_rows":               "024af226d4f4aaf92e5a9e7cb97086727005804e8814775a37ae1596f13fa854",
-		"hostile_colspan":                "6ccd4acd0f876059dd11fc68fbea4573a66c18307ae4c6854a81c08aa97d6f9d",
-		"hostile_deep_nesting":           "6196ebe9f665973b27fc3fba70651aebf852ff23ed00d85d3ba4e2e8c60c9dd4",
-		"hostile_huge_page":              "857fb373964bc57292ce8afdd20ebfefd148c007ad389033de1c84fad8682b44",
-		"hostile_long_word":              "2a997ae2ae56c3cdff077b3e607a138ad94d481d7980d62ff31eae18ea7a7ab9",
-		"hostile_remote":                 "1a2eac3f3b12a862bd747b336252afb1b2e7e03e4efc743e9433286cab84f67a",
-		"hostile_var_bomb":               "35bfee3feb197abdd15c96bdbc8577fba6fbac4a76fc2964501c53de0bcafcd6",
-		"report_00-host-connector_large": "c43792176482f094edf17d96f00b9dc373b5c7b31e654f21a554c0cb14562688",
-		"report_00-host-connector_small": "88c9ad758d041e96e74a219cc64d926d45a856eadbe345952277862568a40469",
-		"report_01-modern_large":         "e5c395c577c2be845b83965a742526dd33e3b488f31b4041e82f3d677612e508",
-		"report_01-modern_small":         "4cdeee88b39a0a33edcd36624e1710251c432f024eaddc6baf415ff478b7e141",
-		"report_02-executive_large":      "0470870531f4a0ee585bd65e02def5c2ffa4d5b7bbfe43bba789d49f41816b76",
-		"report_02-executive_small":      "0681883be41c79af05d3f4515fd1d2741bff0dd82b0e1369f56e4f0215ba764a",
-		"report_03-analyst_large":        "1475ab00a0cd2ad9d9566449bfe019521520c94e65486048b98281f3c3019d94",
-		"report_03-analyst_small":        "1d8a616e6c76cdbccb9f038a918e5560b4b26562447c5b18992523af3686e7ec",
+		"hostile_50k_rows":          "024af226d4f4aaf92e5a9e7cb97086727005804e8814775a37ae1596f13fa854",
+		"hostile_colspan":           "6ccd4acd0f876059dd11fc68fbea4573a66c18307ae4c6854a81c08aa97d6f9d",
+		"hostile_deep_nesting":      "6196ebe9f665973b27fc3fba70651aebf852ff23ed00d85d3ba4e2e8c60c9dd4",
+		"hostile_huge_page":         "857fb373964bc57292ce8afdd20ebfefd148c007ad389033de1c84fad8682b44",
+		"hostile_long_word":         "2a997ae2ae56c3cdff077b3e607a138ad94d481d7980d62ff31eae18ea7a7ab9",
+		"hostile_remote":            "1a2eac3f3b12a862bd747b336252afb1b2e7e03e4efc743e9433286cab84f67a",
+		"hostile_var_bomb":          "35bfee3feb197abdd15c96bdbc8577fba6fbac4a76fc2964501c53de0bcafcd6",
+		"report_01-modern_large":    "e5c395c577c2be845b83965a742526dd33e3b488f31b4041e82f3d677612e508",
+		"report_01-modern_small":    "4cdeee88b39a0a33edcd36624e1710251c432f024eaddc6baf415ff478b7e141",
+		"report_02-executive_large": "0470870531f4a0ee585bd65e02def5c2ffa4d5b7bbfe43bba789d49f41816b76",
+		"report_02-executive_small": "0681883be41c79af05d3f4515fd1d2741bff0dd82b0e1369f56e4f0215ba764a",
+		"report_03-analyst_large":   "1475ab00a0cd2ad9d9566449bfe019521520c94e65486048b98281f3c3019d94",
+		"report_03-analyst_small":   "1d8a616e6c76cdbccb9f038a918e5560b4b26562447c5b18992523af3686e7ec",
 	}
 	for name, want := range spike {
 		if got := expectedSums[name]; got != want {
@@ -157,7 +158,10 @@ func TestReportErrors(t *testing.T) {
 	}
 }
 
-func TestReportsCarryPrintStyle(t *testing.T) {
+// The reports are the template output as is: production HTML carries no @page
+// (the host-connector page rules arrive as ExtraCSS), whereas the other
+// templates bring their own.
+func TestReportsAreTheTemplateOutput(t *testing.T) {
 	names, err := ReportNames(templatesFS())
 	if err != nil {
 		t.Fatal(err)
@@ -171,8 +175,12 @@ func TestReportsCarryPrintStyle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(b), "@page") || !strings.Contains(string(b), "TLP:AMBER") {
-				t.Errorf("%s %s: no print CSS", n, size)
+			hasPage := strings.Contains(string(b), "@page")
+			if hasPage == (n == "00-host-connector") {
+				t.Errorf("%s %s: @page present = %v", n, size, hasPage)
+			}
+			if strings.Contains(string(b), "TLP:AMBER") && n == "00-host-connector" {
+				t.Errorf("%s %s: the host-connector footer must come from ExtraCSS only", n, size)
 			}
 			if len(b) > int(budget.Defaults()[budget.InputBytes]) {
 				t.Errorf("%s %s: %d bytes exceed MaxInputBytes", n, size, len(b))

@@ -398,3 +398,29 @@ func counterItem(f []css.Token) (ContentKind, bool) {
 	}
 	return 0, false
 }
+
+// HasBoxes reports whether the page has a margin box to draw.
+func (p *PageStyle) HasBoxes() bool {
+	for _, b := range p.Boxes {
+		if b != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// ContentOnly returns a block style with the text properties of c and nothing
+// else: no margin, padding, border, radius or background, automatic width and
+// text-align left. A margin box draws its own box model and lays out only its
+// text with this style.
+func (c *Computed) ContentOnly() *Computed {
+	in := *c
+	in.Display = DisplayBlock
+	in.Margin, in.Padding = [4]Dim{}, [4]Dim{}
+	in.Border = [4]Border{}
+	in.Radius = [4]Corner{}
+	in.BackgroundColor, in.BackgroundImage = css.Color{}, nil
+	in.Width = Dim{Kind: DimAuto}
+	in.TextAlign = AlignLeft
+	return &in
+}

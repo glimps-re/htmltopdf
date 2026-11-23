@@ -1,7 +1,8 @@
 package testcorpus
 
-// expectedSums pins the SHA-256 of every generated fixture. The report_* and
-// hostile_* entries equal the files of the spike.
+// expectedSums pins the SHA-256 of every generated fixture. The hostile_*
+// entries equal the files of the spike; the report_00 entries changed when the
+// injected @page rule was removed (design §4.1): they are the template output.
 var expectedSums = map[string]string{
 	"binary_garbage":                 "f949d66b8ae9ede28ddcb9111da3282c60146ee176bd1be832a667aaba1b07d4",
 	"boxes_pseudo_over":              "87b7e010eb9b2867e6f4a2f97caeabee06de5d8cf188dbdb98967e39bc377aa0",
@@ -82,8 +83,8 @@ var expectedSums = map[string]string{
 	"pages_tall_block_over":          "6472e6f0f33f53b075fa20e6a61a814c7bda8934e0bdc95304f469e9b9b92375",
 	"pages_tall_block_under":         "553337422aed9ff284185d7e5fe6d1d1c783a4e2957cfab73acf8a79169e75f5",
 	"pdf_header_garbage":             "189bb61300209949fa308f9ce8ecf7143e87b119d1b4a9507bb9d35d132c15f2",
-	"report_00-host-connector_large": "c43792176482f094edf17d96f00b9dc373b5c7b31e654f21a554c0cb14562688",
-	"report_00-host-connector_small": "88c9ad758d041e96e74a219cc64d926d45a856eadbe345952277862568a40469",
+	"report_00-host-connector_large": "e6cf9055e18e0aebe61e793ec085e0e604f34e662e6d24e3cb2fe58a3e87cf94",
+	"report_00-host-connector_small": "44eb0b12228d756adcf185b3252e32f0915f2cfff450d701d71087ea8fb3ca2e",
 	"report_01-modern_large":         "e5c395c577c2be845b83965a742526dd33e3b488f31b4041e82f3d677612e508",
 	"report_01-modern_small":         "4cdeee88b39a0a33edcd36624e1710251c432f024eaddc6baf415ff478b7e141",
 	"report_02-executive_large":      "0470870531f4a0ee585bd65e02def5c2ffa4d5b7bbfe43bba789d49f41816b76",

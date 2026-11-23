@@ -269,8 +269,23 @@ func TestHostConnectorPageCSS(t *testing.T) {
 			t.Errorf("margin %d = %v, want %v", i, ps.Margin[i], want[i])
 		}
 	}
-	if bl := ps.Boxes[MarginBottomLeft]; bl == nil || bl.Content[0].Text != "TLP:AMBER" || bl.Style.BackgroundColor != rgb(0, 0, 0) {
-		t.Errorf("bottom-left: %+v", bl)
+	bl, br := ps.Boxes[MarginBottomLeft], ps.Boxes[MarginBottomRight]
+	if bl == nil || len(bl.Content) != 1 || bl.Content[0].Text != "TLP:AMBER" {
+		t.Fatalf("bottom-left: %+v", bl)
+	}
+	// The footer Chrome draws: DejaVu Sans Bold 10px, TLP:AMBER in #FFC000, both
+	// boxes bottom-aligned.
+	for name, box := range map[string]*MarginBox{"bottom-left": bl, "bottom-right": br} {
+		if box == nil {
+			t.Fatalf("%s: no box", name)
+		}
+		st := box.Style
+		if len(st.FontFamily) == 0 || st.FontFamily[0] != "DejaVu Sans" || st.FontWeight < 700 || st.FontSize != 10 || st.VerticalAlign != VAlignBottom {
+			t.Errorf("%s: family %v weight %d size %v vertical-align %v", name, st.FontFamily, st.FontWeight, st.FontSize, st.VerticalAlign)
+		}
+	}
+	if bl.Style.Color != rgb(255, 192, 0) {
+		t.Errorf("bottom-left color %+v, want #FFC000", bl.Style.Color)
 	}
 	if br := ps.Boxes[MarginBottomRight]; br == nil || len(br.Content) != 4 {
 		t.Errorf("bottom-right: %+v", br)

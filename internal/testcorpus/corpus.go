@@ -30,15 +30,18 @@ const (
 )
 
 // HostConnectorPageCSS is the print stylesheet of the host-connector reference
-// configuration. It is also appended to templates that carry no @page rule.
+// configuration. It is only used as Options.ExtraCSS: production HTML carries no
+// @page rule and the report fixtures are the template output as is. It
+// reproduces the footer Chrome draws from the host's footerTemplate: DejaVu Sans
+// Bold at 10px, TLP:AMBER at x = 22.5 pt in #FFC000, "Page N of M" ending at the
+// right margin, both with their text box at 808-817 pt from the top of the page
+// (measured on the Chrome references, to within 0.4 pt).
 const HostConnectorPageCSS = `@page {
             size: A4;
             margin: 1in 0.3in 1.3in 0.3in;
-            @bottom-left { content: "TLP:AMBER"; background: #000; color: #FFC000; font-size: 10px; }
-            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 10px; }
+            @bottom-left { content: "TLP:AMBER"; color: #FFC000; font-family: "DejaVu Sans"; font-weight: bold; font-size: 10px; vertical-align: bottom; padding: 0 0 33.5px 1.2px; }
+            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-family: "DejaVu Sans"; font-weight: bold; font-size: 10px; vertical-align: bottom; padding-bottom: 33.5px; }
         }`
-
-const reportPrintCSS = "\n        " + HostConnectorPageCSS + "\n    </style>"
 
 type file struct {
 	Name, SHA256, Size, MitigationReason, QuarantineLocation, GMalwareURL string
@@ -169,11 +172,7 @@ func Report(templates fs.FS, name string, size Size) ([]byte, error) {
 	if err := t.Execute(&b, data); err != nil {
 		return nil, err
 	}
-	out := b.String()
-	if !strings.Contains(out, "@page") {
-		out = strings.Replace(out, "</style>", reportPrintCSS, 1)
-	}
-	return []byte(out), nil
+	return b.Bytes(), nil
 }
 
 // FixtureName returns the stable fixture name of a report, e.g.
