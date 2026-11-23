@@ -47,15 +47,13 @@ func closed(args []Token) bool {
 // part is trimmed of whitespace.
 func splitTop(args []Token) [][]Token {
 	var parts [][]Token
-	start := 0
-	for i := 0; i < len(args) && len(parts) < maxParts; {
-		if args[i].Type == TComma {
-			parts = append(parts, trimSpace(args[start:i]))
-			start = i + 1
+	for lo, hi := range commaRanges(args) {
+		if len(parts) == maxParts {
+			return append(parts, trimSpace(args[lo:]))
 		}
-		i = next(args, i)
+		parts = append(parts, trimSpace(args[lo:hi]))
 	}
-	return append(parts, trimSpace(args[start:]))
+	return parts
 }
 
 // fields splits toks at top-level whitespace, ignoring whitespace inside

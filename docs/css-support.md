@@ -23,6 +23,14 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 | `@import`, `@font-face`, `@supports`, `@keyframes` and any other at-rule | ignored | Skipped with its block, reported as `unsupported-at-rule`. Nothing is ever loaded. |
 | Nesting of blocks, functions and parentheses | approximated | Limited to 64 levels in one selector or value; a deeper item is dropped with `invalid-value`. |
 | Control characters and invalid UTF-8 in CSS text | approximated | Replaced by U+FFFD. |
+| Selectors: type, `*`, `#id`, `.class`, `[attr]`, `[attr=value]` and `~= \|= ^= $= *=` with `i`/`s` | supported | Names are matched in lowercase (HTML); no namespaces (`ns\|tag` is dropped). |
+| Combinators: descendant, `>`, `+`, `~` | supported | A selector has at most 32 compound selectors of at most 32 simple selectors each. |
+| `:root`, `:first-child`, `:last-child`, `:nth-child(an+b\|odd\|even)` | supported | |
+| `:hover`, `:focus`, `:active`, `:visited`, `:focus-within`, `:focus-visible`, `:target` | supported | Parsed, never match on paper. |
+| `::before`, `::after` (also `:before`, `:after`) | supported | Matched on the originating element; the style stage applies them to the generated box. |
+| Other pseudo-classes and pseudo-elements (`:not()`, `:is()`, `:first-of-type`, `::first-line`...) | ignored | The whole selector list is dropped with `unsupported-selector`, as CSS requires for an invalid selector. |
+| Specificity and the 5 000 selector budget | supported | Every member of a list counts; beyond 5 000 the render fails with `LimitSelectors`. |
+| Media queries: `all`, `print`, `screen`, `not`, `only`, `and`, `,` with `width`, `height` (also `min-`/`max-`) and `orientation` | approximated | The medium is always print, with the page area as viewport. Any other feature, a range (`width >= 600px`) or a malformed query evaluates to false and is reported as `invalid-value`; an unknown media type is valid and simply does not match. |
 
 ## Values and units
 
