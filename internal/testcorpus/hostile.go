@@ -363,10 +363,11 @@ func layoutCases(l budget.Limits) []Case {
 	stress[1].Limits = func(lim *budget.Limits) { lim[budget.Pages] = 2 * maxPages }
 	cs = append(cs, stress...)
 
-	// Page-limit pair with tall rows: every row is 200 px (padding and a fixed
-	// line height; height is unsupported in M1) and A4 without margins holds 5
-	// of them, so Pages+1 pages need 5*(Pages+1) rows and the twin fills
-	// exactly Pages-1 pages.
+	// Page-limit pair with tall rows: every row is exactly 200 px (a single
+	// line of line-height 200px, no padding, margin or border; height is
+	// unsupported in M1) and A4 without margins holds 5 of them, so Pages+1
+	// pages need 5*(Pages+1) rows and the twin fills exactly Pages-1 pages.
+	// Single-line rows are indivisible once tables are laid out (M1-16).
 	tallRows := func(n int64) func() []byte {
 		return func() []byte {
 			var b strings.Builder
@@ -375,8 +376,8 @@ func layoutCases(l budget.Limits) []Case {
 				b.WriteString("<tr><td>1</td></tr>")
 			}
 			b.WriteString("</table>")
-			return doc(style("@page{size:A4;margin:0}body{margin:0}table{border-collapse:collapse;border-spacing:0}"+
-				"td{padding:90px 0;font-size:10px;line-height:20px}"), b.String())
+			return doc(style("@page{size:A4;margin:0}body{margin:0}table{border-collapse:collapse;border:0}"+
+				"tr,td{border:0;margin:0}td{padding:0;line-height:200px}"), b.String())
 		}
 	}
 	cs = append(cs, pair("pages_table_tall_rows", "MaxPages", Limit,

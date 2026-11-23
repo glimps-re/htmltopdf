@@ -791,7 +791,7 @@ func TestTableRowCases(t *testing.T) {
 		t.Errorf("tall rows under: %d rows, want %d", got, 5*(maxPages-1))
 	}
 	for _, name := range []string{"pages_table_tall_rows_over", "pages_table_tall_rows_under"} {
-		for _, want := range []string{"@page{size:A4;margin:0}", "padding:90px 0", "line-height:20px"} {
+		for _, want := range []string{"@page{size:A4;margin:0}", "td{padding:0;line-height:200px}", "tr,td{border:0;margin:0}"} {
 			if !strings.Contains(string(m[name]), want) {
 				t.Errorf("%s lacks %q", name, want)
 			}
