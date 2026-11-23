@@ -213,7 +213,7 @@ func TestHostConnectorReference(t *testing.T) {
 	if HostConnector().Fallback[0] != "DejaVu Sans" {
 		t.Error("HostConnector must return a fresh copy")
 	}
-	for _, want := range []string{"size: A4", "1in 0.3in 1.3in", "TLP:AMBER", "counter(page)", "counter(pages)"} {
+	for _, want := range []string{"size: 794.56px 1122.56px", "margin: 96px 28px 124px 28px", "TLP:AMBER", "counter(page)", "counter(pages)"} {
 		if !strings.Contains(HostConnector().ExtraCSS, want) {
 			t.Errorf("ExtraCSS lacks %q", want)
 		}

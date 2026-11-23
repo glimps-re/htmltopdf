@@ -95,26 +95,26 @@ func textExtent(t *testing.T, doc *pdftest.Doc, content []byte) float64 {
 }
 
 // Chrome's footer of the production references, tmp/spike/out/chrome09/
-// report_00-host-connector_large.pdf (Scale 0.9, A4, margins 1/0.3/1.3/0.3 in,
+// report_00-host-connector_large.pdf (Scale 0.9, 595.92 x 841.92 pt pages,
 // 38 pages, one footer layer), is drawn by the footerTemplate: bold sans, TLP:AMBER yellow on a
 // white highlight at the left, "Page N of M" right-aligned. Measured with
 // pdftotext -bbox, in pt from the page top-left:
 //   - TLP:AMBER starts at x = 22.50;
 //   - "Page N of M" ends at x = 573.50 and starts at 520.77 for one digit of
-//     N, 515.55 for two (the total has two digits: 38, as in our 42-page render);
-//   - the text box is y = 808.29 to 817.02 (7.8 pt bold), baseline about 815.4.
+//     N, 515.55 for two (the total has two digits: 38, as in our 38-page render);
+//   - the text box is y = 808.29 to 817.02 (7.8 pt bold), baseline 815.28 (the box bottom 817.02 minus the 1.74 pt descent of DejaVu Sans Bold at this size).
 //
-// Both strings must be within 1 pt of Chrome's position on every page. Chrome's
-// page is 595.92 pt wide, ours 595.28: the right edge is allowed 0.64 pt more.
+// Both strings must be within 0.1 pt of Chrome's position on every page (the
+// page is 595.92 x 841.92 pt in both).
 func TestFooterMatchesChrome(t *testing.T) {
 	const (
 		tlpX         = 22.50
 		rightEdge    = 573.50
 		startOneDig  = 520.77
 		startTwoDig  = 515.55
-		chromeBase   = 815.4
-		pageHeightPt = 841.89
-		tolerance    = 1.0
+		chromeBase   = 815.28
+		pageHeightPt = 841.92
+		tolerance    = 0.1
 		pages        = 38
 	)
 	c := mustNew(t, referenceOptions(t))
@@ -145,7 +145,7 @@ func TestFooterMatchesChrome(t *testing.T) {
 		if math.Abs(start-startWant) > tolerance {
 			errs = append(errs, fmt.Sprintf("Page N of M starts at x=%.2f, Chrome %.2f", start, startWant))
 		}
-		if edge := start + textExtent(t, doc, content); math.Abs(edge-rightEdge) > tolerance+0.64 {
+		if edge := start + textExtent(t, doc, content); math.Abs(edge-rightEdge) > tolerance {
 			errs = append(errs, fmt.Sprintf("Page N of M ends at x=%.2f, Chrome %.2f", edge, rightEdge))
 		}
 		for i, m := range xs {

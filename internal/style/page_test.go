@@ -263,7 +263,11 @@ func TestHostConnectorPageCSS(t *testing.T) {
 	if w, _ := b.Warnings(); len(w) != 0 {
 		t.Fatalf("the reference ExtraCSS must compile strictly: %+v", w)
 	}
-	want := [4]float64{96, 0.3 * 96, 1.3 * 96, 0.3 * 96}
+	if !nearPx(ps.Width, 794.56) || !nearPx(ps.Height, 1122.56) {
+		t.Errorf("page %v x %v px, want Chrome's 794.56 x 1122.56", ps.Width, ps.Height)
+	}
+	// Chrome floors the paper margins of PrintToPDF to whole CSS px.
+	want := [4]float64{96, 28, 124, 28}
 	for i := range want {
 		if !nearPx(ps.Margin[i], want[i]) {
 			t.Errorf("margin %d = %v, want %v", i, ps.Margin[i], want[i])

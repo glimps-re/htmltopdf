@@ -31,16 +31,21 @@ const (
 
 // HostConnectorPageCSS is the print stylesheet of the host-connector reference
 // configuration. It is only used as Options.ExtraCSS: production HTML carries no
-// @page rule and the report fixtures are the template output as is. It
-// reproduces the footer Chrome draws from the host's footerTemplate: DejaVu Sans
-// Bold at 10px, TLP:AMBER at x = 22.5 pt in #FFC000, "Page N of M" ending at the
-// right margin, both with their text box at 808-817 pt from the top of the page
-// (measured on the Chrome references, to within 0.4 pt).
+// @page rule and the report fixtures are the template output as is.
+//
+// Measured: the page size and margins are what Chrome makes of the host's
+// 8.27 x 11.69 in paper and 1/0.3/1.3/0.3 in margins, floored to whole CSS px
+// (probe in design 4.1): do not turn them back into inches.
+//
+// Fitted: the footer reproduces the footerTemplate Chrome draws (DejaVu Sans
+// Bold 10px, TLP:AMBER in #FFC000 at x = 22.5 pt, "Page N of M" ending at the
+// right margin, text boxes at 808-817 pt from the top); its paddings (2px,
+// 1.9px, 33.5px) are fitted to the Chrome references, to within 0.01 pt.
 const HostConnectorPageCSS = `@page {
-            size: A4;
-            margin: 1in 0.3in 1.3in 0.3in;
-            @bottom-left { content: "TLP:AMBER"; color: #FFC000; font-family: "DejaVu Sans"; font-weight: bold; font-size: 10px; vertical-align: bottom; padding: 0 0 33.5px 1.2px; }
-            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-family: "DejaVu Sans"; font-weight: bold; font-size: 10px; vertical-align: bottom; padding-bottom: 33.5px; }
+            size: 794.56px 1122.56px;
+            margin: 96px 28px 124px 28px;
+            @bottom-left { content: "TLP:AMBER"; color: #FFC000; font-family: "DejaVu Sans"; font-weight: bold; font-size: 10px; vertical-align: bottom; padding: 0 0 33.5px 2px; }
+            @bottom-right { content: "Page " counter(page) " of " counter(pages); font-family: "DejaVu Sans"; font-weight: bold; font-size: 10px; vertical-align: bottom; padding: 0 1.9px 33.5px 0; }
         }`
 
 type file struct {

@@ -31,35 +31,39 @@ func lastTd(tb testing.TB, content []byte) (x, y float64) {
 	return x, y
 }
 
-// pageAreaHeight measures, by rendering, the page area height of the options
-// in the units of a tall padding-top block.
-func pageAreaHeight(t *testing.T, c *Converter) float64 {
-	t.Helper()
-	pages := func(px int) int {
-		res, _ := renderBytes(t, c, fmt.Sprintf(`<div style="padding-top:%dpx"></div>`, px))
-		return res.Pages
-	}
-	a, b := pages(20000), pages(40000)
-	if b <= a {
-		t.Fatalf("pages(20000)=%d pages(40000)=%d", a, b)
-	}
-	return 20000 / float64(b-a)
-}
-
-// documentOfPages returns a document that paginates to exactly n pages.
+// documentOfPages returns a document that paginates to exactly n pages: the
+// padding of one empty block is found by binary search, so nothing depends on
+// the page geometry.
 func documentOfPages(t *testing.T, c *Converter, n int) string {
 	t.Helper()
-	h := pageAreaHeight(t, c)
-	for _, adj := range []float64{40, 100, 200, 10, 300} {
-		html := fmt.Sprintf(`<div style="padding-top:%dpx"></div>`, int(float64(n)*h-adj))
-		var buf bytes.Buffer
-		res, err := c.Render(context.Background(), strings.NewReader(html), &buf)
-		if err == nil && res.Pages == n {
-			return html
+	html := func(px int) string { return fmt.Sprintf(`<div style="padding-top:%dpx"></div>`, px) }
+	pages := func(px int) int {
+		res, err := c.Render(context.Background(), strings.NewReader(html(px)), io.Discard)
+		var le *LimitError
+		if errors.As(err, &le) && le.Limit == LimitPages {
+			return math.MaxInt
+		}
+		if err != nil {
+			t.Fatalf("padding %d: %v", px, err)
+		}
+		return res.Pages
+	}
+	lo, hi := 0, 4000*n
+	if got := pages(hi); got < n {
+		t.Fatalf("a padding of %d px gives only %d pages", hi, got)
+	}
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if pages(mid) >= n {
+			hi = mid
+		} else {
+			lo = mid + 1
 		}
 	}
-	t.Fatalf("cannot build a %d-page document", n)
-	return ""
+	if got := pages(lo); got != n {
+		t.Fatalf("cannot build a %d-page document: %d px gives %d pages", n, lo, got)
+	}
+	return html(lo)
 }
 
 func TestFooterOnEveryPageAtCounts(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/style"
 )
 
+// footerCSS is a synthetic footer, not the reference one (testcorpus.HostConnectorPageCSS).
 const footerCSS = `@page {
 	size: A4; margin: 1in 0.3in 1.3in 0.3in;
 	@bottom-left { content: "TLP:AMBER"; background: #000; color: #FFC000; font-size: 10px; }
