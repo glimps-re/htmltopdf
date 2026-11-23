@@ -193,7 +193,11 @@ func nodeCases(l budget.Limits) []Case {
 		over := maxIn / int64(len(u.unit))
 		// The pre-pass also counts the implied html, head and body nodes.
 		under := (maxNodes - 16) / u.cost
-		cs = append(cs, pair("nodes_"+u.name, "MaxNodes", Limit, rep(u.unit, over), rep(u.unit, under))...)
+		twins := pair("nodes_"+u.name, "MaxNodes", Limit, rep(u.unit, over), rep(u.unit, under))
+		// A document at MaxNodes made of paragraphs or breaks needs more pages
+		// than MaxPages: the twin raises that limit only, to test the node bound.
+		twins[1].Limits = func(lim *budget.Limits) { lim[budget.Pages] = 10 * lim[budget.Pages] }
+		cs = append(cs, twins...)
 	}
 	// Reconstruction of formatting elements multiplies nodes per token, so the
 	// twin stays at a fortieth of the limit instead of hugging it.
@@ -300,13 +304,47 @@ var malformedCSS = []string{
 	"p{width:calc(1px +)}",
 }
 
+// glyphAllowance is the number of glyphs the under twin of MaxGlyphs leaves for
+// the glyphs of margin boxes.
+const glyphAllowance = 10_000
+
+// GlyphsDocument returns the document of the glyphs_under/over cases: a
+// paragraph of exactly n runes of short words at 4px. A caller whose
+// configuration adds glyphs of its own (the margin boxes of a footer) sizes its
+// twin with it.
+func GlyphsDocument(n int64) []byte {
+	text := repeat("aaaa ", n/5) + "aaaa "[:n%5]
+	return doc(style("body{font-size:4px}"), "<p>"+text+"</p>")
+}
+
 func layoutCases(l budget.Limits) []Case {
 	var cs []Case
-	word := func(n int64) func() []byte {
-		return func() []byte { return doc("", "<p>"+repeat("A", int(n))+"</p>") }
-	}
+	// Short words, spaces counted: n runes wrap over about 40 pages at 4px, so
+	// the glyph limit is reached before MaxPages. (One 2 M-glyph line would need
+	// more than the 16 MiB content cap of a page, see glyphs_longword_2M.)
+	words := func(n int64) func() []byte { return func() []byte { return GlyphsDocument(n) } }
 	maxGlyphs := l[budget.Glyphs]
-	cs = append(cs, pair("glyphs_word", "MaxGlyphs", Limit, word(maxGlyphs+1), word(maxGlyphs))...)
+	// The under twin leaves 10 000 glyphs for the margin boxes (footers), which are
+	// shaped on the same budget: its outcome does not depend on the options.
+	cs = append(cs, pair("glyphs", "MaxGlyphs", Limit, words(maxGlyphs+1), words(max(maxGlyphs-glyphAllowance, 0)))...)
+	longWord := func(css string, n int64) func() []byte {
+		return func() []byte {
+			head := ""
+			if css != "" {
+				head = style(css)
+			}
+			return doc(head, "<p>"+repeat("A", int(n))+"</p>")
+		}
+	}
+	// One word of 1 M runes renders as a single overflowing line (4 hex digits
+	// per glyph in the page content). One of 2 M runes with a letter-spacing, which
+	// adds a positioning adjustment after every glyph (about 13 bytes per glyph),
+	// exceeds the 16 MiB content cap of a page.
+	cs = append(cs, Case{Name: "glyphs_longword_1M", Want: Success, HTML: longWord("", 1_000_000)})
+	// The plain word leaves the margin-box allowance too (it is shaped on the same
+	// budget), so it renders with every option set.
+	cs = append(cs, Case{Name: "glyphs_longword_2M_plain", Want: Success, HTML: longWord("", max(maxGlyphs-glyphAllowance, 0))})
+	cs = append(cs, Case{Name: "glyphs_longword_2M", Limit: "MaxOutputBytes", Want: Limit, HTML: longWord("p{letter-spacing:1px}", 2_000_000)})
 
 	uniqueStyles := func(n int64) func() []byte {
 		return func() []byte {

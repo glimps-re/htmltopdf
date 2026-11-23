@@ -540,11 +540,23 @@ func TestOtherCountedCasesStayUnderNodeLimit(t *testing.T) {
 func TestBoxesAndGlyphsBoundaries(t *testing.T) {
 	l := budget.Defaults()
 	m := hostileByName(t, l)
-	if got := strings.Count(string(m["glyphs_word_over"]), "A"); int64(got) != l[budget.Glyphs]+1 {
+	if got := glyphRunes(m["glyphs_over"]); got != l[budget.Glyphs]+1 {
 		t.Errorf("glyphs over = %d", got)
 	}
-	if got := strings.Count(string(m["glyphs_word_under"]), "A"); int64(got) != l[budget.Glyphs] {
+	if got := glyphRunes(m["glyphs_under"]); got != l[budget.Glyphs]-glyphAllowance {
 		t.Errorf("glyphs under = %d", got)
+	}
+	if !strings.Contains(string(m["glyphs_over"]), "body{font-size:4px}") {
+		t.Error("glyphs cases are set at 4px")
+	}
+	if got := strings.Count(string(m["glyphs_longword_1M"]), "A"); got != 1_000_000 {
+		t.Errorf("1M word = %d runes", got)
+	}
+	if got := strings.Count(string(m["glyphs_longword_2M"]), "A"); got != 2_000_000 {
+		t.Errorf("2M word = %d runes", got)
+	}
+	if got := strings.Count(string(m["glyphs_longword_2M_plain"]), "A"); int64(got) != l[budget.Glyphs]-glyphAllowance || strings.Contains(string(m["glyphs_longword_2M_plain"]), "letter-spacing") {
+		t.Errorf("plain 2M word: %d runes", got)
 	}
 	if got := strings.Count(string(m["boxes_pseudo_over"]), "<i></i>"); int64(got)*3 <= l[budget.Boxes] {
 		t.Errorf("boxes over: %d elements make at most %d boxes", got, got*3)
@@ -727,9 +739,17 @@ func TestHostileScalesWithLimits(t *testing.T) {
 	if int64(len(m["input_bytes_under"])) != l[budget.InputBytes] {
 		t.Error("input boundary must follow the limit")
 	}
-	if got := strings.Count(string(m["glyphs_word_over"]), "A"); int64(got) != l[budget.Glyphs]+1 {
+	if got := glyphRunes(m["glyphs_over"]); got != l[budget.Glyphs]+1 {
 		t.Errorf("glyphs over = %d", got)
 	}
+}
+
+// glyphRunes counts the runes of the paragraph of a glyph case.
+func glyphRunes(doc []byte) int64 {
+	s := string(doc)
+	i := strings.Index(s, "<p>") + 3
+	j := strings.Index(s, "</p>")
+	return int64(utf8.RuneCountInString(s[i:j]))
 }
 
 func TestHostileIsTotalOverTinyLimits(t *testing.T) {
