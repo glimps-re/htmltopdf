@@ -65,6 +65,7 @@ browser, with the difference stated), **ignored** (dropped with a warning),
 
 | Feature | Status | Notes |
 |---|---|---|
+| Mark positioning (GPOS offsets) | Not supported (M1-M4) | Shaped glyphs keep their advance but not their X/Y offsets, so combining marks are not repositioned: precomposed characters render correctly, stacked or detached marks may overlap their base. |
 | `font-family` (names, strings, generic families), `font-size` (lengths, `%`, keywords, `smaller`, `larger`), `font-weight` (1 to 1000, `bold`, `bolder`, `lighter`), `font-style`, `line-height`, `color`, `letter-spacing`, `text-align`, `vertical-align` (`baseline`, `top`, `middle`, `bottom`) | supported | At most 32 font families are kept; font sizes are clamped to 10 000 px. `text-align: justify` is dropped with `invalid-value`. `font` (shorthand): `unsupported-property` until M2. |
 | `white-space`: `normal`, `pre`; `overflow-wrap` and `word-wrap`: `normal`, `break-word` | supported | `nowrap`, `pre-wrap`, `pre-line` and `overflow-wrap: anywhere` are dropped with `invalid-value` until M2. |
 | `text-decoration` (`underline`, `line-through`, `none`) | supported | Not inherited; the box stage propagates it. `overline` is dropped with `invalid-value`. |
