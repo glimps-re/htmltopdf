@@ -1,0 +1,5 @@
+page 1 size 800x600 area 0,0 800x600 scale 1
+  block html 0,0 800x18
+    block body 0,0 800x18
+      block div 0,0 100x18
+        line 0,0 100x18 base 14.5 "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"

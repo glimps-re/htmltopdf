@@ -1,0 +1,14 @@
+page 1 size 800x600 area 0,0 800x600 scale 1
+  block html 0,0 800x180
+    block body 0,0 800x180
+      block div 0,0 100x180
+        line 0,0 100x18 base 14.5 "WWWWWW"
+        line 0,18 100x18 base 32.5 "WWWWWW"
+        line 0,36 100x18 base 50.5 "WWWWWW"
+        line 0,54 100x18 base 68.5 "WWWWWW"
+        line 0,72 100x18 base 86.5 "WWWWWW"
+        line 0,90 100x18 base 104.5 "WWWWWW"
+        line 0,108 100x18 base 122.5 "WWWWWW"
+        line 0,126 100x18 base 140.5 "WWWWWW"
+        line 0,144 100x18 base 158.5 "WWWWWW"
+        line 0,162 100x18 base 176.5 "WWWWWW"
