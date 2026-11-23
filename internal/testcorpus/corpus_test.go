@@ -445,11 +445,14 @@ func TestVarDoublingStraddlesTheLimit(t *testing.T) {
 	m := hostileByName(t, l)
 	levels := func(name string) int { return (strings.Count(string(m[name]), "--v") - 2) / 3 }
 	over, under := levels("var_doubling_over"), levels("var_doubling_under")
-	if size := int64(1)<<(over+1) - 1; size <= l[budget.VarBytes] {
-		t.Errorf("over: value of %d bytes does not exceed %d", size, l[budget.VarBytes])
+	if over != 16 || under != 15 {
+		t.Errorf("levels over %d, under %d, want 16 and 15", over, under)
 	}
-	if size := int64(1)<<(under+1) - 1; size > l[budget.VarBytes] || size <= l[budget.VarBytes]/2 {
-		t.Errorf("under: value of %d bytes is not the last level that fits in %d", size, l[budget.VarBytes])
+	if total := 3 * (int64(1)<<(over+1) - 1); total <= l[budget.VarBytes] {
+		t.Errorf("over: total charge of %d bytes does not exceed %d", total, l[budget.VarBytes])
+	}
+	if total := 3 * (int64(1)<<(under+1) - 1); total > l[budget.VarBytes] || total <= l[budget.VarBytes]/2 {
+		t.Errorf("under: total charge of %d bytes is not the last level that fits in %d", total, l[budget.VarBytes])
 	}
 }
 

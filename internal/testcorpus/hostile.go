@@ -250,10 +250,13 @@ func cssCases(l budget.Limits) []Case {
 			return doc(style(b.String()), "<p>var</p>")
 		}
 	}
-	// Each level doubles the value: len(v_k) = 2^(k+1)-1 bytes.
-	// The bound of 61 keeps the shift in range for an "unlimited" VarBytes.
+	// Each level doubles the value: len(v_k) = 2^(k+1)-1 bytes. MaxVarBytes is
+	// charged cumulatively (the intermediate custom properties plus the use
+	// site), about 3 times the final value (design §5.2.1): the twins are sized
+	// on that total. The bound of 61 keeps the shift in range for an
+	// "unlimited" VarBytes.
 	over := 0
-	for over < 61 && int64(1)<<(over+1)-1 <= l[budget.VarBytes] {
+	for over < 61 && 3*(int64(1)<<(over+1)-1) <= l[budget.VarBytes] {
 		over++
 	}
 	cs = append(cs, pair("var_doubling", "MaxVarBytes", Degraded, bombLevels(over), bombLevels(max(over-1, 0)))...)
