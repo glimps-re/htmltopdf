@@ -120,6 +120,9 @@ func (bd *builder) block(e int32, cs *style.Computed, href string) (*Box, error)
 	case style.DisplayTableCell:
 		bd.cellSpans(el, bx)
 	}
+	if !isTableContainer(cs.Display) {
+		return bx, bd.wrapOrphans(bx)
+	}
 	return bx, nil
 }
 

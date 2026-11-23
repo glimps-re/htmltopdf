@@ -117,6 +117,10 @@ func (bd *builder) fixTable(tb *Box) error {
 		if len(loose) == 0 {
 			return nil
 		}
+		if allBlank(loose) {
+			loose = nil
+			return nil
+		}
 		row, err := bd.looseRow(ts, loose)
 		loose = nil
 		if err != nil {
@@ -173,6 +177,10 @@ func (bd *builder) fixGroup(ts *tableStyles, g *Box) error {
 		if len(loose) == 0 {
 			return nil
 		}
+		if allBlank(loose) {
+			loose = nil
+			return nil
+		}
 		row, err := bd.looseRow(ts, loose)
 		loose = nil
 		if err != nil {
@@ -225,6 +233,10 @@ func (bd *builder) fixRow(ts *tableStyles, r *Box) error {
 	var loose []*Box
 	flush := func() error {
 		if len(loose) == 0 {
+			return nil
+		}
+		if allBlank(loose) {
+			loose = nil
 			return nil
 		}
 		cell, err := bd.anon(&ts.cell, ts.parent, style.DisplayTableCell, nil)
@@ -304,4 +316,122 @@ func (bd *builder) blockify(ts *tableStyles, boxes []*Box) ([]*Box, error) {
 		out = append(out, b)
 	}
 	return out, flush()
+}
+
+// blank reports whether b only holds white space: such boxes between table
+// parts are ignored (CSS 2.1 §17.2.1), also under white-space: pre.
+func blank(b *Box) bool {
+	switch {
+	case b.Kind == KindText:
+		return strings.Trim(b.Text, " \t\n\f\r") == ""
+	case b.Kind == KindLineBreak:
+		// A preserved newline has no tag; a br element does.
+		return b.Tag == 0
+	case b.Kind == KindBlock && b.Anonymous, b.Kind == KindInline && b.Tag == 0:
+		for _, c := range b.Children {
+			if !blank(c) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func allBlank(boxes []*Box) bool {
+	for _, b := range boxes {
+		if !blank(b) {
+			return false
+		}
+	}
+	return true
+}
+
+func isTablePart(c *Box) bool {
+	if c.Kind != KindBlock || c.Anonymous {
+		return false
+	}
+	switch c.Style.Display {
+	case style.DisplayTableRowGroup, style.DisplayTableHeaderGroup, style.DisplayTableFooterGroup,
+		style.DisplayTableRow, style.DisplayTableCell, style.DisplayTableColumn, style.DisplayTableColumnGroup:
+		return true
+	}
+	return false
+}
+
+// wrapOrphans wraps the runs of table parts that are not in a table (a cell in
+// a div) in anonymous tables, which are then fixed up (CSS 2.1 §17.2.1, rule 3).
+// White space between two parts joins the run; a run made only of columns
+// (which the fix-up drops) is left alone.
+func (bd *builder) wrapOrphans(c *Box) error {
+	hasPart := false
+	for _, ch := range c.Children {
+		if isTablePart(ch) {
+			hasPart = true
+			break
+		}
+	}
+	if !hasPart {
+		return nil
+	}
+	out := make([]*Box, 0, len(c.Children))
+	var run, pending []*Box // pending: blank boxes that join the run if a part follows
+	flush := func() error {
+		defer func() { run, pending = nil, nil }()
+		if len(run) > 0 {
+			if onlyColumns(run) {
+				out = append(out, run...)
+			} else {
+				var slot *style.Computed
+				tb, err := bd.anon(&slot, c.Style, style.DisplayTable, run)
+				if err != nil {
+					return err
+				}
+				if err := bd.fixTable(tb); err != nil {
+					return err
+				}
+				out = append(out, tb)
+			}
+		}
+		out = append(out, pending...)
+		return nil
+	}
+	for _, ch := range c.Children {
+		switch {
+		case isTablePart(ch):
+			run = append(run, pending...)
+			pending = nil
+			run = append(run, ch)
+		case len(run) > 0 && blank(ch):
+			pending = append(pending, ch)
+		default:
+			if err := flush(); err != nil {
+				return err
+			}
+			out = append(out, ch)
+		}
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	c.Children = out
+	return nil
+}
+
+// onlyColumns reports whether every box is a column or a column group.
+func onlyColumns(boxes []*Box) bool {
+	for _, b := range boxes {
+		if !isColumn(b) {
+			return false
+		}
+	}
+	return true
+}
+
+func isTableContainer(d style.Display) bool {
+	switch d {
+	case style.DisplayTable, style.DisplayTableRowGroup, style.DisplayTableHeaderGroup, style.DisplayTableFooterGroup, style.DisplayTableRow:
+		return true
+	}
+	return false
 }

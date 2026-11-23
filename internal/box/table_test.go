@@ -131,3 +131,59 @@ func itoa(n int) string {
 	}
 	return string(d)
 }
+
+func TestOrphanCellGetsAnonymousParents(t *testing.T) {
+	got, _ := buildHTML(t, `<div><span style="display:table-cell">a</span><span style="display:table-cell">b</span>text</div>`)
+	want := `block div
+  anon-block
+    anon-block
+      block span
+        text "a"
+      block span
+        text "b"
+  anon-block
+    text "text"`
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestBlankBetweenTablePartsIsDroppedUnderPre(t *testing.T) {
+	got, _ := buildHTML(t, "<table style=\"white-space:pre\">\n<tr>\n<td>a</td>\n<td>b</td>\n</tr>\n</table>")
+	want := `block table
+  block tbody
+    block tr
+      block td
+        text "a"
+      block td
+        text "b"`
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	got, _ = buildHTML(t, `<div style="display:table;white-space:pre"><div style="display:table-row"><div style="display:table-cell">a</div> x </div></div>`)
+	if !strings.Contains(got, `text " x "`) {
+		t.Fatalf("text between cells must stay:\n%s", got)
+	}
+}
+
+func TestOrphanPartsSeparatedByBlankShareOneTable(t *testing.T) {
+	got, _ := buildHTML(t, "<div style=\"white-space:pre\"><span style=\"display:table-cell\">a</span>\n<span style=\"display:table-cell\">b</span></div>")
+	if n := strings.Count(got, "anon-block\n"); n != 2 { // one table, one row
+		t.Fatalf("want one anonymous table and one row:\n%s", got)
+	}
+	if strings.Count(got, "block span") != 2 {
+		t.Fatalf("cells lost:\n%s", got)
+	}
+	// Blank after the last part stays after the table.
+	got, _ = buildHTML(t, "<div style=\"white-space:pre\"><span style=\"display:table-cell\">a</span>\n</div>")
+	if !strings.Contains(got, "br") {
+		t.Fatalf("trailing blank dropped:\n%s", got)
+	}
+}
+
+func TestOrphanColumnsAreLeftAlone(t *testing.T) {
+	got, _ := buildHTML(t, `<div><span style="display:table-column"></span><span style="display:table-column"></span>x</div>`)
+	if strings.Count(got, "anon-block") != 1 || !strings.Contains(got, `text "x"`) {
+		t.Fatalf("columns alone must not make an anonymous table:\n%s", got)
+	}
+}
