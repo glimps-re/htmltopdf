@@ -134,10 +134,12 @@ const (
 	WarnShapingFallback     Code = "shaping-fallback"
 )
 
-// WarningCodes lists every code, for the tests that compare it with the public list.
-var WarningCodes = [...]Code{
-	WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
-	WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback,
+// WarningCodes returns every code, for the tests that compare it with the public list.
+func WarningCodes() []Code {
+	return []Code{
+		WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
+		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback,
+	}
 }
 
 // Warning is a deduplicated warning with its number of occurrences.
