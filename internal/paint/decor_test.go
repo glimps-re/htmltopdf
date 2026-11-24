@@ -232,3 +232,24 @@ func TestMaxGradientStopsMatchCSS(t *testing.T) {
 		t.Fatalf("pdf accepts %d stops, css produces %d", pdf.MaxGradientStops, css.MaxGradientStops)
 	}
 }
+
+func TestFillGradientIsOpaqueAfterATranslucentFill(t *testing.T) {
+	e := newEnv(t)
+	content, _ := e.page(t, a4, display.List{
+		display.FillRect{Rect: display.Rect{X: 10, Y: 10, W: 50, H: 50}, Color: css.Color{R: 1, A: 0.04}},
+		display.FillGradient{Rect: display.Rect{X: 10, Y: 100, W: 300, H: 100}, Gradient: grad(90, 0)},
+		display.FillRect{Rect: display.Rect{X: 10, Y: 300, W: 50, H: 50}, Color: css.Color{R: 1, A: 0.04}},
+	})
+	shade := strings.Index(content, "/Sh1 sh")
+	if shade < 0 {
+		t.Fatalf("no gradient in\n%s", content)
+	}
+	before := content[:shade]
+	if i := strings.LastIndex(before, "/GT"); i < 0 || !strings.HasPrefix(before[i:], "/GT0 gs") {
+		t.Errorf("the gradient is not painted opaque:\n%s", content)
+	}
+	if strings.Count(content, " gs\n") != 2 {
+		t.Errorf("the alpha must come back with the Q, without another gs:\n%s", content)
+	}
+	e.finish(t)
+}

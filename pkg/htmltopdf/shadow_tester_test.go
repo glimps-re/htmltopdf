@@ -197,3 +197,69 @@ func TestShadowsDoNotMoveTemplate00(t *testing.T) {
 		})
 	}
 }
+
+var extGStateRE = regexp.MustCompile(`/(GT\d+) << /Type /ExtGState /ca ([0-9.]+) /CA ([0-9.]+) >>`)
+
+// alphaAtShadings returns the fill alpha in effect at every "/Sh<n> sh" of the
+// pages: the ExtGState set by the last "gs" before it (1 before any).
+func alphaAtShadings(t *testing.T, data []byte) []float64 {
+	t.Helper()
+	alpha := map[string]float64{}
+	for _, m := range extGStateRE.FindAllSubmatch(data, -1) {
+		a, err := strconv.ParseFloat(string(m[2]), 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		alpha[string(m[1])] = a
+	}
+	var out []float64
+	for _, p := range pdftest.Validate(t, data).Pages {
+		cur := 1.0
+		for _, l := range strings.Split(string(p.Content), "\n") {
+			if name, ok := strings.CutSuffix(l, " gs"); ok {
+				a, known := alpha[strings.TrimPrefix(name, "/")]
+				if !known {
+					t.Fatalf("%s is not an ExtGState with /ca", name)
+				}
+				cur = a
+			}
+			if strings.HasSuffix(l, " sh") {
+				out = append(out, cur)
+			}
+		}
+	}
+	return out
+}
+
+// A gradient is painted opaque after the translucent items of its own box (a
+// shadow, an rgba background): the alpha of the last of them must not leak into
+// the shading.
+func TestGradientIsOpaqueAfterTranslucentItems(t *testing.T) {
+	grad := "background:linear-gradient(90deg,#e52321,#f9c105);"
+	for _, tc := range []struct{ name, style string }{
+		{"blurred shadow", grad + "box-shadow:0 2px 6px rgba(0,0,0,.15)"},
+		{"flat shadow", grad + "box-shadow:2px 2px 0 rgba(0,0,0,.5)"},
+		{"two shadows", grad + "box-shadow:0 0 4px rgba(0,0,0,.2),0 0 9px rgba(255,0,0,.1)"},
+		{"rounded with shadow", grad + "border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.3)"},
+		{"rgba color under the gradient", grad + "background-color:rgba(0,0,0,.4)"},
+		{"shadow and rgba color", grad + "background-color:rgba(0,0,0,.4);box-shadow:0 2px 6px rgba(0,0,0,.15)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, data := renderBytes(t, mustNew(t, m2Options(t)), `<div style="margin:20px;padding:20px;`+tc.style+`">x</div>`)
+			got := alphaAtShadings(t, data)
+			if len(got) != 1 || got[0] != 1 {
+				t.Errorf("alpha at the shading: %v, want [1]", got)
+			}
+		})
+	}
+	html, err := testcorpus.Report(os.DirFS("../../testdata/templates"), "00-host-connector", testcorpus.Small)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, data := renderBytes(t, mustNew(t, referenceOptions(t)), string(html))
+	for _, a := range alphaAtShadings(t, data) {
+		if a != 1 {
+			t.Errorf("00: a gradient is painted at alpha %v", a)
+		}
+	}
+}
