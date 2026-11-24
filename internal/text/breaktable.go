@@ -1,7 +1,7 @@
 package text
 
-// The table is derived from testdata/chrome_breaks.txt and checked against it
-// bit for bit by TestBreakTableIsDerivedFromChromeData.
+// The table is derived from Chrome's recorded line segmentation of a probe set
+// and checked against it bit for bit by TestBreakTableIsDerivedFromChromeData.
 
 // asciiBreak[c1] has bit c2 set when Chrome offers a line-break opportunity
 // between two tailored characters of classes c1 and c2 (see classOf).
