@@ -13,7 +13,9 @@ import (
 // Options configures a Converter. The zero value is valid: A4 pages with 10 mm
 // margins, embedded Go fonts, default limits.
 type Options struct {
-	// Fonts are TrueType fonts added to the embedded Go fonts.
+	// Fonts are TrueType fonts added to the embedded Go fonts. They are trusted
+	// operator configuration (see Font): font data must come from a trusted
+	// source, because a crafted font can exhaust memory.
 	Fonts []Font
 
 	// Generic names the families used for the CSS generic families. Empty fields
@@ -39,8 +41,11 @@ type Options struct {
 	Limits Limits
 }
 
-// Font is one TrueType font file with glyf outlines. Font collections (.ttc) and
-// CFF-flavoured OpenType fonts are rejected by New.
+// Font is one TrueType font file with glyf outlines. Font collections (.ttc),
+// CFF-flavoured OpenType fonts and WOFF files are rejected by New.
+// Fonts are trusted operator configuration: the caller is responsible for their
+// origin and licence; New validates structure, not resistance to crafted fonts,
+// which can exhaust memory.
 type Font struct {
 	// Data is the font file. It is retained by the Converter and must not be
 	// modified. At most 32 MiB; all Fonts together at most 128 MiB.

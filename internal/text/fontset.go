@@ -147,6 +147,9 @@ func describe(src Source) (f *Face, err error) {
 	case string(d[:4]) == "ttcf":
 		return nil, errors.New("font collections are not supported")
 	}
+	if err := checkSfnt(d); err != nil {
+		return nil, err
+	}
 	ld, err := ot.NewLoader(bytes.NewReader(d))
 	if err != nil {
 		return nil, err

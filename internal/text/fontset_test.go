@@ -113,9 +113,25 @@ func repeat(b byte, n int) string {
 	return string(s)
 }
 
+// FuzzNewFontSet feeds the font loader: it must neither panic nor hang. Fonts
+// are trusted configuration, so the allocation a crafted font drives is not
+// asserted (go-text parses a shared GSUB subtable once per reference). Seeded
+// with a full reference font so that the mutator reaches the table parsers; run
+// it with -fuzzminimizetime 0s (minimizing 300 KB inputs stalls the workers for
+// minutes) and a memory cap of at least 2 GiB (`systemd-run --user --scope -p
+// MemoryMax=2G -p MemorySwapMax=0`).
 func FuzzNewFontSet(f *testing.F) {
-	good := referenceSources(f)[0].Data
-	f.Add(good[:512])
+	// One full font is enough to reach the table parsers; every seed is kept in
+	// memory by each worker and every "interesting" mutant is a full font copy.
+	seeds := referenceSources(f)
+	smallest := seeds[0].Data
+	for _, src := range seeds {
+		if len(src.Data) < len(smallest) {
+			smallest = src.Data
+		}
+	}
+	f.Add(smallest)
+	f.Add(seeds[0].Data[:512])
 	f.Add([]byte("OTTO\x00\x01\x00\x00"))
 	f.Add([]byte("ttcf\x00\x01\x00\x00"))
 	f.Fuzz(func(_ *testing.T, data []byte) {
