@@ -191,6 +191,15 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		if stat == nothing {
 			return result{status: nothing}, nil
 		}
+	case b.Style.Display == style.DisplayGrid:
+		var err error
+		stat, tok, err = l.grid(b, f, lv, inner, childDecor, resuming, emptyAtEntry)
+		if err != nil {
+			return result{}, err
+		}
+		if stat == nothing {
+			return result{status: nothing}, nil
+		}
 	case hasInlineChildren(b):
 		var err error
 		stat, tok, err = l.lines(b, f, lv, inner, childDecor, resuming, emptyAtEntry)
