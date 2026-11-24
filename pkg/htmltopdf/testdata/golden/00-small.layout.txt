@@ -1,0 +1,540 @@
+page 1 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
+  block html 0,0 820.62x1019.36 more
+    block body 0,0 820.62x1019.36 more
+      block header 16,32 788.62x86.4
+        block h1 40,56 740.62x38.4
+          line 40,56 740.62x38.4 base 83.7 "Rapport d'analyse - a1b2c3d4-e5f6"
+      block section 16,150.4 788.62x452.32
+        block h2 40,174.4 740.62x48.4
+          line 40,174.4 740.62x38.4 base 202.1 "Détails de l'analyse"
+        block ul 40,242.72 740.62x328
+          block li 40,242.72 740.62x25.6
+            line 40,242.72 740.62x25.6 base 261.02 "Fichiers listés : 1234"
+          block li 40,276.32 740.62x25.6
+            line 40,276.32 740.62x25.6 base 294.62 "Fichiers analysés : 1200"
+          block li 40,309.92 740.62x25.6
+            line 40,309.92 740.62x25.6 base 328.22 "Fichiers non analysés (membres d'archives inclus) : 4"
+          block li 40,343.52 740.62x25.6
+            line 40,343.52 740.62x25.6 base 361.82 "Taille totale des fichiers (avant extraction) : 3.2 GiB"
+          block li 40,377.12 740.62x25.6
+            line 40,377.12 740.62x25.6 base 395.42 "Volume analysé : 3.0 GiB"
+          block li 40,410.72 740.62x25.6
+            line 40,410.72 740.62x25.6 base 429.02 "Volume filtré : 200 MiB"
+          block li 40,444.32 740.62x25.6
+            line 40,444.32 740.62x25.6 base 462.62 "Bloqués : 5, dont fichiers détéctés comme malveillants: 5"
+          block li 40,477.92 740.62x25.6
+            line 40,477.92 740.62x25.6 base 496.22 "Fichiers en erreur : 2"
+          block li 40,511.52 740.62x25.6
+            line 40,511.52 740.62x25.6 base 529.82 "Date de début : 2026-11-23 10:42:00"
+          block li 40,545.12 740.62x25.6
+            line 40,545.12 740.62x25.6 base 563.42 "Durée de session: 4m12s"
+      block section 16,618.72 788.62x292.32
+        block h2 40,642.72 740.62x48.4
+          line 40,642.72 740.62x38.4 base 670.42 "Conclusion"
+        block p 40,711.04 740.62x25.6
+          line 40,711.04 740.62x25.6 base 729.34 "Un ou plusieurs fichiers ont été bloqués par les moteurs d'analyse."
+        block p 40,752.64 740.62x51.2
+          line 40,752.64 740.62x25.6 base 770.94 "Seuls les fichiers analysés comme sains ont pu être déplacés par l'application sur le support de"
+          line 40,778.24 740.62x25.6 base 796.54 "destination."
+        block p 40,819.84 740.62x51.2
+          line 40,819.84 740.62x25.6 base 838.14 "Des fichiers non analysés (voir la rubrique « Fichiers non analysés ») ont pu être transmis sans analyse"
+          line 40,845.44 740.62x25.6 base 863.74 "complète, selon la politique choisie (unanalyzable_policy) : leur contenu n'a pas été vérifié."
+      block section 16,927.04 788.62x92.32 more
+        block h2 40,951.04 740.62x48.4
+          line 40,951.04 740.62x38.4 base 978.74 "Fichiers bloqués"
+page 2 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
+  block html 0,0 820.62x994.2 cont more
+    block body 0,0 820.62x994.2 cont more
+      block section 16,0 788.62x571.56 cont
+        block div 40,0 740.62x489.96
+          block table 40,0 740.62x489.96
+            block thead 40,0 740.62x30.96
+              block tr 40,0 740.62x30.96
+                block th 40,0 123.44x30.96
+                  line 48,8 107.44x14.96 base 19.98 "Chemin"
+                block th 163.44,0 123.44x30.96
+                  line 171.44,8 107.44x14.96 base 19.98 "Menace(s)"
+                block th 286.87,0 123.44x30.96
+                  line 294.87,8 107.44x14.96 base 19.98 "SHA-256"
+                block th 410.31,0 123.44x30.96
+                  line 418.31,8 107.44x14.96 base 19.98 "Taille"
+                block th 533.75,0 123.44x30.96
+                  line 541.75,8 107.44x14.96 base 19.98 "Raison"
+                block th 657.19,0 123.44x30.96
+                  line 665.19,8 107.44x14.96 base 19.98 "Analyse"
+            block tbody 40,30.96 740.62x459
+              block tr 40,30.96 740.62x91.3
+                block td 40,30.96 123.44x91.3
+                  line 48,38.96 107.44x14.96 base 50.94 "C:\\Users\\victim\\D"
+                  line 48,53.92 107.44x14.96 base 65.9 "ownloads\\invoice"
+                  line 48,68.88 107.44x14.96 base 80.86 "_0000_très_urge"
+                  line 48,83.84 107.44x14.96 base 95.82 "nt_à_ouvrir.pdf.e"
+                  line 48,98.8 107.44x14.96 base 110.78 "xe"
+                block td 163.44,30.96 123.44x91.3
+                  line 171.44,38.96 107.44x14.96 base 50.94 "*"
+                  line 171.44,53.92 107.44x14.96 base 65.9 "Trojan.GenericK"
+                  line 171.44,68.88 107.44x14.96 base 80.86 "D.4821"
+                  line 171.44,83.84 107.44x14.96 base 95.82 "*"
+                  line 171.44,98.8 107.44x14.96 base 110.78 "Win32/Emotet.AB"
+                block td 286.87,30.96 123.44x91.3
+                  line 294.87,38.96 107.44x14.96 base 50.94 "00000000000000"
+                  line 294.87,53.92 107.44x14.96 base 65.9 "00000000000000"
+                  line 294.87,68.88 107.44x14.96 base 80.86 "00000000000000"
+                  line 294.87,83.84 107.44x14.96 base 95.82 "00000000000000"
+                  line 294.87,98.8 107.44x14.96 base 110.78 "00000000"
+                block td 410.31,30.96 123.44x91.3
+                  line 418.31,68.88 107.44x14.96 base 80.86 "0.0 MiB"
+                block td 533.75,30.96 123.44x91.3
+                  line 541.75,68.88 107.44x14.96 base 80.86 "malware détecté"
+                block td 657.19,30.96 123.44x91.3
+                  line 665.19,61.4 107.44x14.96 base 73.38 "Pas d'analyse"
+                  line 665.19,76.36 107.44x14.96 base 88.34 "GLIMPS Malware"
+              block tr 40,122.26 740.62x91.8
+                block td 40,122.26 123.44x91.8
+                  line 48,130.76 107.44x14.96 base 142.74 "C:\\Users\\victim\\D"
+                  line 48,145.72 107.44x14.96 base 157.7 "ownloads\\invoice"
+                  line 48,160.68 107.44x14.96 base 172.66 "_0001_très_urge"
+                  line 48,175.64 107.44x14.96 base 187.62 "nt_à_ouvrir.pdf.e"
+                  line 48,190.6 107.44x14.96 base 202.58 "xe"
+                block td 163.44,122.26 123.44x91.8
+                  line 171.44,130.76 107.44x14.96 base 142.74 "*"
+                  line 171.44,145.72 107.44x14.96 base 157.7 "Trojan.GenericK"
+                  line 171.44,160.68 107.44x14.96 base 172.66 "D.4821"
+                  line 171.44,175.64 107.44x14.96 base 187.62 "*"
+                  line 171.44,190.6 107.44x14.96 base 202.58 "Win32/Emotet.AB"
+                block td 286.87,122.26 123.44x91.8
+                  line 294.87,130.76 107.44x14.96 base 142.74 "00000000000000"
+                  line 294.87,145.72 107.44x14.96 base 157.7 "00000000000000"
+                  line 294.87,160.68 107.44x14.96 base 172.66 "00000000000000"
+                  line 294.87,175.64 107.44x14.96 base 187.62 "0000009e3779b9"
+                  line 294.87,190.6 107.44x14.96 base 202.58 "7f4a7c15"
+                block td 410.31,122.26 123.44x91.8
+                  line 418.31,160.68 107.44x14.96 base 172.66 "1.1 MiB"
+                block td 533.75,122.26 123.44x91.8
+                  line 541.75,160.68 107.44x14.96 base 172.66 "malware détecté"
+                block td 657.19,122.26 123.44x91.8
+                  line 665.19,160.68 107.44x14.96 base 172.66 "Lien analyse"
+              block tr 40,214.06 740.62x91.8
+                block td 40,214.06 123.44x91.8
+                  line 48,222.56 107.44x14.96 base 234.54 "C:\\Users\\victim\\D"
+                  line 48,237.52 107.44x14.96 base 249.5 "ownloads\\invoice"
+                  line 48,252.48 107.44x14.96 base 264.46 "_0002_très_urge"
+                  line 48,267.44 107.44x14.96 base 279.42 "nt_à_ouvrir.pdf.e"
+                  line 48,282.4 107.44x14.96 base 294.38 "xe"
+                block td 163.44,214.06 123.44x91.8
+                  line 171.44,222.56 107.44x14.96 base 234.54 "*"
+                  line 171.44,237.52 107.44x14.96 base 249.5 "Trojan.GenericK"
+                  line 171.44,252.48 107.44x14.96 base 264.46 "D.4821"
+                  line 171.44,267.44 107.44x14.96 base 279.42 "*"
+                  line 171.44,282.4 107.44x14.96 base 294.38 "Win32/Emotet.AB"
+                block td 286.87,214.06 123.44x91.8
+                  line 294.87,222.56 107.44x14.96 base 234.54 "00000000000000"
+                  line 294.87,237.52 107.44x14.96 base 249.5 "00000000000000"
+                  line 294.87,252.48 107.44x14.96 base 264.46 "00000000000000"
+                  line 294.87,267.44 107.44x14.96 base 279.42 "0000003c6ef372f"
+                  line 294.87,282.4 107.44x14.96 base 294.38 "e94f82a"
+                block td 410.31,214.06 123.44x91.8
+                  line 418.31,252.48 107.44x14.96 base 264.46 "2.2 MiB"
+                block td 533.75,214.06 123.44x91.8
+                  line 541.75,252.48 107.44x14.96 base 264.46 "malware détecté"
+                block td 657.19,214.06 123.44x91.8
+                  line 665.19,252.48 107.44x14.96 base 264.46 "Lien analyse"
+              block tr 40,305.86 740.62x91.8
+                block td 40,305.86 123.44x91.8
+                  line 48,314.36 107.44x14.96 base 326.34 "C:\\Users\\victim\\D"
+                  line 48,329.32 107.44x14.96 base 341.3 "ownloads\\invoice"
+                  line 48,344.28 107.44x14.96 base 356.26 "_0003_très_urge"
+                  line 48,359.24 107.44x14.96 base 371.22 "nt_à_ouvrir.pdf.e"
+                  line 48,374.2 107.44x14.96 base 386.18 "xe"
+                block td 163.44,305.86 123.44x91.8
+                  line 171.44,314.36 107.44x14.96 base 326.34 "*"
+                  line 171.44,329.32 107.44x14.96 base 341.3 "Trojan.GenericK"
+                  line 171.44,344.28 107.44x14.96 base 356.26 "D.4821"
+                  line 171.44,359.24 107.44x14.96 base 371.22 "*"
+                  line 171.44,374.2 107.44x14.96 base 386.18 "Win32/Emotet.AB"
+                block td 286.87,305.86 123.44x91.8
+                  line 294.87,314.36 107.44x14.96 base 326.34 "00000000000000"
+                  line 294.87,329.32 107.44x14.96 base 341.3 "00000000000000"
+                  line 294.87,344.28 107.44x14.96 base 356.26 "00000000000000"
+                  line 294.87,359.24 107.44x14.96 base 371.22 "000000daa66d2c"
+                  line 294.87,374.2 107.44x14.96 base 386.18 "7ddf743f"
+                block td 410.31,305.86 123.44x91.8
+                  line 418.31,344.28 107.44x14.96 base 356.26 "3.3 MiB"
+                block td 533.75,305.86 123.44x91.8
+                  line 541.75,344.28 107.44x14.96 base 356.26 "malware détecté"
+                block td 657.19,305.86 123.44x91.8
+                  line 665.19,336.8 107.44x14.96 base 348.78 "Pas d'analyse"
+                  line 665.19,351.76 107.44x14.96 base 363.74 "GLIMPS Malware"
+              block tr 40,397.66 740.62x92.3
+                block td 40,397.66 123.44x92.3
+                  line 48,406.16 107.44x14.96 base 418.14 "C:\\Users\\victim\\D"
+                  line 48,421.12 107.44x14.96 base 433.1 "ownloads\\invoice"
+                  line 48,436.08 107.44x14.96 base 448.06 "_0004_très_urge"
+                  line 48,451.04 107.44x14.96 base 463.02 "nt_à_ouvrir.pdf.e"
+                  line 48,466 107.44x14.96 base 477.98 "xe"
+                block td 163.44,397.66 123.44x92.3
+                  line 171.44,406.16 107.44x14.96 base 418.14 "*"
+                  line 171.44,421.12 107.44x14.96 base 433.1 "Trojan.GenericK"
+                  line 171.44,436.08 107.44x14.96 base 448.06 "D.4821"
+                  line 171.44,451.04 107.44x14.96 base 463.02 "*"
+                  line 171.44,466 107.44x14.96 base 477.98 "Win32/Emotet.AB"
+                block td 286.87,397.66 123.44x92.3
+                  line 294.87,406.16 107.44x14.96 base 418.14 "00000000000000"
+                  line 294.87,421.12 107.44x14.96 base 433.1 "00000000000000"
+                  line 294.87,436.08 107.44x14.96 base 448.06 "00000000000000"
+                  line 294.87,451.04 107.44x14.96 base 463.02 "00000078dde6e5"
+                  line 294.87,466 107.44x14.96 base 477.98 "fd29f054"
+                block td 410.31,397.66 123.44x92.3
+                  line 418.31,436.08 107.44x14.96 base 448.06 "4.4 MiB"
+                block td 533.75,397.66 123.44x92.3
+                  line 541.75,436.08 107.44x14.96 base 448.06 "malware détecté"
+                block td 657.19,397.66 123.44x92.3
+                  line 665.19,436.08 107.44x14.96 base 448.06 "Lien analyse"
+        block p 40,505.96 740.62x25.6
+          line 40,505.96 740.62x25.6 base 524.26 "… et 12 autres"
+      block section 16,587.56 788.62x406.64 more
+        block h2 40,611.56 740.62x48.4
+          line 40,611.56 740.62x38.4 base 639.26 "Archives bloquées"
+        block section 40,679.88 740.62x314.32 more
+          block div 64,703.88 692.62x190.48
+            block h3 64,703.88 692.62x43.28
+              line 64,703.88 692.62x33.28 base 728.02 "Archive dump_0.zip"
+            block ul 64,767.96 692.62x126.4
+              block li 64,767.96 692.62x25.6
+                line 64,767.96 692.62x25.6 base 786.26 "Nombre de sous-fichier extrait : 4"
+              block li 64,801.56 692.62x25.6
+                line 64,801.56 692.62x25.6 base 819.86 "SHA-256 : 00000000000000000000000000000000000000000000000096af9ccb49675251"
+              block li 64,835.16 692.62x25.6
+                line 64,835.16 692.62x25.6 base 853.46 "Taille : 12 MiB"
+              block li 64,868.76 692.62x25.6
+                line 64,868.76 692.62x25.6 base 887.06 "Quarantaine : /var/quarantine/000000000000"
+          block div 64,910.36 692.62x83.84 more
+            block table 64,910.36 692.62x83.84 more
+              block thead 64,910.36 692.62x45.92
+                block tr 64,910.36 692.62x45.92
+                  block th 64,910.36 115.44x45.92
+                    line 72,925.84 99.44x14.96 base 937.82 "Nom"
+                  block th 179.44,910.36 115.44x45.92
+                    line 187.44,925.84 99.44x14.96 base 937.82 "SHA-256"
+                  block th 294.87,910.36 115.44x45.92
+                    line 302.87,925.84 99.44x14.96 base 937.82 "Taille"
+                  block th 410.31,910.36 115.44x45.92
+                    line 418.31,925.84 99.44x14.96 base 937.82 "Menace(s)"
+                  block th 525.75,910.36 115.44x45.92
+                    line 533.75,925.84 99.44x14.96 base 937.82 "Raison"
+                  block th 641.19,910.36 115.44x45.92
+                    line 649.19,918.36 99.44x14.96 base 930.34 "URL de"
+                    line 649.19,933.32 99.44x14.96 base 945.3 "l'analyse"
+              block tbody 64,956.28 692.62x37.92
+                block tr 64,956.28 692.62x37.92 more
+                  block td 64,956.28 115.44x37.92 more
+                    line 64,964.28 107.44x14.96 base 976.26 "C:\\Users\\victim\\D"
+                    line 64,979.24 107.44x14.96 base 991.22 "ownloads\\invoice"
+                  block td 179.44,956.28 115.44x37.92 more
+                    line 187.44,964.28 99.44x14.96 base 976.26 "0000000000000"
+                    line 187.44,979.24 99.44x14.96 base 991.22 "0000000000000"
+                  block td 294.87,956.28 115.44x37.92 more
+                    line 302.87,964.28 99.44x14.96 base 976.26 "0.0 MiB"
+                  block td 410.31,956.28 115.44x37.92 more
+                    line 418.31,964.28 99.44x14.96 base 976.26 "*"
+                    line 418.31,979.24 99.44x14.96 base 991.22 "Trojan.GenericK"
+                  block td 525.75,956.28 115.44x37.92 more
+                    line 533.75,964.28 99.44x14.96 base 976.26 "malware"
+                    line 533.75,979.24 99.44x14.96 base 991.22 "détecté"
+                  block td 641.19,956.28 115.44x37.92 more
+                    line 649.19,964.28 99.44x14.96 base 976.26 "Pas d'analyse"
+                    line 649.19,979.24 99.44x14.96 base 991.22 "GLIMPS"
+page 3 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
+  block html 0,0 820.62x982.98 cont more
+    block body 0,0 820.62x982.98 cont more
+      block section 16,0 788.62x942.98 cont
+        block section 40,0 740.62x861.38 cont
+          block div 64,0 692.62x779.78 cont
+            block table 64,0 692.62x779.78 cont
+              block thead 64,0 692.62x45.92
+                block tr 64,0 692.62x45.92
+                  block th 64,0 115.44x45.92
+                    line 72,15.48 99.44x14.96 base 27.46 "Nom"
+                  block th 179.44,0 115.44x45.92
+                    line 187.44,15.48 99.44x14.96 base 27.46 "SHA-256"
+                  block th 294.87,0 115.44x45.92
+                    line 302.87,15.48 99.44x14.96 base 27.46 "Taille"
+                  block th 410.31,0 115.44x45.92
+                    line 418.31,15.48 99.44x14.96 base 27.46 "Menace(s)"
+                  block th 525.75,0 115.44x45.92
+                    line 533.75,15.48 99.44x14.96 base 27.46 "Raison"
+                  block th 641.19,0 115.44x45.92
+                    line 649.19,8 99.44x14.96 base 19.98 "URL de"
+                    line 649.19,22.96 99.44x14.96 base 34.94 "l'analyse"
+              block tbody 64,45.92 692.62x733.86
+                block tr 64,45.92 692.62x68.34 cont
+                  block td 64,45.92 115.44x68.34 cont
+                    line 64,45.92 107.44x14.96 base 57.9 "_0000_très_urge"
+                    line 64,60.88 107.44x14.96 base 72.86 "nt_à_ouvrir.pdf.e"
+                    line 64,75.84 107.44x14.96 base 87.82 "xe"
+                  block td 179.44,45.92 115.44x68.34 cont
+                    line 187.44,45.92 99.44x14.96 base 57.9 "0000000000000"
+                    line 187.44,60.88 99.44x14.96 base 72.86 "0000000000000"
+                    line 187.44,75.84 99.44x14.96 base 87.82 "000000000000"
+                  block td 294.87,45.92 115.44x68.34 cont
+                  block td 410.31,45.92 115.44x68.34 cont
+                    line 418.31,45.92 99.44x14.96 base 57.9 "D.4821"
+                    line 418.31,60.88 99.44x14.96 base 72.86 "*"
+                    line 418.31,75.84 99.44x14.96 base 87.82 "Win32/Emotet.A"
+                    line 418.31,90.8 99.44x14.96 base 102.78 "B"
+                  block td 525.75,45.92 115.44x68.34 cont
+                  block td 641.19,45.92 115.44x68.34 cont
+                    line 649.19,45.92 99.44x14.96 base 57.9 "Malware"
+                block tr 64,114.26 692.62x109.76
+                  block td 64,114.26 115.44x109.76
+                    line 74,122.76 97.44x15.46 base 135.24 "↳"
+                    line 74,138.22 97.44x15.46 base 150.7 "C:\\Users\\victim\\"
+                    line 74,153.68 97.44x15.46 base 166.16 "Downloads\\invo"
+                    line 74,169.14 97.44x15.46 base 181.62 "ice_9999_très_"
+                    line 74,184.6 97.44x15.46 base 197.08 "urgent_à_ouvrir"
+                    line 74,200.06 97.44x15.46 base 212.54 ".pdf.exe"
+                  block td 179.44,114.26 115.44x109.76
+                    line 187.44,131.74 99.44x14.96 base 143.72 "0000000000000"
+                    line 187.44,146.7 99.44x14.96 base 158.68 "0000000000000"
+                    line 187.44,161.66 99.44x14.96 base 173.64 "0000000000000"
+                    line 187.44,176.62 99.44x14.96 base 188.6 "000000000b8cb"
+                    line 187.44,191.58 99.44x14.96 base 203.56 "6442ce44783b"
+                  block td 294.87,114.26 115.44x109.76
+                    line 302.87,161.66 99.44x14.96 base 173.64 "49.9 MiB"
+                  block td 410.31,114.26 115.44x109.76
+                    line 418.31,124.26 99.44x14.96 base 136.24 "*"
+                    line 418.31,139.22 99.44x14.96 base 151.2 "Trojan.GenericK"
+                    line 418.31,154.18 99.44x14.96 base 166.16 "D.4821"
+                    line 418.31,169.14 99.44x14.96 base 181.12 "*"
+                    line 418.31,184.1 99.44x14.96 base 196.08 "Win32/Emotet.A"
+                    line 418.31,199.06 99.44x14.96 base 211.04 "B"
+                  block td 525.75,114.26 115.44x109.76
+                    line 533.75,154.18 99.44x14.96 base 166.16 "malware"
+                    line 533.75,169.14 99.44x14.96 base 181.12 "détecté"
+                  block td 641.19,114.26 115.44x109.76
+                    line 649.19,146.7 99.44x14.96 base 158.68 "Pas d'analyse"
+                    line 649.19,161.66 99.44x14.96 base 173.64 "GLIMPS"
+                    line 649.19,176.62 99.44x14.96 base 188.6 "Malware"
+                block tr 64,224.02 692.62x125.22
+                  block td 64,224.02 115.44x125.22
+                    line 84,232.52 87.44x15.46 base 245 "↳"
+                    line 84,247.98 87.44x15.46 base 260.46 "C:\\Users\\victi"
+                    line 84,263.44 87.44x15.46 base 275.92 "m\\Downloads\\"
+                    line 84,278.9 87.44x15.46 base 291.38 "invoice_9997"
+                    line 84,294.36 87.44x15.46 base 306.84 "_très_urgent_"
+                    line 84,309.82 87.44x15.46 base 322.3 "à_ouvrir.pdf.e"
+                    line 84,325.28 87.44x15.46 base 337.76 "xe"
+                  block td 179.44,224.02 115.44x125.22
+                    line 187.44,249.23 99.44x14.96 base 261.21 "0000000000000"
+                    line 187.44,264.19 99.44x14.96 base 276.17 "0000000000000"
+                    line 187.44,279.15 99.44x14.96 base 291.13 "0000000000000"
+                    line 187.44,294.11 99.44x14.96 base 306.09 "0000000007c5c"
+                    line 187.44,309.07 99.44x14.96 base 321.05 "70cfcfaf8011"
+                  block td 294.87,224.02 115.44x125.22
+                    line 302.87,279.15 99.44x14.96 base 291.13 "47.7 MiB"
+                  block td 410.31,224.02 115.44x125.22
+                    line 418.31,241.75 99.44x14.96 base 253.73 "*"
+                    line 418.31,256.71 99.44x14.96 base 268.69 "Trojan.GenericK"
+                    line 418.31,271.67 99.44x14.96 base 283.65 "D.4821"
+                    line 418.31,286.63 99.44x14.96 base 298.61 "*"
+                    line 418.31,301.59 99.44x14.96 base 313.57 "Win32/Emotet.A"
+                    line 418.31,316.55 99.44x14.96 base 328.53 "B"
+                  block td 525.75,224.02 115.44x125.22
+                    line 533.75,271.67 99.44x14.96 base 283.65 "malware"
+                    line 533.75,286.63 99.44x14.96 base 298.61 "détecté"
+                  block td 641.19,224.02 115.44x125.22
+                    line 649.19,279.15 99.44x14.96 base 291.13 "Lien analyse"
+                block tr 64,349.24 692.62x109.76
+                  block td 64,349.24 115.44x109.76
+                    line 74,357.74 97.44x15.46 base 370.22 "↳"
+                    line 74,373.2 97.44x15.46 base 385.68 "C:\\Users\\victim\\"
+                    line 74,388.66 97.44x15.46 base 401.14 "Downloads\\invo"
+                    line 74,404.12 97.44x15.46 base 416.6 "ice_9998_très_"
+                    line 74,419.58 97.44x15.46 base 432.06 "urgent_à_ouvrir"
+                    line 74,435.04 97.44x15.46 base 447.52 ".pdf.exe"
+                  block td 179.44,349.24 115.44x109.76
+                    line 187.44,366.72 99.44x14.96 base 378.7 "0000000000000"
+                    line 187.44,381.68 99.44x14.96 base 393.66 "0000000000000"
+                    line 187.44,396.64 99.44x14.96 base 408.62 "0000000000000"
+                    line 187.44,411.6 99.44x14.96 base 423.58 "0000000001a93"
+                    line 187.44,426.56 99.44x14.96 base 438.54 "ea894ef9fc26"
+                  block td 294.87,349.24 115.44x109.76
+                    line 302.87,396.64 99.44x14.96 base 408.62 "48.8 MiB"
+                  block td 410.31,349.24 115.44x109.76
+                    line 418.31,359.24 99.44x14.96 base 371.22 "*"
+                    line 418.31,374.2 99.44x14.96 base 386.18 "Trojan.GenericK"
+                    line 418.31,389.16 99.44x14.96 base 401.14 "D.4821"
+                    line 418.31,404.12 99.44x14.96 base 416.1 "*"
+                    line 418.31,419.08 99.44x14.96 base 431.06 "Win32/Emotet.A"
+                    line 418.31,434.04 99.44x14.96 base 446.02 "B"
+                  block td 525.75,349.24 115.44x109.76
+                    line 533.75,389.16 99.44x14.96 base 401.14 "malware"
+                    line 533.75,404.12 99.44x14.96 base 416.1 "détecté"
+                  block td 641.19,349.24 115.44x109.76
+                    line 649.19,396.64 99.44x14.96 base 408.62 "Lien analyse"
+                block tr 64,459 692.62x106.76
+                  block td 64,459 115.44x106.76
+                    line 64,474.98 107.44x14.96 base 486.96 "C:\\Users\\victim\\D"
+                    line 64,489.94 107.44x14.96 base 501.92 "ownloads\\invoice"
+                    line 64,504.9 107.44x14.96 base 516.88 "_0001_très_urge"
+                    line 64,519.86 107.44x14.96 base 531.84 "nt_à_ouvrir.pdf.e"
+                    line 64,534.82 107.44x14.96 base 546.8 "xe"
+                  block td 179.44,459 115.44x106.76
+                    line 187.44,474.98 99.44x14.96 base 486.96 "0000000000000"
+                    line 187.44,489.94 99.44x14.96 base 501.92 "0000000000000"
+                    line 187.44,504.9 99.44x14.96 base 516.88 "0000000000000"
+                    line 187.44,519.86 99.44x14.96 base 531.84 "0000000009e37"
+                    line 187.44,534.82 99.44x14.96 base 546.8 "79b97f4a7c15"
+                  block td 294.87,459 115.44x106.76
+                    line 302.87,504.9 99.44x14.96 base 516.88 "1.1 MiB"
+                  block td 410.31,459 115.44x106.76
+                    line 418.31,467.5 99.44x14.96 base 479.48 "*"
+                    line 418.31,482.46 99.44x14.96 base 494.44 "Trojan.GenericK"
+                    line 418.31,497.42 99.44x14.96 base 509.4 "D.4821"
+                    line 418.31,512.38 99.44x14.96 base 524.36 "*"
+                    line 418.31,527.34 99.44x14.96 base 539.32 "Win32/Emotet.A"
+                    line 418.31,542.3 99.44x14.96 base 554.28 "B"
+                  block td 525.75,459 115.44x106.76
+                    line 533.75,497.42 99.44x14.96 base 509.4 "malware"
+                    line 533.75,512.38 99.44x14.96 base 524.36 "détecté"
+                  block td 641.19,459 115.44x106.76
+                    line 649.19,504.9 99.44x14.96 base 516.88 "Lien analyse"
+                block tr 64,565.76 692.62x106.76
+                  block td 64,565.76 115.44x106.76
+                    line 64,581.74 107.44x14.96 base 593.72 "C:\\Users\\victim\\D"
+                    line 64,596.7 107.44x14.96 base 608.68 "ownloads\\invoice"
+                    line 64,611.66 107.44x14.96 base 623.64 "_0002_très_urge"
+                    line 64,626.62 107.44x14.96 base 638.6 "nt_à_ouvrir.pdf.e"
+                    line 64,641.58 107.44x14.96 base 653.56 "xe"
+                  block td 179.44,565.76 115.44x106.76
+                    line 187.44,581.74 99.44x14.96 base 593.72 "0000000000000"
+                    line 187.44,596.7 99.44x14.96 base 608.68 "0000000000000"
+                    line 187.44,611.66 99.44x14.96 base 623.64 "0000000000000"
+                    line 187.44,626.62 99.44x14.96 base 638.6 "0000000003c6e"
+                    line 187.44,641.58 99.44x14.96 base 653.56 "f372fe94f82a"
+                  block td 294.87,565.76 115.44x106.76
+                    line 302.87,611.66 99.44x14.96 base 623.64 "2.2 MiB"
+                  block td 410.31,565.76 115.44x106.76
+                    line 418.31,574.26 99.44x14.96 base 586.24 "*"
+                    line 418.31,589.22 99.44x14.96 base 601.2 "Trojan.GenericK"
+                    line 418.31,604.18 99.44x14.96 base 616.16 "D.4821"
+                    line 418.31,619.14 99.44x14.96 base 631.12 "*"
+                    line 418.31,634.1 99.44x14.96 base 646.08 "Win32/Emotet.A"
+                    line 418.31,649.06 99.44x14.96 base 661.04 "B"
+                  block td 525.75,565.76 115.44x106.76
+                    line 533.75,604.18 99.44x14.96 base 616.16 "malware"
+                    line 533.75,619.14 99.44x14.96 base 631.12 "détecté"
+                  block td 641.19,565.76 115.44x106.76
+                    line 649.19,611.66 99.44x14.96 base 623.64 "Lien analyse"
+                block tr 64,672.52 692.62x107.26
+                  block td 64,672.52 115.44x107.26
+                    line 64,688.5 107.44x14.96 base 700.48 "C:\\Users\\victim\\D"
+                    line 64,703.46 107.44x14.96 base 715.44 "ownloads\\invoice"
+                    line 64,718.42 107.44x14.96 base 730.4 "_0003_très_urge"
+                    line 64,733.38 107.44x14.96 base 745.36 "nt_à_ouvrir.pdf.e"
+                    line 64,748.34 107.44x14.96 base 760.32 "xe"
+                  block td 179.44,672.52 115.44x107.26
+                    line 187.44,688.5 99.44x14.96 base 700.48 "0000000000000"
+                    line 187.44,703.46 99.44x14.96 base 715.44 "0000000000000"
+                    line 187.44,718.42 99.44x14.96 base 730.4 "0000000000000"
+                    line 187.44,733.38 99.44x14.96 base 745.36 "000000000daa6"
+                    line 187.44,748.34 99.44x14.96 base 760.32 "6d2c7ddf743f"
+                  block td 294.87,672.52 115.44x107.26
+                    line 302.87,718.42 99.44x14.96 base 730.4 "3.3 MiB"
+                  block td 410.31,672.52 115.44x107.26
+                    line 418.31,681.02 99.44x14.96 base 693 "*"
+                    line 418.31,695.98 99.44x14.96 base 707.96 "Trojan.GenericK"
+                    line 418.31,710.94 99.44x14.96 base 722.92 "D.4821"
+                    line 418.31,725.9 99.44x14.96 base 737.88 "*"
+                    line 418.31,740.86 99.44x14.96 base 752.84 "Win32/Emotet.A"
+                    line 418.31,755.82 99.44x14.96 base 767.8 "B"
+                  block td 525.75,672.52 115.44x107.26
+                    line 533.75,710.94 99.44x14.96 base 722.92 "malware"
+                    line 533.75,725.9 99.44x14.96 base 737.88 "détecté"
+                  block td 641.19,672.52 115.44x107.26
+                    line 649.19,703.46 99.44x14.96 base 715.44 "Pas d'analyse"
+                    line 649.19,718.42 99.44x14.96 base 730.4 "GLIMPS"
+                    line 649.19,733.38 99.44x14.96 base 745.36 "Malware"
+          block p 64,795.78 692.62x25.6
+            line 64,795.78 692.62x25.6 base 814.08 "… et 3 autres fichiers de l'archive"
+        block p 40,877.38 740.62x25.6
+          line 40,877.38 740.62x25.6 base 895.68 "… et 1 autre archive"
+page 4 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
+  block html 0,0 820.62x633.52 cont
+    block body 0,0 820.62x633.52 cont
+      block section 16,0 788.62x316.72
+        block h2 40,24 740.62x48.4
+          line 40,24 740.62x38.4 base 51.7 "Fichiers non analysés"
+        block p 40,92.32 740.62x25.6
+          line 40,92.32 740.62x25.6 base 110.62 "Ces fichiers n'ont pas été analysés complètement : leur contenu n'a pas été vérifié. Total : 4."
+        block div 40,133.92 740.62x158.8
+          block table 40,133.92 740.62x158.8
+            block thead 40,133.92 740.62x30.96
+              block tr 40,133.92 740.62x30.96
+                block th 40,133.92 185.16x30.96
+                  line 48,141.92 169.16x14.96 base 153.9 "Fichier"
+                block th 225.16,133.92 185.16x30.96
+                  line 233.16,141.92 169.16x14.96 base 153.9 "Taille"
+                block th 410.31,133.92 185.16x30.96
+                  line 418.31,141.92 169.16x14.96 base 153.9 "Raison"
+                block th 595.47,133.92 185.16x30.96
+                  line 603.47,141.92 169.16x14.96 base 153.9 "Archive d'origine"
+            block tbody 40,164.88 740.62x127.84
+              block tr 40,164.88 740.62x31.46
+                block td 40,164.88 185.16x31.46
+                  line 48,172.88 169.16x14.96 base 184.86 "secret.7z"
+                block td 225.16,164.88 185.16x31.46
+                  line 233.16,172.88 169.16x14.96 base 184.86 "1 MiB"
+                block td 410.31,164.88 185.16x31.46
+                  line 418.31,172.88 169.16x14.96 base 184.86 "chiffré"
+                block td 595.47,164.88 185.16x31.46
+                  line 603.47,172.88 169.16x14.96 base 184.86 "dump_0.zip"
+              block tr 40,196.34 740.62x31.96
+                block td 40,196.34 185.16x31.96
+                  line 48,204.84 169.16x14.96 base 216.82 "x.bin"
+                block td 225.16,196.34 185.16x31.96
+                  line 233.16,204.84 169.16x14.96 base 216.82 "0 B"
+                block td 410.31,196.34 185.16x31.96
+                  line 418.31,204.84 169.16x14.96 base 216.82 "vide"
+                block td 595.47,196.34 185.16x31.96
+              block tr 40,228.3 740.62x31.96
+                block td 40,228.3 185.16x31.96
+                  line 48,236.8 169.16x14.96 base 248.78 "y.iso"
+                block td 225.16,228.3 185.16x31.96
+                  line 233.16,236.8 169.16x14.96 base 248.78 "4 GiB"
+                block td 410.31,228.3 185.16x31.96
+                  line 418.31,236.8 169.16x14.96 base 248.78 "trop gros"
+                block td 595.47,228.3 185.16x31.96
+              block tr 40,260.26 740.62x32.46
+                block td 40,260.26 185.16x32.46
+                  line 48,268.76 169.16x14.96 base 280.74 "z.rar"
+                block td 225.16,260.26 185.16x32.46
+                  line 233.16,268.76 169.16x14.96 base 280.74 "2 MiB"
+                block td 410.31,260.26 185.16x32.46
+                  line 418.31,268.76 169.16x14.96 base 280.74 "corrompu"
+                block td 595.47,260.26 185.16x32.46
+                  line 603.47,268.76 169.16x14.96 base 280.74 "dump_1.zip"
+      block section 16,332.72 788.62x252.8
+        block h2 40,356.72 740.62x48.4
+          line 40,356.72 740.62x38.4 base 384.42 "Fichiers en erreur"
+        block p 40,425.04 740.62x25.6
+          line 40,425.04 740.62x25.6 base 443.34 "Les fichiers suivants n'ont pas pu être analysés correctement :"
+        block div 40,466.64 740.62x94.88
+          block table 40,466.64 740.62x94.88
+            block thead 40,466.64 740.62x30.96
+              block tr 40,466.64 740.62x30.96
+                block th 40,466.64 370.31x30.96
+                  line 48,474.64 354.31x14.96 base 486.62 "Fichier"
+                block th 410.31,466.64 370.31x30.96
+                  line 418.31,474.64 354.31x14.96 base 486.62 "Erreur"
+            block tbody 40,497.6 740.62x63.92
+              block tr 40,497.6 740.62x31.46
+                block td 40,497.6 370.31x31.46
+                  line 48,505.6 354.31x14.96 base 517.58 "a.doc"
+                block td 410.31,497.6 370.31x31.46
+                  line 418.31,505.6 354.31x14.96 base 517.58 "timeout"
+              block tr 40,529.06 740.62x32.46
+                block td 40,529.06 370.31x32.46
+                  line 48,537.56 354.31x14.96 base 549.54 "b.xls"
+                block td 410.31,529.06 370.31x32.46
+                  line 418.31,537.56 354.31x14.96 base 549.54 "parse error: unexpected EOF"

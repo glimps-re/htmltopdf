@@ -1,0 +1,346 @@
+--- page 1
+Rapport d'analyse - a1b2c3d4-e5f6
+Détails de l'analyse
+Fichiers listés : 
+1234
+Fichiers analysés : 
+1200
+Fichiers non analysés (membres d'archives inclus) : 
+4
+Taille totale des fichiers (avant extraction) : 
+3.2 GiB
+Volume analysé : 
+3.0 GiB
+Volume filtré : 
+200 MiB
+Bloqués : 
+5, dont fichiers détéctés comme malveillants: 5
+Fichiers en erreur : 
+2
+Date de début : 
+2026-11-23 10:42:00
+Durée de session: 
+4m12s
+Conclusion
+Un ou plusieurs fichiers ont été bloqués par les moteurs d'analyse.
+Seuls les fichiers analysés comme sains ont pu être déplacés par l'application sur le support de
+destination.
+Des fichiers non analysés (voir la rubrique « Fichiers non analysés ») ont pu être transmis sans analyse
+complète, selon la politique choisie (
+unanalyzable_policy
+) : leur contenu n'a pas été vérifié.
+Fichiers bloqués
+TLP:AMBER
+Page 1 of 4
+--- page 2
+Chemin
+Menace(s)
+SHA-256
+Taille
+Raison
+Analyse
+C:\Users\victim\D
+ownloads\invoice
+_0000_très_urge
+nt_à_ouvrir.pdf.e
+xe
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.AB
+00000000000000
+00000000000000
+00000000000000
+00000000000000
+00000000
+0.0 MiB
+malware détecté
+Pas d'analyse
+GLIMPS Malware
+C:\Users\victim\D
+ownloads\invoice
+_0001_très_urge
+nt_à_ouvrir.pdf.e
+xe
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.AB
+00000000000000
+00000000000000
+00000000000000
+0000009e3779b9
+7f4a7c15
+1.1 MiB
+malware détecté
+Lien analyse
+C:\Users\victim\D
+ownloads\invoice
+_0002_très_urge
+nt_à_ouvrir.pdf.e
+xe
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.AB
+00000000000000
+00000000000000
+00000000000000
+0000003c6ef372f
+e94f82a
+2.2 MiB
+malware détecté
+Lien analyse
+C:\Users\victim\D
+ownloads\invoice
+_0003_très_urge
+nt_à_ouvrir.pdf.e
+xe
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.AB
+00000000000000
+00000000000000
+00000000000000
+000000daa66d2c
+7ddf743f
+3.3 MiB
+malware détecté
+Pas d'analyse
+GLIMPS Malware
+C:\Users\victim\D
+ownloads\invoice
+_0004_très_urge
+nt_à_ouvrir.pdf.e
+xe
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.AB
+00000000000000
+00000000000000
+00000000000000
+00000078dde6e5
+fd29f054
+4.4 MiB
+malware détecté
+Lien analyse
+… et 12 autres
+Archives bloquées
+Archive dump_0.zip
+Nombre de sous-fichier extrait : 
+4
+SHA-256 : 
+00000000000000000000000000000000000000000000000096af9ccb49675251
+Taille : 
+12 MiB
+Quarantaine : 
+/var/quarantine/000000000000
+Nom
+SHA-256
+Taille
+Menace(s)
+Raison
+URL de
+l'analyse
+C:\Users\victim\D
+ownloads\invoice
+0000000000000
+0000000000000
+0.0 MiB
+*
+Trojan.GenericK
+malware
+détecté
+Pas d'analyse
+GLIMPS
+TLP:AMBER
+Page 2 of 4
+--- page 3
+Nom
+SHA-256
+Taille
+Menace(s)
+Raison
+URL de
+l'analyse
+_0000_très_urge
+nt_à_ouvrir.pdf.e
+xe
+0000000000000
+0000000000000
+000000000000
+D.4821
+*
+Win32/Emotet.A
+B
+Malware
+↳
+C:\Users\victim\
+Downloads\invo
+ice_9999_très_
+urgent_à_ouvrir
+.pdf.exe
+0000000000000
+0000000000000
+0000000000000
+000000000b8cb
+6442ce44783b
+49.9 MiB
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.A
+B
+malware
+détecté
+Pas d'analyse
+GLIMPS
+Malware
+↳
+C:\Users\victi
+m\Downloads\
+invoice_9997
+_très_urgent_
+à_ouvrir.pdf.e
+xe
+0000000000000
+0000000000000
+0000000000000
+0000000007c5c
+70cfcfaf8011
+47.7 MiB
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.A
+B
+malware
+détecté
+Lien analyse
+↳
+C:\Users\victim\
+Downloads\invo
+ice_9998_très_
+urgent_à_ouvrir
+.pdf.exe
+0000000000000
+0000000000000
+0000000000000
+0000000001a93
+ea894ef9fc26
+48.8 MiB
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.A
+B
+malware
+détecté
+Lien analyse
+C:\Users\victim\D
+ownloads\invoice
+_0001_très_urge
+nt_à_ouvrir.pdf.e
+xe
+0000000000000
+0000000000000
+0000000000000
+0000000009e37
+79b97f4a7c15
+1.1 MiB
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.A
+B
+malware
+détecté
+Lien analyse
+C:\Users\victim\D
+ownloads\invoice
+_0002_très_urge
+nt_à_ouvrir.pdf.e
+xe
+0000000000000
+0000000000000
+0000000000000
+0000000003c6e
+f372fe94f82a
+2.2 MiB
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.A
+B
+malware
+détecté
+Lien analyse
+C:\Users\victim\D
+ownloads\invoice
+_0003_très_urge
+nt_à_ouvrir.pdf.e
+xe
+0000000000000
+0000000000000
+0000000000000
+000000000daa6
+6d2c7ddf743f
+3.3 MiB
+*
+Trojan.GenericK
+D.4821
+*
+Win32/Emotet.A
+B
+malware
+détecté
+Pas d'analyse
+GLIMPS
+Malware
+… et 3 autres fichiers de l'archive
+… et 1 autre archive
+TLP:AMBER
+Page 3 of 4
+--- page 4
+Fichiers non analysés
+Ces fichiers n'ont pas été analysés complètement : leur contenu n'a pas été vérifié. Total : 4.
+Fichier
+Taille
+Raison
+Archive d'origine
+secret.7z
+1 MiB
+chiffré
+dump_0.zip
+x.bin
+0 B
+vide
+y.iso
+4 GiB
+trop gros
+z.rar
+2 MiB
+corrompu
+dump_1.zip
+Fichiers en erreur
+Les fichiers suivants n'ont pas pu être analysés correctement :
+Fichier
+Erreur
+a.doc
+timeout
+b.xls
+parse error: unexpected EOF
+TLP:AMBER
+Page 4 of 4
