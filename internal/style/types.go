@@ -330,6 +330,9 @@ type Computed struct {
 	GridColumns []Track
 	// BoxShadow is nil for none. It is shared between styles: never modify it.
 	BoxShadow []Shadow
+	// shadowSrc is the specified box-shadow, kept so that inherit resolves it
+	// again against the colour and opacity of the inheriting element.
+	shadowSrc []shadowSpec
 
 	// ownFade is 1 − opacity and fade is 1 − the product of the opacities of the
 	// element and its ancestors, so that the zero value is opaque. When fade is

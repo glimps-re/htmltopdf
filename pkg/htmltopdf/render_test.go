@@ -103,7 +103,7 @@ func TestMediaQueriesSeeThePageArea(t *testing.T) {
 }
 
 func TestWarnings(t *testing.T) {
-	html := `<style>p { box-shadow: 1px 1px red; foo: bar } @import "x.css"; p::first-line { color: red }</style>
+	html := `<style>p { z-index: 3; foo: bar } @import "x.css"; p::first-line { color: red }</style>
 <img src="x.png"><img src="y.png"><a href="javascript:alert(1)">bad</a><p>x</p>`
 	res, _ := renderBytes(t, mustNew(t, Options{}), html)
 	counts := map[string]int{}
@@ -111,7 +111,7 @@ func TestWarnings(t *testing.T) {
 		counts[string(w.Code)+": "+w.Detail] = w.Count
 	}
 	for _, want := range []string{
-		"unsupported-property: box-shadow", "unsupported-property: foo", "unsupported-element: img", "blocked-link: ",
+		"unsupported-property: z-index", "unsupported-property: foo", "unsupported-element: img", "blocked-link: ",
 	} {
 		found := false
 		for k := range counts {

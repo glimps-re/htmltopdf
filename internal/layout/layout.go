@@ -149,7 +149,14 @@ func (p *Paginator) Next() (*Page, error) {
 		// position is retried on the next page, with the margins truncated.
 	}
 	if res.f != nil {
-		pg.Items = emit(res.f, make(display.List, 0, 64))
+		e := &emitter{}
+		pg.Items = e.emit(res.f, make(display.List, 0, 64))
+		if err := p.cfg.Budget.Charge(budget.Work, int64(e.shadows)); err != nil {
+			return nil, err
+		}
+		if e.clamped {
+			p.cfg.Budget.Warn(budget.WarnClamped, "box-shadow items per page")
+		}
 	}
 	return pg, nil
 }

@@ -97,6 +97,7 @@ func (x *computeCtx) finish() {
 		c.BackgroundColor = c.Color
 	}
 	x.applyOpacity()
+	c.BoxShadow = x.resolveShadows(c.shadowSrc)
 }
 
 // applyOpacity multiplies the used alpha of the colours by the product of the
@@ -243,6 +244,8 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 		c.ColumnGap = src.ColumnGap
 	case pGridColumns:
 		c.GridColumns = src.GridColumns
+	case pBoxShadow:
+		c.shadowSrc = src.shadowSrc
 	}
 }
 
@@ -381,6 +384,11 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 		c.GridColumns = nil
 		if !s.none {
 			c.GridColumns = x.gridTracks(s.grid)
+		}
+	case pBoxShadow:
+		c.shadowSrc = nil
+		if s.shadow != nil {
+			c.shadowSrc = s.shadow.shadows
 		}
 	}
 }

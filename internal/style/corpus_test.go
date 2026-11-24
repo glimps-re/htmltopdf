@@ -136,19 +136,12 @@ func TestCorpus00Values(t *testing.T) {
 	t.Fatal("no header")
 }
 
-func TestCorpusIsWarningFreeExceptBoxShadow(t *testing.T) {
+func TestCorpusIsWarningFree(t *testing.T) {
 	_, d := loadReport(t, "00-host-connector", testcorpus.Large)
 	sheets, extra, b := compileDocWarnings(t, d)
 	cascade(t, d, sheets, extra, b)
-	w, _ := b.Warnings()
-	if len(w) != 1 {
-		t.Errorf("want the box-shadow warning only, got %+v", w)
-	}
-	for _, v := range w {
-		if v.Code == budget.WarnUnsupportedProperty && v.Detail == "box-shadow" {
-			continue
-		}
-		t.Errorf("unexpected warning %+v", v)
+	if w, _ := b.Warnings(); len(w) != 0 {
+		t.Errorf("unexpected warnings %+v", w)
 	}
 }
 

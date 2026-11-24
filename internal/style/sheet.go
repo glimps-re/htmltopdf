@@ -209,6 +209,13 @@ func warnTruncated(b *budget.Budget, specs []propSpec) {
 			b.Warn(budget.WarnClamped, "font-family")
 		case specs[i].prop == pGridColumns && specs[i].spec.n == gridCut:
 			b.Warn(budget.WarnClamped, "grid tracks")
+		case specs[i].prop == pBoxShadow:
+			if sh := specs[i].spec.shadow; sh != nil && sh.inset {
+				b.Warn(budget.WarnUnsupportedProperty, "box-shadow inset")
+			}
+			if sh := specs[i].spec.shadow; sh != nil && sh.clamped {
+				b.Warn(budget.WarnClamped, "box-shadow")
+			}
 		}
 	}
 }

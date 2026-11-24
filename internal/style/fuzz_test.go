@@ -60,6 +60,9 @@ func FuzzStyle(f *testing.F) {
 		"p{font:italic 700 7pt/4mm Georgia,serif;font:var(--f);opacity:50%;text-transform:uppercase;white-space:nowrap}",
 		"div{display:grid;grid-template-columns:repeat(100000,1fr 2fr) auto;gap:1px 2px;flex:1 1 0;flex:auto 3}",
 		"div{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;flex-grow:1e30;break-before:page}",
+		"div{box-shadow:0 1px 2px 3px rgba(0,0,0,.2),inset 1px 1px red,1em 1rem;opacity:.5;color:blue}",
+		"div{box-shadow:" + strings.Repeat("1px 1px 1px red,", 200) + "1px 1px;--s:1px 2px;box-shadow:var(--s) green}",
+		"div{box-shadow:inherit;box-shadow:none}p{box-shadow:-1px 1e30px 0 -1e30px currentcolor}",
 	} {
 		f.Add(s, "color:red;--q:1")
 	}

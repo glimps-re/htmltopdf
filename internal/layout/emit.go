@@ -8,10 +8,11 @@ import (
 )
 
 // emit appends the display items of f and its descendants.
-func emit(f *frag, out display.List) display.List {
+func (e *emitter) emit(f *frag, out display.List) display.List {
 	st := f.box.Style
 	r := f.rect
 	rad := radiiOf(st, r, f.first, f.last)
+	out = e.appendShadows(out, st, r, rad)
 	out = appendBackground(out, st, r, rad)
 	widths := f.border
 	if !f.first {
@@ -30,10 +31,10 @@ func emit(f *frag, out display.List) display.List {
 		out = append(out, display.PushClip{Rect: paddingBox(f), Radii: innerRadii(rad, f)})
 	}
 	for _, c := range f.children {
-		out = emit(c, out)
+		out = e.emit(c, out)
 	}
 	for _, ln := range f.lines {
-		out = emitLine(ln, out)
+		out = e.emitLine(ln, out)
 	}
 	if clip {
 		out = append(out, display.PopClip{})
@@ -54,23 +55,7 @@ func radiiOf(st *style.Computed, r display.Rect, first, last bool) display.Radii
 		rad[i].H = math.Max(0, px(c.H, r.W))
 		rad[i].V = math.Max(0, px(c.V, r.H))
 	}
-	f := 1.0
-	scale := func(side, sum float64) {
-		if sum > side && sum > 0 {
-			f = math.Min(f, side/sum)
-		}
-	}
-	scale(r.W, rad[style.TopLeft].H+rad[style.TopRight].H)
-	scale(r.W, rad[style.BottomLeft].H+rad[style.BottomRight].H)
-	scale(r.H, rad[style.TopLeft].V+rad[style.BottomLeft].V)
-	scale(r.H, rad[style.TopRight].V+rad[style.BottomRight].V)
-	if f < 1 {
-		for i := range rad {
-			rad[i].H *= f
-			rad[i].V *= f
-		}
-	}
-	return rad
+	return fitRadii(rad, r)
 }
 
 // appendBackground adds the background color and gradient of a box.
@@ -142,7 +127,7 @@ func innerRadii(rad display.Radii, f *frag) display.Radii {
 }
 
 // emitLine appends the inline box backgrounds, the text and the links of a line.
-func emitLine(ln *lineFrag, out display.List) display.List {
+func (e *emitter) emitLine(ln *lineFrag, out display.List) display.List {
 	out = emitInlineBoxes(ln, out)
 	for i := range ln.items {
 		if t := ln.items[i].text; t != nil {
@@ -153,7 +138,7 @@ func emitLine(ln *lineFrag, out display.List) display.List {
 	// inline-blocks, painted atomically above the inline content (CSS 2.1 App. E).
 	for i := range ln.items {
 		if a := ln.items[i].atom; a != nil {
-			out = emit(a.f, out)
+			out = e.emit(a.f, out)
 		}
 	}
 	return emitLinks(ln, out)

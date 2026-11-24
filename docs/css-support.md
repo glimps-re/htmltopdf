@@ -65,7 +65,8 @@ Output PDFs are not tagged: they have no structure tree and do not conform to PD
 | Block layout: margin collapsing (siblings, parent and first or last child, empty boxes), auto margins, `%` of the containing block, `box-sizing` | supported | The root element and boxes with `overflow: hidden` keep the margins of their children inside. |
 | Fragmentation | approximated | Pages break between blocks and between lines; there is no orphans/widows control and `break-*` is ignored until M2. Margins next to a break are truncated. A border or padding that does not fit a page is sliced over the following pages. |
 | `Options.Scale` | supported | The page area is laid out at 1/Scale of its size and drawn at Scale; margin boxes are not scaled. |
-| `box-shadow`, `position`, `float`, `z-index`, `transform`, `opacity`, `flex*`, `grid*` | ignored | `unsupported-property`. |
+| `box-shadow` (outer, up to 8) | approximated | Drawn under the box, before its background: spread and offset applied to the border box; a blur is 4 concentric translucent rounded rectangles over the blur radius (no smooth falloff), not clipped to the outside of the box. At most 4096 shadow rectangles per page, the rest of the page gets none (`clamped`, `box-shadow items per page`). `inset` shadows are dropped with `unsupported-property` (`box-shadow inset`); more than 8 are cut with `clamped`. Non-atomic inline boxes get none. |
+| `position`, `float`, `z-index`, `transform`, `opacity`, `flex*`, `grid*` | ignored | `unsupported-property`. |
 
 ## Text and fonts
 

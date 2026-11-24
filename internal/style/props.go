@@ -77,6 +77,7 @@ const (
 	pRowGap
 	pColumnGap
 	pGridColumns
+	pBoxShadow
 	numProps
 )
 
@@ -152,7 +153,7 @@ var longhands = map[string][]prop{
 	"flex-direction":             {pFlexDirection}, "flex-wrap": {pFlexWrap}, "justify-content": {pJustifyContent},
 	"align-items": {pAlignItems}, "flex-grow": {pFlexGrow}, "flex-shrink": {pFlexShrink}, "flex-basis": {pFlexBasis},
 	"flex": {pFlexGrow, pFlexShrink, pFlexBasis}, "row-gap": {pRowGap}, "column-gap": {pColumnGap},
-	"gap": {pRowGap, pColumnGap}, "grid-template-columns": {pGridColumns},
+	"gap": {pRowGap, pColumnGap}, "grid-template-columns": {pGridColumns}, "box-shadow": {pBoxShadow},
 }
 
 // declCtx tells where a declaration appears: properties differ between
@@ -208,19 +209,20 @@ const (
 // spec is the specified value of one longhand, parsed when the sheet is
 // compiled (or, after var() substitution, when the style is computed).
 type spec struct {
-	kind  specKind
-	len   css.Length
-	len2  css.Length
-	auto  bool
-	none  bool
-	n     int32
-	f     float64
-	color css.Color
-	cur   bool // currentcolor
-	grad  *css.Gradient
-	list  []string
-	items []ContentItem
-	grid  []gridGroup
+	kind   specKind
+	len    css.Length
+	len2   css.Length
+	auto   bool
+	none   bool
+	n      int32
+	f      float64
+	color  css.Color
+	cur    bool // currentcolor
+	grad   *css.Gradient
+	list   []string
+	items  []ContentItem
+	grid   []gridGroup
+	shadow *shadowList
 }
 
 type propSpec struct {
@@ -401,6 +403,9 @@ func parseLonghand(p prop, toks []css.Token) (spec, bool) {
 		return parseGap(toks)
 	case pGridColumns:
 		return parseGridColumns(toks)
+	case pBoxShadow:
+		l, ok := parseBoxShadow(toks)
+		return spec{shadow: &l}, ok
 	}
 	return spec{}, false
 }
