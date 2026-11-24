@@ -57,6 +57,7 @@ type Resolver struct {
 	bk      buckets
 	specs   [numProps]spec
 	touched []prop
+	grid    gridCache
 }
 
 // NewResolver builds the rule index of the render: ua and extra are compiled
@@ -163,7 +164,10 @@ func (r *Resolver) Anonymous(parent *Computed, display Display) (*Computed, erro
 	}
 	r.touched = r.touched[:0]
 	r.set(pDisplay, spec{kind: specValue, n: int32(display)})
-	c := compute(parent, &r.specs, r.touched, r.b)
+	c, err := compute(parent, &r.specs, r.touched, r.b, nil)
+	if err != nil {
+		return nil, err
+	}
 	if parent != nil {
 		c.vars = parent.vars
 	}
@@ -259,7 +263,10 @@ func (r *Resolver) build(parent *Computed, m []matched, inline []decl) (*Compute
 			return nil, err
 		}
 	}
-	c := compute(parent, &r.specs, r.touched, r.b)
+	c, err := compute(parent, &r.specs, r.touched, r.b, &r.grid)
+	if err != nil {
+		return nil, err
+	}
 	c.vars = vars
 	return c, nil
 }

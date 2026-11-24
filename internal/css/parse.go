@@ -270,6 +270,9 @@ func convert(dst *Token, tt tcss.TokenType, raw string) {
 		return
 	case tcss.NumberToken:
 		*dst = Token{Type: TNumber, Num: parseNum(raw)}
+		if !strings.ContainsAny(raw, ".eE") {
+			dst.Flags = FlagInt
+		}
 		return
 	case tcss.PercentageToken:
 		*dst = Token{Type: TPercentage, Unit: UnitPercent, Num: parseNum(raw[:len(raw)-1])}

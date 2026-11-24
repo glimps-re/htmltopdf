@@ -24,6 +24,20 @@ func checkComputed(t *testing.T, c *Computed) {
 			t.Fatalf("bad dimension %+v", d)
 		}
 	}
+	for _, d := range []Dim{c.FlexBasis, c.RowGap, c.ColumnGap} {
+		if !finite(d.Value) {
+			t.Fatalf("bad dimension %+v", d)
+		}
+	}
+	for _, tr := range c.GridColumns {
+		if !finite(tr.Value) || tr.Kind > TrackMaxContent {
+			t.Fatalf("bad track %+v", tr)
+		}
+	}
+	if len(c.GridColumns) > MaxGridTracks || c.FlexGrow < 0 || c.FlexGrow > MaxFlexFactor || c.FlexShrink < 0 || c.FlexShrink > MaxFlexFactor ||
+		c.fade < 0 || c.fade > 1 || c.Color.A < 0 || c.Color.A > 1 {
+		t.Fatalf("bad M2 values %+v", c)
+	}
 	vals := []float64{c.FontSize, c.LetterSpacing, c.BorderSpacing[0], c.BorderSpacing[1], c.LineHeight.Value}
 	for _, b := range c.Border {
 		vals = append(vals, b.Width)
@@ -43,6 +57,9 @@ func FuzzStyle(f *testing.F) {
 		"p { color: red; margin: 1px 2px }", ":root{--a:var(--b)} p{color:var(--a, blue)}", "p{font-size:1e30em;margin:1e30px}",
 		"p{--x:var(--x)} @media print{p{width:50%}} @page{size:A4 landscape;margin:1in;@top-left{content:\"x\"}}",
 		"p{background:linear-gradient(red,blue);border:1px solid;border-radius:1px/2px;font-family:a,b,\"c d\"}",
+		"p{font:italic 700 7pt/4mm Georgia,serif;font:var(--f);opacity:50%;text-transform:uppercase;white-space:nowrap}",
+		"div{display:grid;grid-template-columns:repeat(100000,1fr 2fr) auto;gap:1px 2px;flex:1 1 0;flex:auto 3}",
+		"div{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;flex-grow:1e30;break-before:page}",
 	} {
 		f.Add(s, "color:red;--q:1")
 	}

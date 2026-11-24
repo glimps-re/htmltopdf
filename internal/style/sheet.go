@@ -200,11 +200,15 @@ func (c *compiler) decl(in *css.Declaration, ctx declCtx) (decl, bool) {
 	return decl{important: in.Important, name: name, specs: specs}, true
 }
 
-// warnTruncated records the font-family lists cut at MaxFontFamilies.
+// warnTruncated records the font-family lists cut at MaxFontFamilies and the
+// track lists cut at MaxGridTracks.
 func warnTruncated(b *budget.Budget, specs []propSpec) {
 	for i := range specs {
-		if specs[i].prop == pFontFamily && specs[i].spec.n == familiesCut {
+		switch {
+		case specs[i].prop == pFontFamily && specs[i].spec.n == familiesCut:
 			b.Warn(budget.WarnClamped, "font-family")
+		case specs[i].prop == pGridColumns && specs[i].spec.n == gridCut:
+			b.Warn(budget.WarnClamped, "grid tracks")
 		}
 	}
 }

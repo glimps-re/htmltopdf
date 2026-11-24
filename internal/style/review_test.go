@@ -116,7 +116,7 @@ func TestKeywordsBeyondM1AreDroppedAndWarned(t *testing.T) {
 		{"overflow-wrap: nowhere", "overflow-wrap", func(c *Computed) bool { return c.OverflowWrap == WrapNormal }},
 		{"word-break: break-word", "word-break", func(c *Computed) bool { return c.WordBreak == WordBreakNormal }},
 		{"word-break: keep-all", "word-break", func(c *Computed) bool { return c.WordBreak == WordBreakNormal }},
-		{"white-space: nowrap", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
+		{"white-space: nowrap-ish", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
 		{"white-space: pre-wrap", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
 		{"white-space: pre-line", "white-space", func(c *Computed) bool { return c.WhiteSpace == WhiteSpaceNormal }},
 		{"text-decoration: overline", "text-decoration", func(c *Computed) bool { return c.TextDecoration == 0 }},
@@ -135,7 +135,7 @@ func TestKeywordsBeyondM1AreDroppedAndWarned(t *testing.T) {
 		})
 	}
 	// The cascade falls back to the previous declaration.
-	x := resolve(t, `<p>x</p>`, `p { white-space: pre; white-space: nowrap; text-align: center; text-align: justify }`, "")
+	x := resolve(t, `<p>x</p>`, `p { white-space: pre; white-space: pre-wrap; text-align: center; text-align: justify }`, "")
 	if p := x.by(t, "p"); p.WhiteSpace != WhiteSpacePre || p.TextAlign != AlignCenter {
 		t.Errorf("fallback: %+v", p)
 	}

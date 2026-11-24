@@ -305,7 +305,8 @@ func (r *Resolver) buildMarginBox(pos MarginPos) *MarginBox {
 	if s := &r.specs[pContent]; s.kind == specValue && !s.none {
 		content = r.capContent(s.items)
 	}
-	c := compute(nil, &r.specs, r.touched, r.b)
+	// Without a grid cache compute charges nothing: it cannot fail.
+	c, _ := compute(nil, &r.specs, r.touched, r.b, nil)
 	r.resetSpecs()
 	if content == nil {
 		return nil

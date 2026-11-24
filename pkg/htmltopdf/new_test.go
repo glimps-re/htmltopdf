@@ -85,7 +85,7 @@ func TestExtraCSSIsStrict(t *testing.T) {
 		"syntax error":              "p { color: red",
 		"unknown property":          "p { frobnicate: 1 }",
 		"invalid value":             "p { color: notacolor }",
-		"unsupported value":         "p { display: grid }",
+		"unsupported value":         "p { display: inline-flex }",
 		"unsupported at-rule":       "@font-face { font-family: x }",
 		"import":                    "@import 'x.css';",
 		"invalid selector":          "p:nope { color: red }",

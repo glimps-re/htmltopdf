@@ -16,6 +16,9 @@ type computeCtx struct {
 	c      *Computed
 	parent *Computed
 	b      *budget.Budget
+	grid   *gridCache
+	// err is the first budget error met while computing.
+	err error
 	// root is true for the element without parent.
 	root bool
 	// colorSet tells which border colors were specified, curBorder which of them
@@ -48,10 +51,12 @@ func (x *computeCtx) dim(l css.Length, em float64) Dim {
 func (x *computeCtx) px(l css.Length) float64 { return x.dim(l, x.c.FontSize).Value }
 
 // compute builds the computed style from the specified values of the touched
-// properties; warnings go to b.
-func compute(parent *Computed, specs *[numProps]spec, touched []prop, b *budget.Budget) *Computed {
+// properties; warnings go to b. grid is the cache of expanded track lists of
+// the render, nil where grid-template-columns has no effect. The error is a
+// budget error.
+func compute(parent *Computed, specs *[numProps]spec, touched []prop, b *budget.Budget, grid *gridCache) (*Computed, error) {
 	c := initialStyle
-	x := &computeCtx{c: &c, parent: parent, root: parent == nil, b: b}
+	x := &computeCtx{c: &c, parent: parent, root: parent == nil, b: b, grid: grid}
 	if parent != nil {
 		c.inheritFrom(parent)
 	}
@@ -70,12 +75,16 @@ func compute(parent *Computed, specs *[numProps]spec, touched []prop, b *budget.
 		}
 	}
 	x.finish()
-	return &c
+	return &c, x.err
 }
 
-// finish resolves currentcolor and the border widths.
+// finish blockifies the children of flex and grid containers (CSS Display 3
+// §2.7) and resolves currentcolor and the border widths.
 func (x *computeCtx) finish() {
 	c := x.c
+	if x.parent != nil && (x.parent.Display == DisplayFlex || x.parent.Display == DisplayGrid) {
+		c.Display = blockified(c.Display)
+	}
 	for i := range c.Border {
 		if !x.colorSet[i] || x.curBorder[i] {
 			c.Border[i].Color = c.Color
@@ -87,13 +96,50 @@ func (x *computeCtx) finish() {
 	if x.curBackground {
 		c.BackgroundColor = c.Color
 	}
+	x.applyOpacity()
+}
+
+// applyOpacity multiplies the used alpha of the colours by the product of the
+// opacities of the element and its ancestors (design §5.2.2: no transparency
+// group, so overlapping descendants are each translucent on their own).
+func (x *computeCtx) applyOpacity() {
+	c := x.c
+	product := 1 - c.ownFade
+	if x.parent != nil {
+		product *= 1 - x.parent.fade
+	}
+	c.fade = 1 - product
+	if c.fade == 0 {
+		return
+	}
+	c.raw = &unfaded{color: c.Color, background: c.BackgroundColor}
+	c.Color.A *= product
+	c.BackgroundColor.A *= product
+	for i := range c.Border {
+		c.raw.border[i] = c.Border[i].Color
+		c.Border[i].Color.A *= product
+	}
+	if c.BackgroundImage != nil && x.b != nil {
+		x.b.Warn(budget.WarnUnsupportedProperty, "opacity on gradient")
+	}
+}
+
+func (x *computeCtx) flexFactor(v float64, name string) float64 {
+	if v > MaxFlexFactor {
+		if x.b != nil {
+			x.b.Warn(budget.WarnClamped, name)
+		}
+		return MaxFlexFactor
+	}
+	return v
 }
 
 func (c *Computed) inheritFrom(p *Computed) {
 	c.BorderCollapse, c.BorderSpacing = p.BorderCollapse, p.BorderSpacing
 	c.FontFamily, c.FontSize, c.FontWeight, c.FontStyle = p.FontFamily, p.FontSize, p.FontWeight, p.FontStyle
-	c.LineHeight, c.Color, c.TextAlign, c.LetterSpacing = p.LineHeight, p.Color, p.TextAlign, p.LetterSpacing
+	c.LineHeight, c.Color, c.TextAlign, c.LetterSpacing = p.LineHeight, p.rawColor(), p.TextAlign, p.LetterSpacing
 	c.OverflowWrap, c.WordBreak, c.WhiteSpace, c.ListStyleNone = p.OverflowWrap, p.WordBreak, p.WhiteSpace, p.ListStyleNone
+	c.TextTransform, c.TabularNums = p.TextTransform, p.TabularNums
 	c.rootFont, c.vars = p.rootFont, p.vars
 }
 
@@ -123,7 +169,7 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 			x.colorSet[i] = false
 			break
 		}
-		c.Border[i].Color = src.Border[i].Color
+		c.Border[i].Color = src.rawBorder(int(i))
 		x.colorSet[i], x.curBorder[i] = true, false
 	case pBorderCollapse:
 		c.BorderCollapse = src.BorderCollapse
@@ -134,7 +180,7 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 	case pRadiusTopLeft, pRadiusTopRight, pRadiusBottomRight, pRadiusBottomLeft:
 		c.Radius[p-pRadiusTopLeft] = src.Radius[p-pRadiusTopLeft]
 	case pBackgroundColor:
-		c.BackgroundColor, x.curBackground = src.BackgroundColor, false
+		c.BackgroundColor, x.curBackground = src.rawBackground(), false
 	case pBackgroundImage:
 		c.BackgroundImage = src.BackgroundImage
 	case pOverflow:
@@ -150,7 +196,7 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 	case pLineHeight:
 		c.LineHeight = src.LineHeight
 	case pColor:
-		c.Color = src.Color
+		c.Color = src.rawColor()
 	case pTextAlign:
 		c.TextAlign = src.TextAlign
 	case pLetterSpacing:
@@ -167,6 +213,36 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 		c.VerticalAlign = src.VerticalAlign
 	case pListStyleType:
 		c.ListStyleNone = src.ListStyleNone
+	case pTextTransform:
+		c.TextTransform = src.TextTransform
+	case pFontVariantNumeric:
+		c.TabularNums = src.TabularNums
+	case pBreakBefore:
+		c.BreakBefore = src.BreakBefore
+	case pBreakAfter:
+		c.BreakAfter = src.BreakAfter
+	case pBreakInside:
+		c.BreakInside = src.BreakInside
+	case pOpacity:
+		c.ownFade = src.ownFade
+	case pFlexWrap:
+		c.FlexWrap = src.FlexWrap
+	case pJustifyContent:
+		c.JustifyContent = src.JustifyContent
+	case pAlignItems:
+		c.AlignItems = src.AlignItems
+	case pFlexGrow:
+		c.FlexGrow = src.FlexGrow
+	case pFlexShrink:
+		c.FlexShrink = src.FlexShrink
+	case pFlexBasis:
+		c.FlexBasis = src.FlexBasis
+	case pRowGap:
+		c.RowGap = src.RowGap
+	case pColumnGap:
+		c.ColumnGap = src.ColumnGap
+	case pGridColumns:
+		c.GridColumns = src.GridColumns
 	}
 }
 
@@ -247,7 +323,7 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 	case pColor:
 		if s.cur {
 			if x.parent != nil {
-				c.Color = x.parent.Color
+				c.Color = x.parent.rawColor()
 			} else {
 				c.Color = initialStyle.Color
 			}
@@ -273,6 +349,39 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 		c.VerticalAlign = VerticalAlign(u8(s.n))
 	case pListStyleType:
 		c.ListStyleNone = s.n == 1
+	case pTextTransform:
+		c.TextTransform = TextTransform(u8(s.n))
+	case pFontVariantNumeric:
+		c.TabularNums = s.n == 1
+	case pBreakBefore:
+		c.BreakBefore = Break(u8(s.n))
+	case pBreakAfter:
+		c.BreakAfter = Break(u8(s.n))
+	case pBreakInside:
+		c.BreakInside = Break(u8(s.n))
+	case pOpacity:
+		c.ownFade = 1 - s.f
+	case pFlexWrap:
+		c.FlexWrap = s.n == 1
+	case pJustifyContent:
+		c.JustifyContent = Justify(u8(s.n))
+	case pAlignItems:
+		c.AlignItems = ItemAlign(u8(s.n))
+	case pFlexGrow:
+		c.FlexGrow = x.flexFactor(s.f, "flex-grow")
+	case pFlexShrink:
+		c.FlexShrink = x.flexFactor(s.f, "flex-shrink")
+	case pFlexBasis:
+		c.FlexBasis = x.lengthOrAuto(s)
+	case pRowGap:
+		c.RowGap = x.dim(s.len, c.FontSize)
+	case pColumnGap:
+		c.ColumnGap = x.dim(s.len, c.FontSize)
+	case pGridColumns:
+		c.GridColumns = nil
+		if !s.none {
+			c.GridColumns = x.gridTracks(s.grid)
+		}
 	}
 }
 
@@ -359,3 +468,10 @@ func (x *computeCtx) lineHeight(s *spec) LineHeight {
 
 // u8 narrows an enum value stored in a spec: parsers only store small values.
 func u8(n int32) uint8 { return uint8(min(max(n, 0), math.MaxUint8)) }
+
+func blockified(d Display) Display {
+	if d == DisplayInline || d == DisplayInlineBlock {
+		return DisplayBlock
+	}
+	return d
+}

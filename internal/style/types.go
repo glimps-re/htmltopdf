@@ -32,7 +32,8 @@ type Dim struct {
 // Display is the computed display type.
 type Display uint8
 
-// Display values. List items are blocks: markers are not drawn.
+// Display values. List items are blocks: markers are not drawn. Children of a
+// flex or grid container are blockified when computed.
 const (
 	DisplayInline Display = iota
 	DisplayBlock
@@ -47,6 +48,9 @@ const (
 	DisplayTableCaption
 	DisplayTableColumn
 	DisplayTableColumnGroup
+	DisplayInlineBlock
+	DisplayFlex
+	DisplayGrid
 )
 
 // BoxSizing is the computed box-sizing.
@@ -159,7 +163,87 @@ type WhiteSpace uint8
 const (
 	WhiteSpaceNormal WhiteSpace = iota
 	WhiteSpacePre
+	WhiteSpaceNowrap
 )
+
+// TextTransform is the computed text-transform.
+type TextTransform uint8
+
+// Text transforms.
+const (
+	TransformNone TextTransform = iota
+	TransformUppercase
+	TransformLowercase
+)
+
+// Break is a computed break-before, break-after or break-inside value.
+type Break uint8
+
+// Break values: BreakPage covers page, left, right, recto and verso and is
+// never the value of break-inside.
+const (
+	BreakAuto Break = iota
+	BreakAvoid
+	BreakPage
+)
+
+// Justify is the computed justify-content.
+type Justify uint8
+
+// Justify values; start and left map to JustifyStart, end and right to JustifyEnd.
+const (
+	JustifyStart Justify = iota
+	JustifyEnd
+	JustifyCenter
+	JustifySpaceBetween
+	JustifySpaceAround
+	JustifySpaceEvenly
+)
+
+// ItemAlign is the computed align-items.
+type ItemAlign uint8
+
+// Item alignments.
+const (
+	ItemStretch ItemAlign = iota
+	ItemStart
+	ItemEnd
+	ItemCenter
+)
+
+// TrackKind is the kind of a grid Track.
+type TrackKind uint8
+
+// Track kinds.
+const (
+	TrackPx TrackKind = iota
+	TrackPercent
+	TrackFr
+	TrackAuto
+	TrackMinContent
+	TrackMaxContent
+)
+
+// Track is one column track of grid-template-columns. Value is in px, percent
+// or fr, and 0 for the keyword kinds.
+type Track struct {
+	Kind  TrackKind
+	Value float64
+}
+
+// MaxGridTracks bounds the tracks of grid-template-columns once repeat() is
+// expanded.
+const MaxGridTracks = 1000
+
+// Shadow is one outer box-shadow, lengths in px.
+type Shadow struct {
+	X, Y, Blur, Spread float64
+	// Color is the used colour, opacity applied.
+	Color css.Color
+}
+
+// MaxShadows bounds the shadows kept from a box-shadow list.
+const MaxShadows = 8
 
 // TextDecoration is a set of decoration lines (not inherited).
 type TextDecoration uint8
@@ -225,8 +309,64 @@ type Computed struct {
 	// ListStyleNone is true for list-style-type: none.
 	ListStyleNone bool
 
+	// TextTransform is inherited.
+	TextTransform TextTransform
+	// TabularNums is font-variant-numeric: tabular-nums, inherited. It has no
+	// effect: the reference fonts have tabular figures.
+	TabularNums bool
+
+	BreakBefore, BreakAfter, BreakInside Break
+
+	// FlexWrap is true for flex-wrap: wrap.
+	FlexWrap       bool
+	JustifyContent Justify
+	AlignItems     ItemAlign
+	FlexGrow       float64
+	FlexShrink     float64
+	FlexBasis      Dim
+	RowGap         Dim
+	ColumnGap      Dim
+	// GridColumns is nil for none. It is shared between styles: never modify it.
+	GridColumns []Track
+	// BoxShadow is nil for none. It is shared between styles: never modify it.
+	BoxShadow []Shadow
+
+	// ownFade is 1 − opacity and fade is 1 − the product of the opacities of the
+	// element and its ancestors, so that the zero value is opaque. When fade is
+	// not 0, raw holds the colours before the product was applied.
+	ownFade, fade float64
+	raw           *unfaded
+
 	rootFont float64
 	vars     *varSet
+}
+
+// unfaded holds the colours of a style before opacity was applied: currentColor
+// and inheritance use them.
+type unfaded struct {
+	color, background css.Color
+	border            [4]css.Color
+}
+
+func (c *Computed) rawColor() css.Color {
+	if c.raw != nil {
+		return c.raw.color
+	}
+	return c.Color
+}
+
+func (c *Computed) rawBackground() css.Color {
+	if c.raw != nil {
+		return c.raw.background
+	}
+	return c.BackgroundColor
+}
+
+func (c *Computed) rawBorder(i int) css.Color {
+	if c.raw != nil {
+		return c.raw.border[i]
+	}
+	return c.Border[i].Color
 }
 
 const initialFontSize = 16
@@ -245,6 +385,8 @@ func newInitial() Computed {
 		FontWeight:       400,
 		LineHeight:       LineHeight{Kind: LineHeightNormal},
 		Color:            css.Color{A: 1},
+		FlexShrink:       1,
+		FlexBasis:        Dim{Kind: DimAuto},
 		rootFont:         initialFontSize,
 	}
 	// medium; the width is dropped by finish while the style is none.

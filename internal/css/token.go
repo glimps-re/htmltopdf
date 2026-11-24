@@ -118,6 +118,10 @@ type Token struct {
 // selector.
 const FlagID = 1
 
+// FlagInt is set on a Number token written as an integer: no fraction, no
+// exponent (CSS Syntax 3 §4.3.12 "integer" type flag).
+const FlagInt = 2
+
 func closerOf(t Type) Type {
 	switch t {
 	case TLBracket:

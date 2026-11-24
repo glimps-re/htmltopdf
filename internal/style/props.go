@@ -61,6 +61,22 @@ const (
 	pListStyleType
 	pContent
 	pPageSize
+	pTextTransform
+	pFontVariantNumeric
+	pBreakBefore
+	pBreakAfter
+	pBreakInside
+	pOpacity
+	pFlexDirection
+	pFlexWrap
+	pJustifyContent
+	pAlignItems
+	pFlexGrow
+	pFlexShrink
+	pFlexBasis
+	pRowGap
+	pColumnGap
+	pGridColumns
 	numProps
 )
 
@@ -68,7 +84,8 @@ const (
 var inherited = [numProps]bool{
 	pBorderCollapse: true, pBorderSpacing: true, pFontFamily: true, pFontSize: true, pFontWeight: true,
 	pFontStyle: true, pLineHeight: true, pColor: true, pTextAlign: true, pLetterSpacing: true,
-	pOverflowWrap: true, pWordBreak: true, pWhiteSpace: true, pListStyleType: true,
+	pOverflowWrap: true, pWordBreak: true, pWhiteSpace: true, pListStyleType: true, pTextTransform: true,
+	pFontVariantNumeric: true,
 }
 
 // longhands maps a property name to the longhand properties it sets: one for a
@@ -125,6 +142,17 @@ var longhands = map[string][]prop{
 	"vertical-align":             {pVerticalAlign},
 	"list-style-type":            {pListStyleType},
 	"list-style":                 {pListStyleType},
+	"text-transform":             {pTextTransform},
+	"font-variant-numeric":       {pFontVariantNumeric},
+	"break-before":               {pBreakBefore},
+	"break-after":                {pBreakAfter},
+	"break-inside":               {pBreakInside},
+	"opacity":                    {pOpacity},
+	"font":                       {pFontStyle, pFontWeight, pFontSize, pLineHeight, pFontFamily, pFontVariantNumeric},
+	"flex-direction":             {pFlexDirection}, "flex-wrap": {pFlexWrap}, "justify-content": {pJustifyContent},
+	"align-items": {pAlignItems}, "flex-grow": {pFlexGrow}, "flex-shrink": {pFlexShrink}, "flex-basis": {pFlexBasis},
+	"flex": {pFlexGrow, pFlexShrink, pFlexBasis}, "row-gap": {pRowGap}, "column-gap": {pColumnGap},
+	"gap": {pRowGap, pColumnGap}, "grid-template-columns": {pGridColumns},
 }
 
 // declCtx tells where a declaration appears: properties differ between
@@ -192,6 +220,7 @@ type spec struct {
 	grad  *css.Gradient
 	list  []string
 	items []ContentItem
+	grid  []gridGroup
 }
 
 type propSpec struct {
@@ -269,6 +298,12 @@ func parseValue(name string, props []prop, toks []css.Token) ([]propSpec, bool) 
 		return backgroundShorthand(toks)
 	case "list-style":
 		return listStyleShorthand(toks)
+	case "font":
+		return fontShorthand(toks)
+	case "flex":
+		return flexShorthand(toks)
+	case "gap":
+		return gapShorthand(toks)
 	}
 	p := props[0]
 	s, ok := parseLonghand(p, toks)
@@ -340,6 +375,32 @@ func parseLonghand(p prop, toks []css.Token) (spec, bool) {
 		return parseContent(toks)
 	case pPageSize:
 		return parsePageSize(toks)
+	case pTextTransform:
+		return keyword(toks, textTransformKeywords)
+	case pFontVariantNumeric:
+		return keyword(toks, variantNumericKeywords)
+	case pBreakBefore, pBreakAfter:
+		return keyword(toks, breakKeywords)
+	case pBreakInside:
+		return keyword(toks, breakInsideKeywords)
+	case pOpacity:
+		return parseOpacity(toks)
+	case pFlexDirection:
+		return keyword(toks, flexDirectionKeywords)
+	case pFlexWrap:
+		return keyword(toks, flexWrapKeywords)
+	case pJustifyContent:
+		return keyword(toks, justifyKeywords)
+	case pAlignItems:
+		return keyword(toks, alignItemsKeywords)
+	case pFlexGrow, pFlexShrink:
+		return parseFlexFactor(toks)
+	case pFlexBasis:
+		return parseFlexBasis(toks)
+	case pRowGap, pColumnGap:
+		return parseGap(toks)
+	case pGridColumns:
+		return parseGridColumns(toks)
 	}
 	return spec{}, false
 }
@@ -355,7 +416,7 @@ var (
 	}
 	overflowWrapKeywords  = map[string]int32{"normal": int32(WrapNormal), "break-word": int32(WrapBreakWord), "anywhere": int32(WrapAnywhere)}
 	wordBreakKeywords     = map[string]int32{"normal": int32(WordBreakNormal), "break-all": int32(WordBreakAll)}
-	whiteSpaceKeywords    = map[string]int32{"normal": int32(WhiteSpaceNormal), "pre": int32(WhiteSpacePre)}
+	whiteSpaceKeywords    = map[string]int32{"normal": int32(WhiteSpaceNormal), "pre": int32(WhiteSpacePre), "nowrap": int32(WhiteSpaceNowrap)}
 	verticalAlignKeywords = map[string]int32{
 		"baseline": int32(VAlignBaseline), "top": int32(VAlignTop), "middle": int32(VAlignMiddle), "bottom": int32(VAlignBottom),
 	}
@@ -369,7 +430,18 @@ var displayKeywords = map[string]int32{
 	"table-footer-group": int32(DisplayTableFooterGroup), "table-row": int32(DisplayTableRow),
 	"table-cell": int32(DisplayTableCell), "table-caption": int32(DisplayTableCaption),
 	"table-column": int32(DisplayTableColumn), "table-column-group": int32(DisplayTableColumnGroup),
+	"inline-block": int32(DisplayInlineBlock), "flex": int32(DisplayFlex), "grid": int32(DisplayGrid),
 }
+
+var (
+	textTransformKeywords  = map[string]int32{"none": int32(TransformNone), "uppercase": int32(TransformUppercase), "lowercase": int32(TransformLowercase)}
+	variantNumericKeywords = map[string]int32{"normal": 0, "tabular-nums": 1}
+	breakInsideKeywords    = map[string]int32{"auto": int32(BreakAuto), "avoid": int32(BreakAvoid), "avoid-page": int32(BreakAvoid)}
+	breakKeywords          = map[string]int32{
+		"auto": int32(BreakAuto), "avoid": int32(BreakAvoid), "avoid-page": int32(BreakAvoid), "page": int32(BreakPage),
+		"left": int32(BreakPage), "right": int32(BreakPage), "recto": int32(BreakPage), "verso": int32(BreakPage),
+	}
+)
 
 func keyword(toks []css.Token, table map[string]int32) (spec, bool) {
 	kw, ok := ident(toks)
