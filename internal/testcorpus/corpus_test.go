@@ -220,6 +220,29 @@ func TestHostConnectorReference(t *testing.T) {
 	}
 }
 
+func TestChromePaper(t *testing.T) {
+	cp := ChromePaper()
+	hc := HostConnector()
+	if cp.ExtraCSS != ChromePaperCSS || !strings.Contains(cp.ExtraCSS, "size: 794.56px 1122.56px") {
+		t.Errorf("ExtraCSS = %q", cp.ExtraCSS)
+	}
+	for _, bad := range []string{"margin", "@bottom", "TLP:AMBER"} {
+		if strings.Contains(cp.ExtraCSS, bad) {
+			t.Errorf("paper-only CSS contains %q", bad)
+		}
+	}
+	if cp.Scale != hc.Scale || cp.SansSerif != hc.SansSerif || cp.Monospace != hc.Monospace || len(cp.Fallback) != 1 || cp.Fallback[0] != hc.Fallback[0] {
+		t.Errorf("ChromePaper %+v differs from HostConnector %+v beyond ExtraCSS", cp, hc)
+	}
+	cp.Fallback[0] = "changed"
+	if ChromePaper().Fallback[0] != "DejaVu Sans" {
+		t.Error("ChromePaper must return a fresh copy")
+	}
+	if HostConnector().ExtraCSS != HostConnectorPageCSS {
+		t.Error("ChromePaper must not alter HostConnector")
+	}
+}
+
 func TestCasesAreWellFormed(t *testing.T) {
 	cases := append(SpikeHostile(), Hostile(budget.Defaults())...)
 	byName := map[string]Case{}

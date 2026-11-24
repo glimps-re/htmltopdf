@@ -250,6 +250,20 @@ func HostConnector() HostConnectorConfig {
 	}
 }
 
+// ChromePaperCSS sets the paper and nothing else. Chrome prints templates 01-03
+// with the caller's paper but keeps the margins and margin boxes of their own
+// @page rule (CSS margins beat the PrintToPDF ones), so these templates are
+// measured without HostConnectorPageCSS, whose margins would override theirs.
+const ChromePaperCSS = "@page { size: 794.56px 1122.56px }"
+
+// ChromePaper returns the reference configuration of templates 01-03: the
+// host-connector fonts and scale with ChromePaperCSS as ExtraCSS.
+func ChromePaper() HostConnectorConfig {
+	hc := HostConnector()
+	hc.ExtraCSS = ChromePaperCSS
+	return hc
+}
+
 // LoadedFont is the bytes of a reference font and its family.
 type LoadedFont struct {
 	Data   []byte
