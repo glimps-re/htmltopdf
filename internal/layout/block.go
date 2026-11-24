@@ -270,6 +270,28 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 		snap     breakSnap
 		kept     int
 	)
+	// backUp undoes the chain of avoided breaks that c is in and reports whether it
+	// did. It needs content before the chain on this page: the chain does not
+	// start it, or the block is not itself at the top of its page (which would
+	// resume at the same child and make no progress).
+	backUp := func() bool {
+		chainStartsPage := chain == lv.child && (resuming || emptyAtEntry)
+		if chain < 0 || l.measuring || snap.pageEmpty || chainStartsPage {
+			return false
+		}
+		l.restoreBreak(&snap)
+		clear(f.children[kept:])
+		f.children = f.children[:kept]
+		return true
+	}
+	// breakBefore ends the page before child i.
+	breakBefore := func(i int) (status, []level, error) {
+		if len(f.children) == 0 && !resuming && !emptyAtEntry {
+			return nothing, nil, nil
+		}
+		l.pend, l.truncate = margins{}, true
+		return partial, []level{{child: i}}, nil
+	}
 	for i := lv.child; i < len(b.Children); i++ {
 		c := b.Children[i]
 		if i > lv.child && !l.pageEmpty && !l.unbounded && forcedBetween(b.Children[i-1], c) {
@@ -299,36 +321,16 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 		case partial:
 			// Only the bottom decoration of c goes on: the break that the chain avoids
 			// is right after c, so the chain moves whole like for a block that did not fit.
-			decorationOnly := link && len(cr.tok) == 1 && cr.tok[0].childrenDone
-			chainStartsPage := chain == lv.child && (resuming || emptyAtEntry)
-			if decorationOnly && chain >= 0 && !l.measuring && !snap.pageEmpty && !chainStartsPage {
-				l.restoreBreak(&snap)
-				clear(f.children[kept:])
-				f.children = f.children[:kept]
-				if len(f.children) == 0 && !resuming && !emptyAtEntry {
-					return nothing, nil, nil
-				}
-				l.pend, l.truncate = margins{}, true
-				return partial, []level{{child: chain}}, nil
+			if link && len(cr.tok) == 1 && cr.tok[0].childrenDone && backUp() {
+				return breakBefore(chain)
 			}
 			f.children = append(f.children, cr.f)
 			return partial, append([]level{{child: i}}, cr.tok...), nil
 		case nothing:
-			// Backing up needs content before the chain on this page: the chain does
-			// not start it, or the block is not itself at the top of its page (which
-			// would resume at the same child and make no progress).
-			chainStartsPage := chain == lv.child && (resuming || emptyAtEntry)
-			if chain >= 0 && chain < i && !l.measuring && !snap.pageEmpty && !chainStartsPage {
-				l.restoreBreak(&snap)
-				clear(f.children[kept:])
-				f.children = f.children[:kept]
+			if chain < i && backUp() {
 				i = chain
 			}
-			if len(f.children) == 0 && !resuming && !emptyAtEntry {
-				return nothing, nil, nil
-			}
-			l.pend, l.truncate = margins{}, true
-			return partial, []level{{child: i}}, nil
+			return breakBefore(i)
 		}
 	}
 	return complete, nil, nil

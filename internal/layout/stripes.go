@@ -79,6 +79,7 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 				return partial, []level{{child: i}}, nil
 			}
 			// A band taller than an empty page: the part that fits goes here.
+			l.b.Warn(budget.WarnClamped, "flex or grid line sliced")
 			room := l.bottom - y
 			for _, fr := range s.frags {
 				piece := cutFrag(fr, off, off+room)
@@ -103,4 +104,19 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 		placed++
 	}
 	return complete, nil, nil
+}
+
+// alignItem returns the top and the height, in a band of cross size cross, of an
+// item of height h and vertical margins mt and mb under align-items a: stretch
+// grows the item to the band, the others move it.
+func alignItem(a style.ItemAlign, mt, mb, h, cross float64) (y, height float64) {
+	switch a {
+	case style.ItemStretch:
+		return mt, math.Max(h, cross-mt-mb)
+	case style.ItemEnd:
+		return cross - mb - h, h
+	case style.ItemCenter:
+		return (cross-mt-h-mb)/2 + mt, h
+	}
+	return mt, h
 }

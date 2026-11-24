@@ -18,7 +18,7 @@ import (
 
 const flat = "body { margin: 0 } p, div { margin: 0 } span { font-size: 16px }"
 
-func boxByID(t *testing.T, b *box.Box, id string) *box.Box {
+func boxByID(t testing.TB, b *box.Box, id string) *box.Box {
 	t.Helper()
 	var find func(*box.Box) *box.Box
 	find = func(b *box.Box) *box.Box {

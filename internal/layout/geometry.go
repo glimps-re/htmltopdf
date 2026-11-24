@@ -98,6 +98,13 @@ func autoMargin(d style.Dim, base float64) float64 {
 	return clampCoord(px(d, base))
 }
 
+// borderBoxWidth is the border box width of a box whose width-like property d
+// (width, flex-basis, max-width) is specified in a containing block of width
+// base, with padding and border of extra px.
+func borderBoxWidth(st *style.Computed, d style.Dim, base, extra float64) float64 {
+	return contentWidth(st, px(d, base), extra) + extra
+}
+
 func contentWidth(st *style.Computed, specified, extra float64) float64 {
 	if st.BoxSizing == style.BorderBox {
 		return math.Max(0, specified-extra)

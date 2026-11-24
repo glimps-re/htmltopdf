@@ -34,8 +34,8 @@ type flexPlan struct {
 	colGap, rowGap float64
 }
 
-// plan resolves the flex lines of the container b in a content box of width w.
-func (l *layouter) flexPlan(b *box.Box, w float64) (*flexPlan, error) {
+// planFlex resolves the flex lines of the container b in a content box of width w.
+func (l *layouter) planFlex(b *box.Box, w float64) (*flexPlan, error) {
 	st := b.Style
 	p := &flexPlan{rowGap: math.Max(0, px(st.RowGap, w)), colGap: math.Max(0, px(st.ColumnGap, w))}
 	items := make([]flexItem, len(b.Children))
@@ -53,31 +53,12 @@ func (l *layouter) flexPlan(b *box.Box, w float64) (*flexPlan, error) {
 	return p, nil
 }
 
-// flexStripes lays every line of the flex container b out: one stripe per flex
-// line, in order, and the row gap between them. Each item is laid out once,
-// with layMono, and positioned inside its stripe at x from inner.x and y from
-// the top of the stripe.
-func (l *layouter) flexStripes(b *box.Box, inner cbox, decor style.TextDecoration) (stripes []stripe, rowGap float64, err error) {
-	p, err := l.flexPlan(b, inner.w)
-	if err != nil {
-		return nil, 0, err
-	}
-	for _, line := range p.lines {
-		s, err := l.layLine(line, inner, p.colGap, b.Style, decor)
-		if err != nil {
-			return nil, 0, err
-		}
-		stripes = append(stripes, s)
-	}
-	return stripes, p.rowGap, nil
-}
-
 // flex lays the lines of the flex container b out from the line lv.child, as
 // monolithic stripes.
 func (l *layouter) flex(b *box.Box, f *frag, lv level, inner cbox, decor style.TextDecoration, resuming, emptyAtEntry bool) (status, []level, error) {
 	st := l.stripes[b]
 	if !resuming || st == nil || st.w != inner.w || st.decor != decor {
-		p, err := l.flexPlan(b, inner.w)
+		p, err := l.planFlex(b, inner.w)
 		if err != nil {
 			return complete, nil, err
 		}
@@ -113,11 +94,11 @@ func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w float64) error {
 	minContent, maxContent := e.content.min+extra, e.content.max+extra
 	specified := -1.0
 	if st.Width.Kind != style.DimAuto {
-		specified = contentWidth(st, px(st.Width, w), extra) + extra
+		specified = borderBoxWidth(st, st.Width, w, extra)
 	}
 	switch {
 	case st.FlexBasis.Kind != style.DimAuto:
-		it.base = contentWidth(st, px(st.FlexBasis, w), extra) + extra
+		it.base = borderBoxWidth(st, st.FlexBasis, w, extra)
 	case specified >= 0:
 		it.base = specified
 	default:
@@ -129,7 +110,7 @@ func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w float64) error {
 	}
 	it.max = math.Inf(1)
 	if st.MaxWidth.Kind != style.DimNone {
-		it.max = contentWidth(st, px(st.MaxWidth, w), extra) + extra
+		it.max = borderBoxWidth(st, st.MaxWidth, w, extra)
 	}
 	it.hyp = math.Max(it.min, math.Min(it.base, it.max))
 	return nil
@@ -181,6 +162,16 @@ func (l *layouter) resolveFlexible(line []*flexItem, avail float64) error {
 			it.size = it.hyp
 		}
 	}
+	// The initial free space (step 3): the frozen items at their target size, the
+	// others at their base size.
+	initial := avail
+	for _, it := range line {
+		if it.frozen {
+			initial -= it.outer(it.size)
+		} else {
+			initial -= it.outer(it.base)
+		}
+	}
 	target := make([]float64, len(line))
 	for range line {
 		// Each pass freezes an item at least, so a line of n items costs up to n² here.
@@ -203,8 +194,10 @@ func (l *layouter) resolveFlexible(line []*flexItem, avail float64) error {
 			return nil
 		}
 		free := avail - used
-		if growing && factors < 1 && math.Abs(free*factors) < math.Abs(free) {
-			free *= factors
+		// Step 4b: with factors that sum to less than one, the initial free space
+		// scaled by their sum, when it is smaller than what is left.
+		if scaled := initial * factors; factors < 1 && math.Abs(scaled) < math.Abs(free) {
+			free = scaled
 		}
 		total := 0.0
 		for i, it := range line {
@@ -255,15 +248,7 @@ func (l *layouter) layLine(line []*flexItem, inner cbox, gap float64, st *style.
 	out := stripe{frags: make([]*frag, 0, len(line)), h: cross}
 	for _, it := range line {
 		f := it.f
-		y, h := it.mt, f.rect.H
-		switch st.AlignItems {
-		case style.ItemStretch:
-			h = math.Max(h, cross-it.mt-it.mb)
-		case style.ItemEnd:
-			y = cross - it.mb - h
-		case style.ItemCenter:
-			y = (cross-it.mt-h-it.mb)/2 + it.mt
-		}
+		y, h := alignItem(st.AlignItems, it.mt, it.mb, f.rect.H, cross)
 		f.rect.H = h
 		moveFrag(f, inner.x+x+it.ml, y)
 		out.frags = append(out.frags, f)

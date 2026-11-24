@@ -10,13 +10,16 @@ import (
 
 // layMono lays out b as a block whose border box is w wide, at x = 0 and y = 0
 // on an unbounded page, and returns its whole fragment. Margins are not part of
-// the fragment.
+// the fragment. Percentages of its padding refer to w.
 func (l *layouter) layMono(b *box.Box, w float64, decor style.TextDecoration) (*frag, error) {
 	return l.layMonoIn(b, w, w, decor)
 }
 
 // monoBox is the box layMonoIn is laying out and the border box width it is
-// forced to: layBlock reads it for that box only.
+// forced to: layBlock reads it for that box only, the first time it lays it out.
+// That is the only time: layMonoIn runs on a scratch page (enterScratch), where
+// nothing is measured (block() does not lay a box out twice), so the forced
+// width cannot be consumed by a measuring pass and missed by the real one.
 type monoBox struct {
 	box *box.Box
 	w   float64
@@ -32,8 +35,10 @@ func (m monoBox) fit(g geom) geom {
 	return g
 }
 
-// layMonoIn is layMono for a box in a containing block of width cbw, which the
-// percentages of its padding refer to.
+// layMonoIn lays out b as a block whose border box is w wide, at x = 0 and y = 0
+// on an unbounded page, and returns its whole fragment; margins are not part of
+// it. cbw is the width of its containing block, which the percentages of its
+// padding refer to.
 func (l *layouter) layMonoIn(b *box.Box, w, cbw float64, decor style.TextDecoration) (*frag, error) {
 	s := l.enterScratch()
 	root, mono := l.root, l.mono

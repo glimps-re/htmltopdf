@@ -168,7 +168,7 @@ func TestM204FlexDistributionFromTheSpec(t *testing.T) {
 				t.Fatalf("%d items", len(got))
 			}
 			for i, f := range got {
-				if !nearTol(f.rect.X, tt.x[i], 0.01) || !nearTol(f.rect.W, tt.w[i], 0.01) {
+				if !nearTol(f.rect.X, tt.x[i]) || !nearTol(f.rect.W, tt.w[i]) {
 					t.Errorf("item %d: x %.3f w %.3f, want %.3f %.3f", i, f.rect.X, f.rect.W, tt.x[i], tt.w[i])
 				}
 			}
@@ -176,7 +176,7 @@ func TestM204FlexDistributionFromTheSpec(t *testing.T) {
 	}
 }
 
-func nearTol(a, b, tol float64) bool { return a-b < tol && b-a < tol }
+func nearTol(a, b float64) bool { return a-b < 0.01 && b-a < 0.01 }
 
 // A flex container taller than a page is a monolithic stripe sliced with
 // cutFrag: it is laid out and shaped a constant number of times (the item texts
@@ -253,5 +253,196 @@ func TestM204TallFlexTwinOf2000Paragraphs(t *testing.T) {
 	}
 	if float64(fw) > 2*float64(pw) {
 		t.Errorf("work %d with the flex wrapper, %d in block (> 2x)", fw, pw)
+	}
+}
+
+// Flexbox §9.7 step 4c: when the unfrozen factors add up to less than one, the
+// free space is scaled by their sum, for shrinking as well as for growing. The
+// expected widths are computed by hand; the container is 300 px wide.
+func TestM204FractionalFactorsFromTheSpec(t *testing.T) {
+	tests := []struct {
+		name  string
+		items []string
+		x, w  []float64
+	}{
+		// free = 300-400 = -100, times 0.5 = -50, shared 1:1.
+		{"shrink .25 + .25", []string{"flex:0 .25 200px", "flex:0 .25 200px"}, []float64{0, 175}, []float64{175, 175}},
+		// the other item cannot shrink: -100 * 0.5 = -50 for the first one alone.
+		{"shrink .5 beside flex:none", []string{"flex:0 .5 200px", "flex:none;width:200px"}, []float64{0, 150}, []float64{150, 200}},
+		// -100 * 0.4 = -40, scaled factors 20:60 -> -10 and -30.
+		{"shrink .1 + .3", []string{"flex:0 .1 200px", "flex:0 .3 200px"}, []float64{0, 190}, []float64{190, 170}},
+		// -100 * 0.75 = -75, scaled factors 100:50 -> -50 and -25.
+		{"shrink .5 + .25", []string{"flex:0 .5 200px", "flex:0 .25 200px"}, []float64{0, 150}, []float64{150, 175}},
+		// a single item: -100 * 0.5 = -50.
+		{"shrink .5 alone", []string{"flex:0 .5 400px"}, []float64{0}, []float64{350}},
+		// sum 1.5 >= 1: no scaling. Container 150 is set below; see the special case.
+		// free = 300-100 = 200, times 0.5 = 100, +50 each.
+		{"grow .25 + .25", []string{"flex:.25 0 50px", "flex:.25 0 50px"}, []float64{0, 100}, []float64{100, 100}},
+		// 200 * 0.5 = 100 shared 2:3.
+		{"grow .2 + .3", []string{"flex:.2 0 50px", "flex:.3 0 50px"}, []float64{0, 90}, []float64{90, 110}},
+		// The first is capped at 60 and freezes. Step 4b scales the INITIAL free space (200)
+		// by the remaining factor sum (.25): 50 < the remaining 190, so the second gets 50.
+		{"grow .25 capped", []string{"flex:.25 0 50px;max-width:60px", "flex:.25 0 50px"}, []float64{0, 60}, []float64{60, 100}},
+		{"grow 1 + .25 (sum >= 1, no scaling)", []string{"flex:1 0 50px", "flex:.25 0 50px"}, []float64{0, 210}, []float64{210, 90}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sb strings.Builder
+			sb.WriteString(`<div style="display:flex;width:300px">`)
+			for _, st := range tt.items {
+				sb.WriteString(`<i style="display:block;` + st + `">w</i>`)
+			}
+			sb.WriteString("</div>")
+			pages := newRun(t, sb.String(), opts{extra: smallPage, css: flat}).all(t)
+			got := frags(pages, "i")
+			if len(got) != len(tt.items) {
+				t.Fatalf("%d items", len(got))
+			}
+			for i, f := range got {
+				if !nearTol(f.rect.X, tt.x[i]) || !nearTol(f.rect.W, tt.w[i]) {
+					t.Errorf("item %d: x %.3f w %.3f, want %.3f %.3f", i, f.rect.X, f.rect.W, tt.x[i], tt.w[i])
+				}
+			}
+		})
+	}
+	t.Run("shrink 0.5 + 1 (sum above one: weighted by basis)", func(t *testing.T) {
+		pages := newRun(t, `<div style="display:flex;width:150px"><i style="display:block;flex:0 .5 100px">w</i><i style="display:block;flex:0 1 100px">w</i></div>`, opts{extra: smallPage, css: flat}).all(t)
+		got := frags(pages, "i")
+		// free -50, factors 50 and 100: -16.667 and -33.333.
+		if !nearTol(got[0].rect.W, 83.3333) || !nearTol(got[1].rect.W, 66.6667) {
+			t.Errorf("widths %.3f %.3f", got[0].rect.W, got[1].rect.W)
+		}
+	})
+}
+
+// An item that must not break inside keeps the width flexbox gave it, whether
+// its line is pushed to the next page, sliced or fits.
+func TestM204AvoidItemsKeepTheirWidth(t *testing.T) {
+	lines := strings.Repeat("line<br>", 200)
+	short := strings.Repeat("row<br>", 5)
+	tests := map[string]string{
+		"fits":                         `<div style="display:flex;width:300px"><i style="display:block;flex:1;break-inside:avoid">` + short + `</i><i style="display:block;flex:2;break-inside:avoid">w</i></div>`,
+		"pushed to the next page":      `<div style="height:0;padding-top:560px"></div><div style="display:flex;width:300px"><i style="display:block;flex:1;break-inside:avoid">` + short + `</i><i style="display:block;flex:2;break-inside:avoid">w</i></div>`,
+		"taller than a page":           `<div style="display:flex;width:300px"><i style="display:block;flex:1;break-inside:avoid">` + lines + `</i><i style="display:block;flex:2;break-inside:avoid">w</i></div>`,
+		"taller, avoid on the line":    `<div style="display:flex;width:300px;break-inside:avoid"><i style="display:block;flex:1">` + lines + `</i><i style="display:block;flex:2">w</i></div>`,
+		"avoid and a fixed basis":      `<div style="display:flex;width:300px"><i style="display:block;flex:0 0 120px;break-inside:avoid">` + lines + `</i><i style="display:block;flex:0 0 80px;break-inside:avoid">w</i></div>`,
+		"avoid before and after":       `<div style="display:flex;width:300px"><i style="display:block;flex:1;break-before:avoid;break-after:avoid">` + lines + `</i><i style="display:block;flex:2">w</i></div>`,
+		"avoid in a wrapped line":      `<div style="display:flex;width:300px;flex-wrap:wrap"><i style="display:block;flex:1 1 200px;break-inside:avoid">` + short + `</i><i style="display:block;flex:1 1 200px;break-inside:avoid">` + lines + `</i></div>`,
+		"avoid wrapper in a flex item": `<div style="display:flex;width:300px"><i style="display:block;flex:1"><div style="break-inside:avoid">` + lines + `</div></i><i style="display:block;flex:2">w</i></div>`,
+	}
+	wantW := map[string][2]float64{
+		"fits": {100, 200}, "pushed to the next page": {100, 200}, "taller than a page": {100, 200}, "taller, avoid on the line": {100, 200},
+		"avoid and a fixed basis": {120, 80}, "avoid before and after": {100, 200}, "avoid wrapper in a flex item": {100, 200},
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := newRun(t, body, opts{extra: smallPage, css: flat})
+			pages, err := r.drain(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertFinite(t, pages)
+			assertTextKept(t, body, pages)
+			if want, ok := wantW[name]; ok {
+				items := frags(pages, "i")
+				if len(items) < 2 {
+					t.Fatalf("%d item fragments", len(items))
+				}
+				for _, f := range items {
+					if !nearTol(f.rect.W, want[0]) && !nearTol(f.rect.W, want[1]) {
+						t.Errorf("a fragment of an item is %.3f wide, want %v", f.rect.W, want)
+					}
+				}
+			} else {
+				for _, f := range frags(pages, "i") {
+					if f.rect.W <= 0 || f.rect.W > 300.01 {
+						t.Errorf("fragment width %.3f in a 300 px container", f.rect.W)
+					}
+				}
+			}
+		})
+	}
+}
+
+func warned(r *run, detail string) bool {
+	ws, _ := r.b.Warnings()
+	for _, w := range ws {
+		if w.Detail == detail {
+			return true
+		}
+	}
+	return false
+}
+
+// A flex line taller than an empty page is sliced and says so; a line that
+// fits, however many pages the container spans, does not.
+func TestM204SlicedLineWarning(t *testing.T) {
+	const detail = "flex or grid line sliced"
+	row := func(n int) string {
+		return `<div style="display:flex"><i style="display:block">` + strings.Repeat("line<br>", n) + `</i><i style="display:block">w</i></div>`
+	}
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"line taller than the page", row(200), true},
+		{"two tall lines", `<div style="display:flex;flex-wrap:wrap"><i style="display:block;width:100%">` + strings.Repeat("a<br>", 100) + `</i><i style="display:block;width:100%">` + strings.Repeat("b<br>", 100) + `</i></div>`, true},
+		{"line of exactly one page area", `<div style="display:flex"><i style="display:block;height:600px">x</i></div>`, false},
+		{"short line", row(3), false},
+		{"many short lines over many pages", strings.Repeat(row(5), 120), false},
+		{"wrapped short lines", `<div style="display:flex;flex-wrap:wrap">` + strings.Repeat(`<i style="display:block;width:100%">a<br>b<br>c</i>`, 400) + `</div>`, false},
+		{"no flex", strings.Repeat("line<br>", 200), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newRun(t, tt.body, opts{extra: smallPage, css: flat})
+			if _, err := r.drain(t); err != nil {
+				t.Fatal(err)
+			}
+			if got := warned(r, detail); got != tt.want {
+				t.Errorf("warning %q = %v, want %v", detail, got, tt.want)
+			}
+		})
+	}
+}
+
+// §9.7 steps 4b and 4c over several passes: three items of basis 200 and
+// flex-shrink 0.3 in 300 px. The first cannot go below its min-content (150).
+//
+//	pass 1: initial free space -300, factors sum 0.9 -> -270, -90 each: 110, 110, 110.
+//	        The first is clamped up to 150 (min violation +40): it freezes.
+//	pass 2: unfrozen factors sum 0.6 -> initial free space -300 * 0.6 = -180, smaller
+//	        in magnitude than the remaining -250, so -180 is shared: -90 each -> 110, 110.
+//
+// The items overflow (150 + 110 + 110 = 370): this is what the specification gives.
+func TestM204FractionalShrinkOverSeveralPasses(t *testing.T) {
+	item := func(inner string) string {
+		return `<i style="display:block;flex:0 .3 200px">` + inner + `</i>`
+	}
+	frozen := `<span style="display:inline-block;width:150px">a</span>`
+	html := `<div style="display:flex;width:300px">` + item(frozen) + item("b") + item("c") + `</div>`
+	got := frags(newRun(t, html, opts{extra: smallPage, css: flat}).all(t), "i")
+	if len(got) != 3 {
+		t.Fatalf("%d items", len(got))
+	}
+	wantX, wantW := []float64{0, 150, 260}, []float64{150, 110, 110}
+	for i, f := range got {
+		if !nearTol(f.rect.X, wantX[i]) || !nearTol(f.rect.W, wantW[i]) {
+			t.Errorf("item %d: x %.3f w %.3f, want %.3f %.3f", i, f.rect.X, f.rect.W, wantX[i], wantW[i])
+		}
+	}
+
+	// Two frozen in turn: min-contents 150 and 130, the third alone ends the loop.
+	// Pass 1: 110 each; the first (150) and the second (130) both violate: both freeze.
+	// Pass 2: the third alone, factors .3 -> -300 * 0.3 = -90 against a remaining free
+	// space of 300 - (150 + 130 + 200) = -180: -90 is used, so 200 - 90 = 110.
+	html = `<div style="display:flex;width:300px">` + item(frozen) + item(`<span style="display:inline-block;width:130px">b</span>`) + item("c") + `</div>`
+	got = frags(newRun(t, html, opts{extra: smallPage, css: flat}).all(t), "i")
+	wantX, wantW = []float64{0, 150, 280}, []float64{150, 130, 110}
+	for i, f := range got {
+		if !nearTol(f.rect.X, wantX[i]) || !nearTol(f.rect.W, wantW[i]) {
+			t.Errorf("two frozen, item %d: x %.3f w %.3f, want %.3f %.3f", i, f.rect.X, f.rect.W, wantX[i], wantW[i])
+		}
 	}
 }

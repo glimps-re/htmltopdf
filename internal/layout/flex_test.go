@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"strings"
@@ -17,11 +18,25 @@ import (
 func flexRun(t *testing.T, container, items string, w float64) ([]stripe, float64) {
 	t.Helper()
 	r := newRun(t, `<div id=c style="display:flex;`+container+`">`+items+`</div>`, opts{extra: smallPage, css: flat})
-	s, gap, err := r.pag.l.flexStripes(boxByID(t, r.root, "c"), cbox{x: 10, w: w}, 0)
+	return flexStripesOf(t, r.pag.l, boxByID(t, r.root, "c"), cbox{x: 10, w: w})
+}
+
+// flexStripesOf lays every line of the container c out, as flex() does one by one.
+func flexStripesOf(tb testing.TB, l *layouter, c *box.Box, inner cbox) ([]stripe, float64) {
+	tb.Helper()
+	p, err := l.planFlex(c, inner.w)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	return s, gap
+	var out []stripe
+	for _, line := range p.lines {
+		s, err := l.layLine(line, inner, p.colGap, c.Style, 0)
+		if err != nil {
+			tb.Fatal(err)
+		}
+		out = append(out, s)
+	}
+	return out, p.rowGap
 }
 
 func item(style, content string) string {
@@ -62,7 +77,6 @@ func TestFlexGrowAndShrink(t *testing.T) {
 		{"shrink scaled by the base", "", item("width:300px", "a") + item("width:100px", "a"), []float64{225, 75}},
 		{"flex:none overflows", "", strings.Repeat(item("flex:none;width:200px", "a"), 2), []float64{200, 200}},
 		{"shrink 0 on one", "", item("width:200px;flex-shrink:0", "a") + item("width:200px", "a"), []float64{200, 100}},
-		{"auto basis is max-content", "", item("", "aaa") + item("", "bbbbbb"), nil},
 		{"no grow without free space", "", item("width:200px;flex-grow:1", "a") + item("width:100px;flex-grow:1", "a"), []float64{200, 100}},
 		{"sum of factors under 1", "", item("flex:0.25 1 0", "a"), []float64{75}},
 	} {
@@ -72,12 +86,6 @@ func TestFlexGrowAndShrink(t *testing.T) {
 				t.Fatalf("%d lines", len(s))
 			}
 			got := ws(s[0])
-			if tt.want == nil {
-				if !near(got[0], widthOf(t, "aaa", "")) || !near(got[1], widthOf(t, "bbbbbb", "")) {
-					t.Errorf("auto basis: %v", got)
-				}
-				return
-			}
 			if !sameFloats(got, tt.want) {
 				t.Errorf("widths %v, want %v", got, tt.want)
 			}
@@ -85,16 +93,23 @@ func TestFlexGrowAndShrink(t *testing.T) {
 	}
 }
 
+func TestFlexAutoBasisIsMaxContent(t *testing.T) {
+	s, _ := flexRun(t, "", item("", "aaa")+item("", "bbbbbb"), 300)
+	if got, want := ws(s[0]), []float64{widthOf(t, "aaa", ""), widthOf(t, "bbbbbb", "")}; !sameFloats(got, want) {
+		t.Errorf("auto basis: %v, want %v", got, want)
+	}
+}
+
 func TestFlexItemsStopAtTheirMinContent(t *testing.T) {
 	long := "WWWWWWWWWWWWWWWWWW"
-	min := widthOf(t, long, "")
+	minContent := widthOf(t, long, "")
 	s, _ := flexRun(t, "", item("width:400px", long)+item("width:200px", "a b"), 300)
 	got := ws(s[0])
-	if !near(got[0], min) || !near(got[1], 300-min) {
-		t.Errorf("widths %v: the first item stops at its min-content %v and the second takes the rest", got, min)
+	if !near(got[0], minContent) || !near(got[1], 300-minContent) {
+		t.Errorf("widths %v: the first item stops at its min-content %v and the second takes the rest", got, minContent)
 	}
 	s, _ = flexRun(t, "", item("flex:1 1 0", long)+item("flex:1 1 0", "a"), 300)
-	if got := ws(s[0]); got[0] < min-0.01 {
+	if got := ws(s[0]); got[0] < minContent-0.01 {
 		t.Errorf("a flex:1 item has an automatic minimum: %v", got)
 	}
 	s, _ = flexRun(t, "", item("width:200px", long)+item("width:200px", "a b"), 300)
@@ -139,18 +154,11 @@ func TestFlexJustifyContent(t *testing.T) {
 		{"center", []float64{110, 160}},
 		{"space-between", []float64{10, 260}},
 		{"space-around", []float64{60, 210}},
-		{"space-evenly", nil},
+		{"space-evenly", []float64{10 + 200.0/3, 10 + 200.0/3*2 + 50}},
 	} {
 		t.Run(tt.j, func(t *testing.T) {
 			s, _ := flexRun(t, "justify-content:"+tt.j, items, 300)
 			got := xs(s[0])
-			if tt.j == "space-evenly" {
-				want := []float64{10 + 200.0/3, 10 + 200.0/3*2 + 50}
-				if !sameFloats(got, want) {
-					t.Errorf("x %v, want %v", got, want)
-				}
-				return
-			}
 			if !sameFloats(got, tt.want) {
 				t.Errorf("x %v, want %v", got, tt.want)
 			}
@@ -237,18 +245,7 @@ func flexTenThousand(tb testing.TB) (*run, *box.Box) {
 	tb.Helper()
 	html := `<div id=c style="display:flex;flex-wrap:wrap">` + strings.Repeat(`<div style="width:30px;flex:none">a</div>`, 10000) + `</div>`
 	r := newRun(tb, html, opts{extra: smallPage, css: flat, limits: func(l *budget.Limits) { l[budget.Boxes] = 1 << 20; l[budget.Glyphs] = 1 << 30 }})
-	var c *box.Box
-	var find func(*box.Box)
-	find = func(b *box.Box) {
-		if b.ID == "c" {
-			c = b
-		}
-		for _, ch := range b.Children {
-			find(ch)
-		}
-	}
-	find(r.root)
-	return r, c
+	return r, boxByID(tb, r.root, "c")
 }
 
 // BenchmarkFlex10k lays 10 000 items out; subtract BenchmarkFlex10kShapeOnly,
@@ -258,9 +255,7 @@ func BenchmarkFlex10k(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		r.pag.l.sizes = nil
-		if _, _, err := r.pag.l.flexStripes(c, cbox{w: 300}, 0); err != nil {
-			b.Fatal(err)
-		}
+		flexStripesOf(b, r.pag.l, c, cbox{w: 300})
 	}
 }
 
@@ -292,10 +287,19 @@ func TestFlexShapesEachItemTextTwice(t *testing.T) {
 	}
 }
 
+// flexItems returns n items with ids fi0..fi<n-1>, the items flexItemsOn finds.
+func flexItems(n int, attrs, content string) string {
+	var sb strings.Builder
+	for i := range n {
+		fmt.Fprintf(&sb, `<div id=fi%d %s>%s</div>`, i, attrs, content)
+	}
+	return sb.String()
+}
+
 func flexItemsOn(pages []*Page, pg int) []*frag {
 	var out []*frag
 	walk(pages[pg].root, func(f *frag) {
-		if f.box.Tag.String() == "div" && f.box.Style.FlexShrink == 0 {
+		if strings.HasPrefix(f.box.ID, "fi") {
 			out = append(out, f)
 		}
 	})
@@ -322,7 +326,7 @@ func TestFlexContainerIsLaidOutInTheFlow(t *testing.T) {
 
 func TestFlexLinesBreakBetweenPages(t *testing.T) {
 	// 30 lines of 100px on pages of 600px: 6 lines a page.
-	html := `<div style="display:flex;flex-wrap:wrap;row-gap:0">` + strings.Repeat(`<div class=b style="flex:none;width:100%">x</div>`, 30) + `</div>`
+	html := `<div style="display:flex;flex-wrap:wrap;row-gap:0">` + flexItems(30, `class=b style="flex:none;width:100%"`, "x") + `</div>`
 	pages := breakRun(t, html)
 	if len(pages) != 5 {
 		t.Fatalf("%d pages", len(pages))
@@ -367,7 +371,7 @@ func TestFlexLineTallerThanAPageIsSliced(t *testing.T) {
 }
 
 func TestFlexLineOfExactlyOnePageFitsAFreshPage(t *testing.T) {
-	html := `<div class=b>before</div><div style="display:flex"><div style="flex:none;width:100px">` + strings.Repeat(`<div class=b>l</div>`, 6) + `</div></div>`
+	html := `<div class=b>before</div><div style="display:flex"><div id=fi0 style="flex:none;width:100px">` + strings.Repeat(`<div class=b>l</div>`, 6) + `</div></div>`
 	pages := breakRun(t, html)
 	if len(pages) != 2 {
 		t.Fatalf("%d pages", len(pages))
@@ -465,5 +469,55 @@ func TestFlexPushedLinesAreNotLaidOutAgain(t *testing.T) {
 	}
 	if got := r.b.Used(budget.Glyphs); got != 2*30 {
 		t.Errorf("%d glyphs for 30 one-glyph items: each must be shaped exactly twice", got)
+	}
+}
+
+// With flex-shrink factors that sum to less than one the items give up only
+// that part of the overflow (Flexbox §9.7 step 4c), as when they grow.
+func TestFlexShrinkFactorsUnderOne(t *testing.T) {
+	s, _ := flexRun(t, "", item("width:200px;flex:0 0.25 auto", "a")+item("width:200px;flex:0 0.25 auto", "a"), 300)
+	if got := ws(s[0]); !sameFloats(got, []float64{175, 175}) {
+		t.Errorf("widths %v: 100px of overflow × 0.5 = 50px, 25px each", got)
+	}
+}
+
+// A flex item that may not break inside keeps the width of its flex line when it
+// is measured again.
+func TestFlexItemWithBreakInsideAvoidKeepsItsWidth(t *testing.T) {
+	html := blocks(5, "p") + `<div style="display:flex"><div id=fi0 style="flex:none;width:250px;break-inside:avoid"><div class=b>a</div></div><div id=fi1 style="flex:1;break-inside:avoid"><div class=b>b</div></div></div>`
+	pages := breakRun(t, html)
+	for i, pg := range pages {
+		for _, f := range flexItemsOn(pages, i) {
+			if f.box.ID == "fi0" && !near(f.rect.W, 250) {
+				t.Errorf("page %d: #fi0 is %v wide", pg.Number, f.rect.W)
+			}
+			if f.box.ID == "fi1" && !near(f.rect.W, 800-250) {
+				t.Errorf("page %d: #fi1 is %v wide", pg.Number, f.rect.W)
+			}
+		}
+	}
+}
+
+// The scaled initial free space of §9.7 step 4b stays the one of step 3 after an
+// item froze: A, B and C shrink by 0.3, the overflow is 100px, A stops at its
+// min-content (its width is 5px under its basis), the 95px left are scaled from
+// the 100px of the start, not from themselves.
+func TestFlexShrinkFactorsAfterAFreeze(t *testing.T) {
+	long := "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
+	minA := widthOf(t, long, "")
+	basisA := minA + 5
+	items := item(fmt.Sprintf("width:%vpx;flex:0 0.3 auto", basisA), long) + item("width:150px;flex:0 0.3 auto", "b") + item("width:150px;flex:0 0.3 auto", "c")
+	avail := basisA + 300 - 100
+	s, _ := flexRun(t, "", items, avail)
+	got := ws(s[0])
+	if !near(got[0], minA) {
+		t.Fatalf("A is %v wide, want its min-content %v: %v", got[0], minA, got)
+	}
+	// Pass 1: free = -100 × 0.9 = -90 over the three bases (scaled shrink): A would
+	// lose 90 × basisA / (basisA + 300) and goes under its minimum, so it freezes.
+	// Pass 2: the remaining free space is -(100 - 5) = -95 but the scaled initial
+	// one is -100 × 0.6 = -60 (two items of 0.3 are left): B and C lose 30 each.
+	if !near(got[1], 150-30) || !near(got[2], 150-30) {
+		t.Errorf("B and C are %v and %v wide, want 120 each", got[1], got[2])
 	}
 }
