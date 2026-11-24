@@ -73,6 +73,9 @@ type rowState struct {
 	from    float64
 	iv      []interval
 	hasCuts bool
+	// top guards the one re-layout of a row that breaks (cells top-aligned):
+	// tl.cur carries the flag over the pages the row is cut on.
+	top bool
 }
 
 func (tl *tableLayout) span(c *tableCell) float64 {
@@ -483,14 +486,17 @@ func findBaseline(f *frag) (float64, bool) {
 }
 
 // layRow lays out the cells of a row at y = 0 and returns the row fragment
-// with its height. Cells are aligned vertically (CSS 2.1 §17.5.3).
-func (l *layouter) layRow(tl *tableLayout, row *tableRow, inner cbox, decor style.TextDecoration) (*frag, error) {
+// with its height. Cells are aligned vertically (CSS 2.1 §17.5.3); with topAlign
+// every cell starts at the top, whatever its vertical-align: Chrome does so in a
+// row that crosses a page break.
+func (l *layouter) layRow(tl *tableLayout, row *tableRow, inner cbox, decor style.TextDecoration, topAlign bool) (*frag, error) {
 	if err := l.b.Charge(budget.Work, int64(len(row.cells)+1)); err != nil {
 		return nil, err
 	}
 	rf := &frag{box: row.box, first: true, last: true, yset: true}
 	rf.rect = display.Rect{X: inner.x, W: tl.total}
 	cells := make([]*frag, len(row.cells))
+	aligns := make([]style.VerticalAlign, len(row.cells))
 	base := 0.0
 	for i := range row.cells {
 		c := &row.cells[i]
@@ -499,13 +505,17 @@ func (l *layouter) layRow(tl *tableLayout, row *tableRow, inner cbox, decor styl
 			return nil, err
 		}
 		cells[i] = f
-		if c.box.Style.VerticalAlign == style.VAlignBaseline {
+		aligns[i] = c.box.Style.VerticalAlign
+		if topAlign {
+			aligns[i] = style.VAlignTop
+		}
+		if aligns[i] == style.VAlignBaseline {
 			base = math.Max(base, firstBaseline(f))
 		}
 	}
 	h := 0.0
 	for i, f := range cells {
-		if row.cells[i].box.Style.VerticalAlign == style.VAlignBaseline {
+		if aligns[i] == style.VAlignBaseline {
 			h = math.Max(h, base-firstBaseline(f)+f.rect.H)
 		} else {
 			h = math.Max(h, f.rect.H)
@@ -514,7 +524,7 @@ func (l *layouter) layRow(tl *tableLayout, row *tableRow, inner cbox, decor styl
 	h = clampCoord(h)
 	for i, f := range cells {
 		var off float64
-		switch row.cells[i].box.Style.VerticalAlign {
+		switch aligns[i] {
 		case style.VAlignMiddle:
 			off = (h - f.rect.H) / 2
 		case style.VAlignBottom:
@@ -548,11 +558,11 @@ func (l *layouter) placeRow(f *frag, row *tableRow, rf *frag, consumed float64) 
 	f.children = append(f.children, g)
 }
 
-// layItem lays out a row or a caption from y = 0 and returns its fragment and
+// layItem lays out a row or a caption from y = 0 (a caption ignores topAlign) and returns its fragment and
 // the height it takes, margins included for a caption.
-func (l *layouter) layItem(tl *tableLayout, row *tableRow, inner cbox, decor style.TextDecoration) (*frag, float64, error) {
+func (l *layouter) layItem(tl *tableLayout, row *tableRow, inner cbox, decor style.TextDecoration, topAlign bool) (*frag, float64, error) {
 	if !row.caption {
-		rf, err := l.layRow(tl, row, inner, decor)
+		rf, err := l.layRow(tl, row, inner, decor, topAlign)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -706,42 +716,52 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 			rf = cur.rf
 			consumed = rf.rect.H
 		} else {
-			if rf, consumed, err = l.layItem(tl, row, inner, decor); err != nil {
+			if rf, consumed, err = l.layItem(tl, row, inner, decor, false); err != nil {
 				return complete, nil, err
 			}
 			cur = &rowState{idx: i, rf: rf}
 		}
 		tl.cur = nil
-		need := consumed - cur.from
-		if !row.caption {
-			need += sv
-			if i == len(rows)-1 {
-				need += sv
-			}
-		}
+		need := rowNeed(row, consumed-cur.from, sv, i == len(rows)-1)
+		work, wrf, wconsumed := cur, rf, consumed
 		if l.y+need > l.bottom {
-			cut, at := l.chooseCut(row, cur, placed, placedBody, emptyAtEntry, sv)
+			// A row that breaks has its cells flow from the top (as in Chrome):
+			// centered cells would have lines on no common cut position. The
+			// top-aligned row decides the cut; a row that finally is not cut
+			// is placed as laid out first.
+			if !row.caption && !cur.top {
+				if wrf, wconsumed, err = l.layItem(tl, row, inner, decor, true); err != nil {
+					return complete, nil, err
+				}
+				work = &rowState{idx: i, rf: wrf, top: true, from: cur.from}
+			}
+			cut, at := l.chooseCut(row, work, placed, placedBody, emptyAtEntry, sv)
 			switch {
 			case cut == cutNothing:
 				delete(l.tables, b)
 				return nothing, nil, nil
 			case cut == cutBreak:
 				l.pend, l.truncate = margins{}, true
-				if cur.from > 0 {
-					tl.cur = cur
+				if work.from > 0 {
+					tl.cur = work
 				}
 				return partial, []level{{child: i}}, nil
-			case at < consumed-cutEps:
+			case at < wconsumed-cutEps:
 				l.y += sv
-				piece := cutFrag(rf, cur.from, at)
-				shiftFrag(piece, -cur.from)
+				piece := cutFrag(wrf, work.from, at)
+				shiftFrag(piece, -work.from)
 				l.placeRow(f, row, piece, piece.rect.H)
 				l.pageEmpty = false
-				cur.from = at
-				tl.cur = cur
+				work.from = at
+				tl.cur = work
 				l.pend, l.truncate = margins{}, true
 				return partial, []level{{child: i}}, nil
 			}
+		}
+		if work != cur && l.y+sv+consumed-cur.from > l.bottom {
+			// Top-aligned, the row fits where it laid out first does not (baseline
+			// cells make a row taller): it is the one to place.
+			rf, consumed, cur = wrf, wconsumed, work
 		}
 		piece, advance := rf, consumed
 		if !row.caption {
@@ -762,6 +782,18 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 	l.y += sv
 	delete(l.tables, b)
 	return complete, nil, nil
+}
+
+// rowNeed is the height a row still takes: what is left of it plus the border
+// spacing around it (after the last row too).
+func rowNeed(row *tableRow, left, sv float64, last bool) float64 {
+	if row.caption {
+		return left
+	}
+	if last {
+		return left + 2*sv
+	}
+	return left + sv
 }
 
 type cutKind uint8
@@ -808,7 +840,7 @@ func (l *layouter) headerRows(tl *tableLayout, inner cbox, decor style.TextDecor
 	tl.hdr.measured = true
 	frs := make([]*frag, 0, tl.hdrEnd-tl.hdrStart)
 	for i := tl.hdrStart; i < tl.hdrEnd; i++ {
-		rf, err := l.layRow(tl, &tl.rows[i], inner, decor)
+		rf, err := l.layRow(tl, &tl.rows[i], inner, decor, false)
 		if err != nil {
 			return err
 		}

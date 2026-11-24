@@ -82,3 +82,14 @@ func pagesContent(tb testing.TB, data []byte) string {
 	}
 	return sb.String()
 }
+
+// renderReport renders a report of the corpus with the host-connector options.
+func renderReport(tb testing.TB, name string, size testcorpus.Size) (*Result, []byte, *pdftest.Doc) {
+	tb.Helper()
+	html, err := testcorpus.Report(os.DirFS("../../testdata/templates"), name, size)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	res, data := renderBytes(tb, mustNew(tb, referenceOptions(tb)), string(html))
+	return res, data, pdftest.Validate(tb, data)
+}

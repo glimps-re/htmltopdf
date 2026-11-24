@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/glimps-re/htmltopdf/internal/pdf/pdftest"
+	"github.com/glimps-re/htmltopdf/internal/testcorpus"
 )
 
 func renderPDF(t *testing.T, html string) (*Result, []byte) {
@@ -71,5 +72,18 @@ func TestPageWithoutMarginBoxesIsNotDeferred(t *testing.T) {
 	}
 	if bytes.Contains(buf.Bytes(), []byte("/Contents [")) {
 		t.Error("a page without margin box has two content streams")
+	}
+}
+
+// Chrome starts the archive table of 00 small at the bottom of page 2 (its
+// header and the first lines of the first row): a row that breaks flows its
+// cells from the top, so the table is not pushed whole to page 3.
+func TestArchiveTableStartsOnPage2OfReport00Small(t *testing.T) {
+	res, _, doc := renderReport(t, "00-host-connector", testcorpus.Small)
+	if res.Pages != 4 {
+		t.Fatalf("%d pages, Chrome has 4", res.Pages)
+	}
+	if text := strings.Join(doc.Pages[1].Text, " "); !strings.Contains(text, "URL de") {
+		t.Errorf("the archive table header is not on page 2: %q", text[max(0, len(text)-200):])
 	}
 }
