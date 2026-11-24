@@ -147,15 +147,15 @@ func (r m2Row) excess(n int) float64 {
 // textLoss 1 on 03 is not a loss: its body shows "TLP:AMBER", which pageStream
 // strips from the stream as a footer.
 var m2Rows = []m2Row{
-	{name: "01S", template: "01-modern", size: testcorpus.Small, chrome: 3, tol: 1, absolute: true, current: 3},
-	{name: "01L", template: "01-modern", size: testcorpus.Large, chrome: 21, tol: 0.15, current: 22},
-	{name: "02S", template: "02-executive", size: testcorpus.Small, chrome: 5, tol: 1, absolute: true, current: 3},
+	{name: "01S", template: "01-modern", size: testcorpus.Small, chrome: 3, tol: 1, absolute: true, current: 3, gating: true},
+	{name: "01L", template: "01-modern", size: testcorpus.Large, chrome: 21, tol: 0.15, current: 22, gating: true},
+	{name: "02S", template: "02-executive", size: testcorpus.Small, chrome: 5, tol: 1, absolute: true, current: 5, gating: true},
 	{
-		name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 52,
+		name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 51,
 		provisional: "provisional ceiling until M2-04 closes: flex children are blockified and stack until flex layout exists; tighten current to the M2-04 count",
 	},
-	{name: "03vS", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 3, textLoss: 1},
-	{name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 27, textLoss: 1},
+	{name: "03vS", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 2, textLoss: 1, gating: true},
+	{name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 17, textLoss: 1, gating: true},
 }
 
 func provisionalNote(r m2Row) string {
