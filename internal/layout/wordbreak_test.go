@@ -149,7 +149,7 @@ func TestBreakAllIsInheritedAndDoesNotApplyToPre(t *testing.T) {
 	}
 }
 
-func TestHugeWordsAreBrokenInLinearTime(t *testing.T) {
+func TestHugeWordsAreBrokenWithinTheLimits(t *testing.T) {
 	if testing.Short() {
 		t.Skip("2 MB words")
 	}
@@ -172,8 +172,41 @@ func TestHugeWordsAreBrokenInLinearTime(t *testing.T) {
 				if !errors.Is(err, io.EOF) && !errors.As(err, &le) {
 					t.Fatal(err)
 				}
-				if d := time.Since(start); d > 10*time.Second && !raceEnabled {
+				if d := time.Since(start); d > time.Minute {
 					t.Errorf("took %v", d)
+				}
+			})
+		}
+	}
+}
+
+// A giant word cut line after line costs linearly: the Work charged for 2n
+// characters is twice that for n (quadratic line breaking charges four times).
+func TestHugeWordWorkIsLinear(t *testing.T) {
+	for name, decl := range map[string]string{
+		"anywhere":           "overflow-wrap:anywhere",
+		"break-word":         "overflow-wrap:break-word",
+		"break-all":          "word-break:break-all",
+		"break-all+anywhere": "word-break:break-all;overflow-wrap:anywhere",
+	} {
+		for _, ch := range []string{"a", "_"} {
+			t.Run(name+"/"+ch, func(t *testing.T) {
+				work := func(n int) int64 {
+					html := `<div style="width:200px;` + decl + `">` + strings.Repeat(ch, n) + `</div>`
+					r := newRun(t, html, opts{css: smallPage + " body{margin:0}", limits: func(l *budget.Limits) { l[budget.Pages] = 100000 }})
+					var err error
+					for err == nil {
+						_, err = r.pag.Next()
+					}
+					if !errors.Is(err, io.EOF) {
+						t.Fatalf("%d characters: %v", n, err)
+					}
+					return r.b.Used(budget.Work)
+				}
+				half, whole := work(100_000), work(200_000)
+				t.Logf("work %d for 100 000 characters, %d for 200 000", half, whole)
+				if float64(whole) > 2.2*float64(half) {
+					t.Errorf("work %d for 200 000 characters against %d for 100 000: %.2fx, linear is 2x", whole, half, float64(whole)/float64(half))
 				}
 			})
 		}
@@ -194,7 +227,7 @@ func TestMiBWordUnderAnywhereIsStoppedByTheLimitsNotTheClock(t *testing.T) {
 	if !errors.Is(err, io.EOF) && (!errors.As(err, &le) || le.Kind != budget.Work) {
 		t.Fatalf("stopped by %v, want completion or LimitWork", err)
 	}
-	if d := time.Since(start); d > 2*time.Second && !raceEnabled {
+	if d := time.Since(start); d > time.Minute {
 		t.Errorf("took %v", d)
 	}
 }

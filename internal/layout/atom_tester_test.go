@@ -131,7 +131,8 @@ func TestM203bHostileGeometryIsFinite(t *testing.T) {
 			r := newRun(t, html, opts{extra: smallPage, css: flat})
 			pages, _ := r.drain(t)
 			assertFinite(t, pages)
-			if d := time.Since(start); d > 5*time.Second && !raceEnabled {
+			assertWorkBound(t, r, html, 130)
+			if d := time.Since(start); d > time.Minute {
 				t.Errorf("took %v", d)
 			}
 		})
@@ -159,7 +160,7 @@ func TestM203bNestedAtomsDepth(t *testing.T) {
 			rr := newRun(t, html, opts{extra: smallPage, css: flat})
 			pages, _ := rr.drain(t)
 			assertFinite(t, pages)
-			if d := time.Since(start); d > 10*time.Second && !raceEnabled {
+			if d := time.Since(start); d > time.Minute {
 				t.Errorf("took %v", d)
 			}
 		})
@@ -216,10 +217,10 @@ func TestM203bHundredThousandAtomsHeap(t *testing.T) {
 		t.Fatalf("100000 sibling atoms with the default limits: %v, want a LimitError", gotErr)
 	}
 	t.Logf("%v after %v, peak heap %d MiB", le.Kind, elapsed, peak>>20)
-	if peak > 256<<20 {
+	if peak > peakHeapCap() {
 		t.Errorf("peak heap %d MiB, limit 256", peak>>20)
 	}
-	if elapsed > 2*time.Second && !raceEnabled {
+	if elapsed > time.Minute {
 		t.Errorf("took %v", elapsed)
 	}
 }
@@ -240,7 +241,8 @@ func TestM203bNowrapHugeText(t *testing.T) {
 			r := newRun(t, `<div style="width:200px;white-space:nowrap">`+content+`</div>`, opts{extra: smallPage, css: flat})
 			pages, _ := r.drain(t)
 			assertFinite(t, pages)
-			if d := time.Since(start); d > 10*time.Second && !raceEnabled {
+			assertWorkBound(t, r, content, 130)
+			if d := time.Since(start); d > time.Minute {
 				t.Errorf("took %v", d)
 			}
 		})
@@ -420,5 +422,30 @@ func TestM203bNoTextIsLost(t *testing.T) {
 			}
 			assertTextKept(t, html, pages)
 		})
+	}
+}
+
+// peakHeapCap is the peak-heap bound of the 256 MiB criteria, in bytes. The
+// sampled HeapAlloc includes garbage the collector has not swept yet, and the
+// race detector multiplies the footprint, so the bound doubles under -race.
+func peakHeapCap() uint64 {
+	if raceEnabled {
+		return 512 << 20
+	}
+	return 256 << 20
+}
+
+// assertWorkBound fails when the document charged more than perByte units of
+// Work per byte of HTML (plus a fixed 20 000 for the page set-up). The factor is
+// the largest measured one times at least four: it catches a super-linear cost
+// that the one-minute guard of a slow machine would not.
+func assertWorkBound(t testing.TB, r *run, html string, perByte int64) {
+	t.Helper()
+	w, limit := r.b.Used(budget.Work), perByte*int64(len(html))+20_000
+	if w > limit {
+		t.Errorf("%d work units for %d bytes of HTML, at most %d expected (%d per byte)", w, len(html), limit, perByte)
+	}
+	if per := float64(w) / float64(len(html)); per > float64(perByte)/4 {
+		t.Logf("work per byte %.1f is above a quarter of the bound (%d)", per, perByte)
 	}
 }

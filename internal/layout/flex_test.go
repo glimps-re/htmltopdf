@@ -396,7 +396,7 @@ func TestFlexNestedIsLinear(t *testing.T) {
 		r := newRun(t, html, opts{extra: smallPage, css: flat, limits: func(l *budget.Limits) { l[budget.Boxes] = 1 << 20; l[budget.Nodes] = 1 << 22 }})
 		start := time.Now()
 		r.all(t)
-		if d := time.Since(start); n == 500 && d > 2*time.Second && !raceEnabled {
+		if d := time.Since(start); n == 500 && d > time.Minute {
 			t.Errorf("500 nested flex containers took %v", d)
 		}
 		return r.b.Used(budget.Work)

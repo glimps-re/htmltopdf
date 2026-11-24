@@ -312,32 +312,34 @@ func TestCancellationAndWorkAtEveryPoint(t *testing.T) {
 		if _, err := p.Next(); err != nil {
 			t.Fatal(err)
 		}
+		before := b.Used(budget.Work)
 		cancel()
-		start := time.Now()
 		for range 5 {
 			if _, err = p.Next(); err != nil {
 				break
 			}
 		}
 		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("after cancel: %v", err)
+			t.Fatalf("after cancel: %v, want context.Canceled", err)
 		}
-		if time.Since(start) > 2*time.Second {
-			t.Errorf("took %v to notice the cancellation", time.Since(start))
+		// The context is polled every WorkPollInterval units: a cancelled run may
+		// finish the interval it is in, not a page (300 paragraphs, ~28 000 units).
+		if after := b.Used(budget.Work); after-before > budget.WorkPollInterval {
+			t.Errorf("%d work units charged after the cancellation, want at most one poll interval (%d)", after-before, budget.WorkPollInterval)
 		}
 	})
 	t.Run("deadline during one huge paragraph", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 		defer cancel()
 		html := `<p style="overflow-wrap:anywhere">` + strings.Repeat("abc ", 400_000) + `</p>`
-		start := time.Now()
 		o := pipe(t, ctx, html, extra, func(l *budget.Limits) { l[budget.Work] = 1 << 40; l[budget.Glyphs] = 1 << 40 }, 3000)
-		t.Logf("%d pages, err %v, %v", o.pages, o.err, time.Since(start).Round(time.Millisecond))
-		if o.err != nil && !errors.Is(o.err, context.DeadlineExceeded) && !isLimit(o.err) {
-			t.Fatalf("%v", o.err)
+		t.Logf("%d pages, stage %q, err %v, work %d", o.pages, o.stage, o.err, o.b.Used(budget.Work))
+		if !errors.Is(o.err, context.DeadlineExceeded) {
+			t.Fatalf("a 30 ms deadline on a 400 000 word paragraph ended with %v, want context.DeadlineExceeded", o.err)
 		}
-		if took := time.Since(start); took > 20*time.Second {
-			t.Errorf("a 30 ms deadline took %v", took)
+		// The full document charges ~440 000 units before MaxPages stops it.
+		if w := o.b.Used(budget.Work); w > 100_000 {
+			t.Errorf("%d work units charged after a 30 ms deadline (a complete run charges ~440 000)", w)
 		}
 	})
 	t.Run("work limit at every point", func(t *testing.T) {

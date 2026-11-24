@@ -509,7 +509,10 @@ loop:
 			break loop
 		}
 		if p.breakWord && !st.nowrap {
-			k := l.fitCluster(st, a, end, avail-w)
+			k, err := l.fitCluster(st, a, end, avail-w)
+			if err != nil {
+				return ln, cur, false, err
+			}
 			if k <= a && !hasText {
 				k = l.nextCluster(st, a, end)
 			}
@@ -541,11 +544,14 @@ loop:
 }
 
 // fitCluster returns the largest cluster boundary k in (a, end] such that
-// [a, k) fits in room, or a when not even one cluster does.
-func (l *layouter) fitCluster(st *shapedText, a, end int, room float64) int {
+// [a, k) fits in room, or a when not even one cluster does. Each cluster it
+// walks is charged to Work: a giant word cut line after line must cost
+// linearly, not once per line over the whole of it.
+func (l *layouter) fitCluster(st *shapedText, a, end int, room float64) (int, error) {
 	ga, gb := st.glyphIndex(a), st.glyphIndex(end)
 	best := a
 	var sum float64
+	walked := int64(1)
 	for g := ga; g < gb; {
 		c := st.glyph(g).Cluster
 		h := g
@@ -554,6 +560,7 @@ func (l *layouter) fitCluster(st *shapedText, a, end int, room float64) int {
 			cw += float64(st.glyph(h).Advance) + st.ls
 			h++
 		}
+		walked++
 		if sum+cw > room+1e-6 {
 			break
 		}
@@ -564,7 +571,7 @@ func (l *layouter) fitCluster(st *shapedText, a, end int, room float64) int {
 		}
 		g = h
 	}
-	return best
+	return best, l.b.Charge(budget.Work, walked)
 }
 
 // nextCluster returns the end of the cluster that starts at a, within [a, end].

@@ -94,7 +94,8 @@ func TestM205GridHostileDocuments(t *testing.T) {
 			}
 			assertFinite(t, pages)
 			assertTextKept(t, body, pages)
-			if d := time.Since(start); d > 10*time.Second && !raceEnabled {
+			assertWorkBound(t, r, body, 50)
+			if d := time.Since(start); d > time.Minute {
 				t.Errorf("took %v", d)
 			}
 		})
@@ -145,13 +146,16 @@ func TestM205GridManyItems(t *testing.T) {
 				assertTextKept(t, body, pages)
 			})
 			t.Logf("%v, work %d, glyphs %d, peak heap %d MiB, clamp warning %v", elapsed, work, glyphs, peak>>20, warned)
-			if peak > 256<<20 {
+			if limit := int64(200*tc.n + 20_000); work > limit {
+				t.Errorf("%d work units for %d items, want at most %d (94 per item measured: linear, 2x margin)", work, tc.n, limit)
+			}
+			if peak > peakHeapCap() {
 				t.Errorf("peak heap %d MiB", peak>>20)
 			}
 			if strings.Contains(tc.cols, "100000") && !warned {
 				t.Error("repeat(100000) is not reported as clamped")
 			}
-			if elapsed > 5*time.Second && !raceEnabled {
+			if elapsed > time.Minute {
 				t.Errorf("took %v", elapsed)
 			}
 		})

@@ -296,7 +296,10 @@ func TestAvoidChainResources(t *testing.T) {
 	start := time.Now()
 	r := newRun(t, html, opts{extra: smallPage, css: breaksCSS})
 	pages := r.all(t)
-	if d := time.Since(start); d > 10*time.Second {
+	if w := r.b.Used(budget.Work); w > 1_500_000 {
+		t.Errorf("10 000 chained headings charged %d work units (75 per heading measured: linear, 2x margin)", w)
+	}
+	if d := time.Since(start); d > time.Minute {
 		t.Errorf("took %v", d)
 	}
 	if len(pages) < 1 {

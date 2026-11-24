@@ -422,11 +422,12 @@ func TestTableHostileColspan(t *testing.T) {
 	if err != nil || pages == 0 {
 		t.Fatalf("%d pages, %v", pages, err)
 	}
-	if d := time.Since(start); d > 2*time.Second {
+	if d := time.Since(start); d > time.Minute {
 		t.Errorf("took %v", d)
 	}
 	r := newRun(t, string(html), opts{css: tableDoc})
 	r.all(t)
+	assertWorkBound(t, r, string(html), 40)
 	found := false
 	for _, w := range warningList(r.b) {
 		found = found || w.Code == budget.WarnClamped
@@ -579,7 +580,7 @@ func TestTableRowStress(t *testing.T) {
 		close(stop)
 		heap := <-peak
 		t.Logf("%s: %d pages, %v, %v, heap max %d MiB", name, pages, err, took.Round(time.Millisecond), heap>>20)
-		if took > 2*time.Second && !raceEnabled {
+		if took > time.Minute {
 			t.Errorf("%s: took %v", name, took)
 		}
 		if heap > 128<<20 {
@@ -646,16 +647,13 @@ func TestTableTallHeaderIsNotRelaidPerPage(t *testing.T) {
 	const head, body = 2000, 2000
 	css := tableDoc + " td,th{line-height:20px}"
 	with := newRun(t, tallHeaderTable(head, body), opts{css: css})
-	start := time.Now()
 	withPages := with.all(t)
-	took := time.Since(start)
 	without := newRun(t, tallHeaderTable(0, head+body), opts{css: css})
-	start = time.Now()
 	without.all(t)
-	base := time.Since(start)
-	t.Logf("%d pages: %v with a tall thead, %v without", len(withPages), took, base)
-	if !raceEnabled && took > 6*base+200*time.Millisecond {
-		t.Errorf("tall thead took %v against %v without", took, base)
+	workWith, workWithout := with.b.Used(budget.Work), without.b.Used(budget.Work)
+	t.Logf("%d pages: work %d with a tall thead, %d without", len(withPages), workWith, workWithout)
+	if float64(workWith) > 1.5*float64(workWithout) {
+		t.Errorf("a tall thead charged %d work units against %d without (measured 1.26x, bound 1.5x): it is laid out again on every page", workWith, workWithout)
 	}
 	if got := len(fragsOf(withPages[100:101], "thead")); got != 0 {
 		t.Errorf("a header taller than half a page was repeated")
@@ -807,9 +805,10 @@ func TestTableHostileColumns(t *testing.T) {
 			r := newRun(t, html, opts{css: tableDoc, limits: func(l *budget.Limits) { l[budget.Nodes] = 1 << 20 }})
 			start := time.Now()
 			pages := r.all(t)
-			if d := time.Since(start); d > 2*time.Second && !raceEnabled {
+			if d := time.Since(start); d > time.Minute {
 				t.Errorf("took %v", d)
 			}
+			assertWorkBound(t, r, html, 20)
 			for _, td := range fragsOf(pages, "td") {
 				if math.IsNaN(td.rect.W) || math.IsInf(td.rect.W, 0) || td.rect.W < 0 {
 					t.Fatalf("cell %v", td.rect)

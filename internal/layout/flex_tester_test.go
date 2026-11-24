@@ -90,7 +90,8 @@ func TestM204FlexHostileDocuments(t *testing.T) {
 			}
 			assertFinite(t, pages)
 			assertTextKept(t, body, pages)
-			if d := time.Since(start); d > 10*time.Second && !raceEnabled {
+			assertWorkBound(t, r, body, 50)
+			if d := time.Since(start); d > time.Minute {
 				t.Errorf("took %v", d)
 			}
 		})
@@ -122,10 +123,13 @@ func TestM204TenThousandItems(t *testing.T) {
 		assertTextKept(t, body, pages)
 	})
 	t.Logf("10 000 items: %v, work %d, glyphs %d, peak heap %d MiB", elapsed, work, glyphs, peak>>20)
-	if peak > 256<<20 {
+	if peak > peakHeapCap() {
 		t.Errorf("peak heap %d MiB", peak>>20)
 	}
-	if elapsed > 5*time.Second && !raceEnabled {
+	if work > 1_900_000 {
+		t.Errorf("%d work units for 10 000 items, want at most 1.9 M (94 per item measured: linear, 2x margin)", work)
+	}
+	if elapsed > time.Minute {
 		t.Errorf("took %v", elapsed)
 	}
 }

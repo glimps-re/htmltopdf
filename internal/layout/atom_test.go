@@ -437,14 +437,14 @@ func TestSiblingAtomsHitTheBoxLimit(t *testing.T) {
 	if !errors.As(err, &le) || le.Kind != budget.Boxes {
 		t.Fatalf("got %v, want the Boxes limit", err)
 	}
-	if time.Since(start) > 2*time.Second && !raceEnabled {
+	if time.Since(start) > time.Minute {
 		t.Errorf("took %v", time.Since(start))
 	}
 	twin := "<p>" + strings.Repeat(`<span style="display:inline-block">k</span> `, 20000) + "</p>"
-	start = time.Now()
-	newRun(t, twin, opts{extra: smallPage, css: flat}).all(t)
-	if d := time.Since(start); d > 2*time.Second && !raceEnabled {
-		t.Errorf("the 20000-atom twin took %v", d)
+	rr := newRun(t, twin, opts{extra: smallPage, css: flat})
+	rr.all(t)
+	if w := rr.b.Used(budget.Work); w > 4_700_000 {
+		t.Errorf("the 20000-atom twin charged %d work units (116 per atom measured: linear, 2x margin)", w)
 	}
 }
 

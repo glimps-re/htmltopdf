@@ -56,7 +56,7 @@ func TestM203bPerAtomCacheGrowth(t *testing.T) {
 			t.Errorf("%d atoms: %d glyphs charged", g.atoms, g.glyphs)
 		}
 	}
-	if last := gs[len(gs)-1]; last.peak > 256<<20 {
+	if last := gs[len(gs)-1]; last.peak > peakHeapCap() {
 		t.Errorf("peak heap %d MiB", last.peak>>20)
 	}
 }
