@@ -1,6 +1,8 @@
 package layout
 
 import (
+	"math"
+
 	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/display"
 	"github.com/glimps-re/htmltopdf/internal/style"
@@ -13,32 +15,36 @@ func (l *layouter) layMono(b *box.Box, w float64, decor style.TextDecoration) (*
 	return l.layMonoIn(b, w, w, decor)
 }
 
+// monoBox is the box layMonoIn is laying out and the border box width it is
+// forced to: layBlock reads it for that box only.
+type monoBox struct {
+	box *box.Box
+	w   float64
+}
+
+// fit forces the geometry of the box to the width w and no margins; the
+// callers resolve both.
+func (m monoBox) fit(g geom) geom {
+	extra := g.pl + g.pr + g.bl + g.br
+	g.mt, g.mb, g.ml, g.mr = 0, 0, 0, 0
+	g.w = math.Max(0, m.w-extra)
+	g.borderW = g.w + extra
+	return g
+}
+
 // layMonoIn is layMono for a box in a containing block of width cbw, which the
 // percentages of its padding refer to.
 func (l *layouter) layMonoIn(b *box.Box, w, cbw float64, decor style.TextDecoration) (*frag, error) {
-	// The probe of the font of a style is made once per style: the copy below
-	// borrows it, and gives it back so that the cache does not grow per box.
-	face, size := l.primaryFace(b.Style)
 	s := l.enterScratch()
-	root := l.root
-	// A copy with the width forced and no margins: the callers resolve both.
-	// Making it the root gives it a block formatting context, which an atomic
+	root, mono := l.root, l.mono
+	// Making b the root gives it a block formatting context, which an atomic
 	// inline or a flex item has: the margins of its children stay inside.
-	nb := *b
-	st := *b.Style
-	st.Width = style.Dim{Kind: style.DimPx, Value: w}
-	st.MaxWidth = style.Dim{Kind: style.DimNone}
-	st.BoxSizing = style.BorderBox
-	st.Margin = [4]style.Dim{}
-	nb.Style = &st
-	l.primaries[&st] = primary{face, size}
-	l.root = &nb
+	l.root, l.mono = b, monoBox{box: b, w: w}
 	defer func() {
 		l.leaveScratch(s)
-		l.root = root
-		delete(l.primaries, &st)
+		l.root, l.mono = root, mono
 	}()
-	res, err := l.block(&nb, nil, cbox{w: cbw}, decor)
+	res, err := l.block(b, nil, cbox{w: cbw}, decor)
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +52,6 @@ func (l *layouter) layMonoIn(b *box.Box, w, cbw float64, decor style.TextDecorat
 	if res.f == nil {
 		return &frag{box: b, first: true, last: true, yset: true, rect: display.Rect{W: w}}, nil
 	}
-	// The copy only served the layout; the fragment keeps the real box so that
-	// the copy of every atom is not retained until the page is emitted.
-	res.f.box = b
 	return res.f, nil
 }
 

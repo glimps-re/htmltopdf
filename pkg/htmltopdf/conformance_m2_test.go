@@ -150,12 +150,12 @@ var m2Rows = []m2Row{
 	{name: "01S", template: "01-modern", size: testcorpus.Small, chrome: 3, tol: 1, absolute: true, current: 3, gating: true},
 	{name: "01L", template: "01-modern", size: testcorpus.Large, chrome: 21, tol: 0.15, current: 22, gating: true},
 	{name: "02S", template: "02-executive", size: testcorpus.Small, chrome: 5, tol: 1, absolute: true, current: 5, gating: true},
-	{
-		name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 51,
-		provisional: "provisional ceiling until M2-04 closes: flex children are blockified and stack until flex layout exists; tighten current to the M2-04 count",
-	},
+	{name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 37, gating: true},
 	{name: "03vS", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 2, textLoss: 1, gating: true},
-	{name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 17, textLoss: 1, gating: true},
+	{
+		name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 16, textLoss: 1,
+		provisional: "floor of 16 until M3-01 (::before/::after, counters); the flex of .archive-head is Chrome-faithful",
+	},
 }
 
 func provisionalNote(r m2Row) string {

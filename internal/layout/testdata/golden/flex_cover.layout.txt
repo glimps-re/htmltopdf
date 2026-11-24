@@ -1,0 +1,11 @@
+page 1 size 794.56x1122.56 area 0,0 794.56x1122.56 scale 1
+  block html 0,0 794.56x126.03
+    block body 0,0 794.56x126.03
+      block div 0,0 794.56x126.03
+        block div 37.8,30.24 272.92x65.56
+          block h1 37.8,30.24 272.92x40
+            line 37.8,30.24 272.92x40 base 59.74 "Rapport d'analyse"
+          block p 37.8,77.8 272.92x18
+            line 37.8,77.8 272.92x18 base 90.8 "a1b2c3d4-e5f6"
+        block div 545.06,41.68 211.7x42.68
+          line 563.96,53.02 173.91x20 base 67.52 "● 5 fichier(s) bloqué(s)"

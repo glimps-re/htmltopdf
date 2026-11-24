@@ -47,6 +47,7 @@ func (l *layouter) restoreBreak(s *breakSnap) {
 	l.pageEmpty, l.forced = s.pageEmpty, s.forced
 	l.dropParagraph()
 	l.takeCutTables()
+	clear(l.stripes)
 }
 
 // takeCutTables removes from the cache the tables cut over pages (a row in
@@ -119,7 +120,8 @@ func (l *layouter) measure(b *box.Box, cb cbox, decor style.TextDecoration) (boo
 		l.measured = make(map[measureKey]bool)
 	}
 	// The attempt that failed is kept if b does not fit: its cut tables stay.
-	kept := l.takeCutTables()
+	kept, stripes := l.takeCutTables(), l.stripes
+	l.stripes = nil
 	page, forced := l.bottom, l.forced
 	l.dropParagraph()
 	s := l.enterScratch()
@@ -132,6 +134,7 @@ func (l *layouter) measure(b *box.Box, cb cbox, decor style.TextDecoration) (boo
 	l.forced = forced
 	l.takeCutTables()
 	maps.Copy(l.tables, kept)
+	l.stripes = stripes
 	if err != nil {
 		return false, err
 	}

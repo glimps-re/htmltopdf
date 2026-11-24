@@ -489,3 +489,18 @@ func TestForcedBreaksInUnboundedContentKeepTheText(t *testing.T) {
 		t.Errorf("%d pages: a forced break inside a cell must not break the page", len(pages))
 	}
 }
+
+func TestAvoidChainWhenOnlyTheBottomDecorationDoesNotFit(t *testing.T) {
+	html := blocks(5, "p") + `<h2 class=b id=h style="break-after:avoid;border-bottom:5px solid;line-height:98px">h</h2><div class=b id=n>n</div>`
+	pages := breakRun(t, html+"")
+	h, _ := pageOf(t, pages, "h")
+	n, _ := pageOf(t, pages, "n")
+	if h != n {
+		t.Errorf("h on page %d and its next sibling on page %d", h, n)
+	}
+	for _, f := range frags(pages, "h2") {
+		if !f.first || !f.last {
+			t.Errorf("heading split: %+v", f.rect)
+		}
+	}
+}

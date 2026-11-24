@@ -21,6 +21,8 @@ func FuzzLayout(f *testing.F) {
 		"<p>a <span style='display:inline-block;padding:2px 9px;margin:0 1e9px 3px;background:red;border-radius:9px'>pill</span> b <span style='display:inline-block;vertical-align:middle'>c d e f</span></p>",
 		"<div style='width:50px;white-space:nowrap'><span style='display:inline-block;width:1e9px'>a</span> b c <span style='display:inline-block;vertical-align:top;overflow:hidden'>x<br>y</span></div>",
 		"<span style='display:inline-block'><span style='display:inline-block'><span style='display:inline-block;word-break:break-all;overflow-wrap:anywhere'>abc def</span></span><table><tr><td>t</table></span>",
+		"<div style='display:flex;flex-wrap:wrap;gap:1e9px 3px;justify-content:space-around;align-items:center'><div style='flex:1 1 1e9px;margin:-1e9px'>a b</div><div style='flex:none;width:1e9px;min-width:0'>c</div><div style='flex:1e9 0 0;max-width:5px'>d<br>e</div></div>",
+		"<div style='display:flex'><div style='flex:1;break-inside:avoid'>" + strings.Repeat("<div style='height:0;line-height:90px'>x</div>", 12) + "</div><span style='display:inline-block'>y</span></div><div style='display:flex;column-gap:50%'><div>a</div><div style='display:flex'><div>b</div></div></div>",
 		"<p style='letter-spacing:1e9px'>abc</p>", "<span style='margin:0 1e9px;padding:1e9px'>x</span>",
 	} {
 		f.Add(s, "p { margin: 3px }")

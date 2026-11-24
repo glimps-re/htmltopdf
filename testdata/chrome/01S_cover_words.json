@@ -1,0 +1,23 @@
+{
+ "source": "tmp/spike/out/chrome09/report_01-modern_small.pdf",
+ "sha256": "d1f49776690f9c9933c3001e4cb3d8dc7da2002dc0acabe8a01898fd0170d63b",
+ "method": "pdftotext -bbox page 1; baseline_top = yMin + 0.928*(yMax-yMin)/1.164 (DejaVu ascent 0.928, ascent+descent 1.164 em), measured from the page top in pt",
+ "page_height": 841.92,
+ "words": {
+  "title": {
+   "text": "Rapport",
+   "x": 65.252,
+   "baseline_top": 102.072
+  },
+  "scan-id": {
+   "text": "a1b2c3d4-e5f6",
+   "x": 65.252,
+   "baseline_top": 123.674
+  },
+  "verdict": {
+   "text": "\u25cf",
+   "x": 400.527,
+   "baseline_top": 107.473
+  }
+ }
+}

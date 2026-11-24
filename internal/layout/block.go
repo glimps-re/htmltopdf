@@ -48,11 +48,13 @@ type layouter struct {
 	onMeasure func(*box.Box)
 
 	root      *box.Box
+	mono      monoBox
 	para      *paragraph
 	segs      []seg
 	primaries map[*style.Computed]primary
 	ext       map[extKey]extVal
 	tables    map[*box.Box]*tableLayout
+	stripes   map[*box.Box]*stripeState
 	sizes     map[*box.Box]sizeEntry
 }
 
@@ -113,6 +115,10 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		lv = in[0]
 	}
 	g := geometry(st, cb)
+	if b == l.mono.box {
+		g = l.mono.fit(g)
+		l.mono.box = nil
+	}
 	f := &frag{box: b, first: !resuming, last: true}
 	f.border = [4]float64{g.bt, g.br, g.bb, g.bl}
 	f.padding = [4]float64{g.pt, g.pr, g.pb, g.pl}
@@ -170,6 +176,15 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 	case b.Style.Display == style.DisplayTable:
 		var err error
 		stat, tok, err = l.tableRows(b, f, lv, inner, childDecor, resuming, emptyAtEntry)
+		if err != nil {
+			return result{}, err
+		}
+		if stat == nothing {
+			return result{status: nothing}, nil
+		}
+	case b.Style.Display == style.DisplayFlex:
+		var err error
+		stat, tok, err = l.flex(b, f, lv, inner, childDecor, resuming, emptyAtEntry)
 		if err != nil {
 			return result{}, err
 		}
@@ -282,6 +297,20 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 		case complete:
 			f.children = append(f.children, cr.f)
 		case partial:
+			// Only the bottom decoration of c goes on: the break that the chain avoids
+			// is right after c, so the chain moves whole like for a block that did not fit.
+			decorationOnly := link && len(cr.tok) == 1 && cr.tok[0].childrenDone
+			chainStartsPage := chain == lv.child && (resuming || emptyAtEntry)
+			if decorationOnly && chain >= 0 && !l.measuring && !snap.pageEmpty && !chainStartsPage {
+				l.restoreBreak(&snap)
+				clear(f.children[kept:])
+				f.children = f.children[:kept]
+				if len(f.children) == 0 && !resuming && !emptyAtEntry {
+					return nothing, nil, nil
+				}
+				l.pend, l.truncate = margins{}, true
+				return partial, []level{{child: chain}}, nil
+			}
 			f.children = append(f.children, cr.f)
 			return partial, append([]level{{child: i}}, cr.tok...), nil
 		case nothing:
