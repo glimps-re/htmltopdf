@@ -32,6 +32,20 @@ type layouter struct {
 	// pageEmpty is true until something is placed on the page: the first line
 	// or box of a page is always placed, so every page makes progress.
 	pageEmpty bool
+	// forced is true when the page ended on a forced break: the margins after
+	// it are kept (CSS Fragmentation §5.5).
+	forced bool
+	// Avoid measurement (breaks.go): measuring is true while a box is laid out
+	// alone to see whether it fits a page, measures counts them on this page,
+	// measured memoizes the results, onMeasure is a test hook.
+	measuring bool
+	// unbounded is true while content is laid out on an unbounded scratch page
+	// (a cell, an atomic inline): nothing breaks there, so a forced break is
+	// ignored and the content stays whole.
+	unbounded bool
+	measures  int
+	measured  map[measureKey]bool
+	onMeasure func(*box.Box)
 
 	root      *box.Box
 	para      *paragraph
@@ -47,7 +61,7 @@ func newLayouter(root *box.Box, cfg Config, width, height float64) *layouter {
 
 func (l *layouter) startPage(resumed bool) {
 	l.y, l.pend, l.waiting = 0, margins{}, l.waiting[:0]
-	l.truncate, l.pageEmpty = resumed, true
+	l.truncate, l.pageEmpty, l.measures = resumed, true, 0
 }
 
 // flush applies the pending margins at the cursor and fixes the top of the
@@ -84,10 +98,10 @@ func newProbe(cfg Config) *text.Shaper {
 	return text.NewShaper(cfg.Fonts, budget.New(context.Background(), limits, nil))
 }
 
-// block lays out the block-level box b in the containing block cb. in holds
+// layBlock lays out the block-level box b in the containing block cb. in holds
 // the levels of the break token from b down when b is resumed. decor is the
 // text decoration propagated from the ancestors.
-func (l *layouter) block(b *box.Box, in []level, cb cbox, decor style.TextDecoration) (result, error) {
+func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDecoration) (result, error) {
 	if err := l.b.Charge(budget.Work, 1); err != nil {
 		return result{}, err
 	}
@@ -231,14 +245,35 @@ func (l *layouter) unwait(f *frag) {
 	}
 }
 
-// children lays out the block children of b from lv.child.
+// children lays out the block children of b from lv.child, applying the
+// breaks between siblings (breaks.go).
 func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbox, decor style.TextDecoration, resuming, emptyAtEntry bool) (status, []level, error) {
+	var (
+		chain    = -1
+		prevLink bool
+		snap     breakSnap
+		kept     int
+	)
 	for i := lv.child; i < len(b.Children); i++ {
+		c := b.Children[i]
+		if i > lv.child && !l.pageEmpty && !l.unbounded && forcedBetween(b.Children[i-1], c) {
+			l.pend, l.forced = margins{}, true
+			return partial, []level{{child: i}}, nil
+		}
+		link := i+1 < len(b.Children) && avoidBetween(c, b.Children[i+1])
+		if !prevLink {
+			chain = -1
+		}
+		if link && chain < 0 {
+			chain, kept = i, len(f.children)
+			l.saveBreak(&snap)
+		}
+		prevLink = link
 		var childIn []level
 		if resuming && i == lv.child && len(in) > 1 {
 			childIn = in[1:]
 		}
-		cr, err := l.block(b.Children[i], childIn, inner, decor)
+		cr, err := l.block(c, childIn, inner, decor)
 		if err != nil {
 			return complete, nil, err
 		}
@@ -249,6 +284,16 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 			f.children = append(f.children, cr.f)
 			return partial, append([]level{{child: i}}, cr.tok...), nil
 		case nothing:
+			// Backing up needs content before the chain on this page: the chain does
+			// not start it, or the block is not itself at the top of its page (which
+			// would resume at the same child and make no progress).
+			chainStartsPage := chain == lv.child && (resuming || emptyAtEntry)
+			if chain >= 0 && chain < i && !l.measuring && !snap.pageEmpty && !chainStartsPage {
+				l.restoreBreak(&snap)
+				clear(f.children[kept:])
+				f.children = f.children[:kept]
+				i = chain
+			}
 			if len(f.children) == 0 && !resuming && !emptyAtEntry {
 				return nothing, nil, nil
 			}

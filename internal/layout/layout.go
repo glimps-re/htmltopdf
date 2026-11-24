@@ -122,7 +122,8 @@ func (p *Paginator) Next() (*Page, error) {
 	}
 	p.number++
 	l := p.l
-	l.startPage(p.resumed)
+	l.startPage(p.resumed && !l.forced)
+	l.forced = false
 	res, err := l.block(p.root, p.tok, cbox{x: 0, w: l.width}, 0)
 	if err != nil {
 		return nil, err

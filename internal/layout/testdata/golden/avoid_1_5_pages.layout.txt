@@ -1,0 +1,19 @@
+page 1 size 800x600 area 0,0 800x600 scale 1
+  block html 0,0 800x600 more
+    block body 0,0 800x600 more
+      block div 0,0 800x100
+        line 0,0 800x100 base 53.5 "x"
+      block div 0,100 800x500 more
+        line 0,100 800x100 base 153.5 "x"
+        line 0,200 800x100 base 253.5 "x"
+        line 0,300 800x100 base 353.5 "x"
+        line 0,400 800x100 base 453.5 "x"
+        line 0,500 800x100 base 553.5 "x"
+page 2 size 800x600 area 0,0 800x600 scale 1
+  block html 0,0 800x400 cont
+    block body 0,0 800x400 cont
+      block div 0,0 800x400 cont
+        line 0,0 800x100 base 53.5 "x"
+        line 0,100 800x100 base 153.5 "x"
+        line 0,200 800x100 base 253.5 "x"
+        line 0,300 800x100 base 353.5 "x"

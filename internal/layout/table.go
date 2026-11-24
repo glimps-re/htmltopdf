@@ -398,10 +398,12 @@ type scratch struct {
 	pageEmpty bool
 	bottom    float64
 	para      *paragraph
+	unbounded bool
 }
 
 func (l *layouter) enterScratch() scratch {
-	s := scratch{y: l.y, pend: l.pend, waiting: l.waiting, truncate: l.truncate, pageEmpty: l.pageEmpty, bottom: l.bottom, para: l.para}
+	s := scratch{y: l.y, pend: l.pend, waiting: l.waiting, truncate: l.truncate, pageEmpty: l.pageEmpty, bottom: l.bottom, para: l.para, unbounded: l.unbounded}
+	l.unbounded = true
 	l.y, l.pend, l.waiting, l.truncate = 0, margins{}, nil, false
 	l.pageEmpty, l.bottom, l.para = true, css.MaxLengthPx, nil
 	return s
@@ -409,6 +411,7 @@ func (l *layouter) enterScratch() scratch {
 
 func (l *layouter) leaveScratch(s scratch) {
 	l.y, l.pend, l.waiting, l.truncate, l.pageEmpty, l.bottom, l.para = s.y, s.pend, s.waiting, s.truncate, s.pageEmpty, s.bottom, s.para
+	l.unbounded = s.unbounded
 }
 
 // layCell lays out the content of a cell in a border box of width w at x, from
@@ -816,6 +819,14 @@ func (l *layouter) chooseCut(row *tableRow, cur *rowState, placed, placedBody in
 			return cutNothing, 0
 		}
 		return cutBreak, 0
+	}
+	if row.box.Style.BreakInside == style.BreakAvoid && cur.from == 0 && cur.rf.rect.H+2*sv <= l.bottom {
+		switch {
+		case placedBody > 0:
+			return cutBreak, 0
+		case !emptyAtEntry:
+			return cutNothing, 0
+		}
 	}
 	if !cur.hasCuts {
 		cur.iv, cur.hasCuts = lineIntervals(cur.rf), true
