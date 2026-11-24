@@ -44,7 +44,7 @@ func Build(d *dom.Document, st Styler, b *budget.Budget) (*Box, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bd.block(0, cs, "")
+	return bd.block(0, KindBlock, cs, "")
 }
 
 type builder struct {
@@ -98,12 +98,13 @@ func (bd *builder) elementBox(kind Kind, el *dom.Element, cs *style.Computed, hr
 	return &Box{Kind: kind, Tag: el.Tag, Style: cs, ID: el.ID, Href: href}, nil
 }
 
-// block builds the block box of element e and its children. Only the root can
-// have display none here (element filters the others): it gives an empty box.
-// A root whose display is inline is built as a block with its inline style.
-func (bd *builder) block(e int32, cs *style.Computed, href string) (*Box, error) {
+// block builds the box of kind KindBlock or KindInlineBlock of element e and
+// its children. Only the root can have display none here (element filters the
+// others): it gives an empty box. A root whose display is inline is built as a
+// block with its inline style.
+func (bd *builder) block(e int32, kind Kind, cs *style.Computed, href string) (*Box, error) {
 	el := &bd.d.Elements[e]
-	bx, err := bd.elementBox(KindBlock, el, cs, href)
+	bx, err := bd.elementBox(kind, el, cs, href)
 	if err != nil || cs.Display == style.DisplayNone {
 		return bx, err
 	}
@@ -168,8 +169,10 @@ func (bd *builder) element(f *flow, e int32, parent *style.Computed, href string
 		return bd.lineBreak(f, &Box{Kind: KindLineBreak, Tag: el.Tag, Style: cs, ID: el.ID, Href: href})
 	case cs.Display == style.DisplayInline:
 		return bd.inline(f, el, cs, href)
+	case cs.Display == style.DisplayInlineBlock:
+		return bd.inlineBlock(f, e, cs, href)
 	}
-	bx, err := bd.block(e, cs, href)
+	bx, err := bd.block(e, KindBlock, cs, href)
 	if err != nil {
 		return err
 	}
@@ -215,6 +218,20 @@ func (bd *builder) inline(f *flow, el *dom.Element, cs *style.Computed, href str
 		return err
 	}
 	f.open = f.open[:len(f.open)-1]
+	return nil
+}
+
+// inlineBlock adds the atomic inline of element e. It is content for the white
+// space of the line: a space before it is kept, one after it is not collapsed
+// into it.
+func (bd *builder) inlineBlock(f *flow, e int32, cs *style.Computed, href string) error {
+	bx, err := bd.block(e, KindInlineBlock, cs, href)
+	if err != nil {
+		return err
+	}
+	f.trailing = nil
+	f.add(bx)
+	f.ws = wsState{}
 	return nil
 }
 
@@ -307,11 +324,14 @@ func prune(boxes []*Box) []*Box {
 
 // finish sets the children of the container: inline-level boxes directly when
 // there is no block-level child, otherwise blocks and anonymous blocks around
-// the runs.
+// the runs. A flex or grid container always gets block-level children: every
+// run is wrapped, except those that are white space only, which are dropped
+// (CSS Flexbox 1 §4).
 func (bd *builder) finish(f *flow) error {
 	f.flushRun()
 	c := f.container
-	if !f.hasBlock {
+	wrap := f.hasBlock || isFlexOrGrid(f.style.Display)
+	if !wrap {
 		for _, it := range f.items {
 			c.Children = append(c.Children, it.run...)
 		}
@@ -320,6 +340,9 @@ func (bd *builder) finish(f *flow) error {
 	for _, it := range f.items {
 		if it.block != nil {
 			c.Children = append(c.Children, it.block)
+			continue
+		}
+		if isFlexOrGrid(f.style.Display) && allBlank(it.run) {
 			continue
 		}
 		if f.anon == nil {
@@ -335,6 +358,22 @@ func (bd *builder) finish(f *flow) error {
 		c.Children = append(c.Children, &Box{Kind: KindBlock, Anonymous: true, Style: f.anon, Children: it.run})
 	}
 	return nil
+}
+
+func isFlexOrGrid(d style.Display) bool {
+	return d == style.DisplayFlex || d == style.DisplayGrid
+}
+
+// transformText applies text-transform with Go's simple case mapping, which
+// keeps a ß as it is (Chrome gives SS).
+func transformText(s string, t style.TextTransform) string {
+	switch t {
+	case style.TransformUppercase:
+		return strings.ToUpper(s)
+	case style.TransformLowercase:
+		return strings.ToLower(s)
+	}
+	return s
 }
 
 // textBoxes is the textSink that turns processed text into boxes.
@@ -354,7 +393,7 @@ func (t *textBoxes) text(s string) {
 	if t.err = t.bd.chargeBox(); t.err != nil {
 		return
 	}
-	tb := &Box{Kind: KindText, Style: t.style, Href: t.href, Text: s}
+	tb := &Box{Kind: KindText, Style: t.style, Href: t.href, Text: transformText(s, t.style.TextTransform)}
 	t.f.add(tb)
 	t.f.trailing = nil
 	if t.collapse && strings.HasSuffix(s, " ") {
@@ -370,8 +409,7 @@ func (t *textBoxes) lineBreak() error {
 }
 
 // text adds the text of a node, its white space processed as cs.WhiteSpace
-// says. Only normal and pre exist in M1: style rejects the other keywords, and
-// they come back, with their tests, in M2-01.
+// says: nowrap collapses like normal, it only affects line breaking.
 func (bd *builder) text(f *flow, data string, cs *style.Computed, href string) error {
 	pre := cs.WhiteSpace == style.WhiteSpacePre
 	sink := &textBoxes{bd: bd, f: f, style: cs, href: href, collapse: !pre}

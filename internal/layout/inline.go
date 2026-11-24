@@ -254,7 +254,7 @@ func (l *layouter) primaryFace(st *style.Computed) (*text.Face, float32) {
 }
 
 func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecoration, cbw float64) error {
-	for _, c := range boxes {
+	for i, c := range boxes {
 		switch c.Kind {
 		case box.KindText:
 			if err := l.textUnit(p, c, decor); err != nil {
@@ -262,7 +262,16 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			}
 		case box.KindLineBreak:
 			p.units = append(p.units, unit{kind: uBreak})
-		case box.KindInline:
+		case box.KindBlock:
+			// Only inside an inline-block, which is laid out as an inline box
+			// until atomic inlines exist: its blocks flow as lines.
+			if err := l.flatten(p, c.Children, decor, cbw); err != nil {
+				return err
+			}
+			if i < len(boxes)-1 {
+				p.units = append(p.units, unit{kind: uBreak})
+			}
+		case box.KindInline, box.KindInlineBlock:
 			cst := c.Style
 			d := decor | cst.TextDecoration
 			openW, closeW := inlineEdges(cst, cbw, !c.Continuation)

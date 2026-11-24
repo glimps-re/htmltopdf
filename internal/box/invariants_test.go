@@ -30,7 +30,7 @@ func checkTree(tb testing.TB, b *Box) {
 		if len(b.Children) != 0 {
 			tb.Fatal("line break with children")
 		}
-	case KindBlock:
+	case KindBlock, KindInlineBlock:
 		blocks, inlines := 0, 0
 		for _, c := range b.Children {
 			if c.Kind == KindBlock {
@@ -119,7 +119,9 @@ func FuzzBuild(f *testing.F) {
 	for _, s := range []string{
 		"<p>a <b>b</b></p>", "<span>a<div>b</div>c</span>", "<pre>a\n\tb</pre>", "<a href='javascript:x'>l</a>", "<svg><text>t</text></svg>",
 		"<div>a<p>b</p>c</div>", "<ul><li>a<li>b</ul>", "<table><tr><td>x</table>", "<p style='white-space:pre-line'>a  \n b</p>",
-		"<i><b><u>x<div>y</div>z</u></b></i>", "text <br> more<br><br>", "<div style='display:none'>x</div>y",
+		"<i><b><u>x<div>y</div>z</u></b></i>", "<p>a <span style='display:inline-block'>b<div>c</div></span> d</p>",
+		"<div style='display:flex'> a <b>b</b><i> </i><div>c</div>d</div>", "<div style='display:grid'> <p>x</p> \n </div>",
+		"<p style='text-transform:uppercase'>é ß <a href='https://a.test' id=i>x</a></p>", "text <br> more<br><br>", "<div style='display:none'>x</div>y",
 	} {
 		f.Add(s)
 	}

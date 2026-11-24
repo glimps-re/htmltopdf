@@ -25,7 +25,7 @@ type Kind uint8
 // Box kinds.
 const (
 	// KindBlock is a block-level box; Style.Display keeps the computed display,
-	// which tells list items and table parts apart (M1-16 reads it).
+	// which tells list items, table parts and flex or grid containers apart.
 	KindBlock Kind = iota + 1
 	// KindInline is an inline box.
 	KindInline
@@ -33,6 +33,10 @@ const (
 	KindText
 	// KindLineBreak is a forced line break (br, or a preserved newline).
 	KindLineBreak
+	// KindInlineBlock is an atomic inline (display: inline-block): inline-level
+	// for its parent, a block container for its children, which are either
+	// block-level only or inline-level only.
+	KindInlineBlock
 )
 
 // String returns the name of the kind, as the dump shows it.
@@ -46,6 +50,8 @@ func (k Kind) String() string {
 		return "text"
 	case KindLineBreak:
 		return "br"
+	case KindInlineBlock:
+		return "inline-block"
 	}
 	return "kind(" + strconv.Itoa(int(k)) + ")"
 }
