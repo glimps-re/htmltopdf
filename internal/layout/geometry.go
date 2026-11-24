@@ -62,9 +62,7 @@ func geometry(st *style.Computed, cb cbox) geom {
 	} else {
 		g.w = contentWidth(st, px(st.Width, cb.w), extra)
 	}
-	if st.MaxWidth.Kind != style.DimNone {
-		g.w = math.Min(g.w, contentWidth(st, px(st.MaxWidth, cb.w), extra))
-	}
+	g.w = capWidth(st, g.w, cb.w, extra)
 	g.borderW = g.w + extra
 	free := cb.w - g.borderW - g.ml - g.mr
 	switch {
@@ -80,6 +78,24 @@ func geometry(st *style.Computed, cb cbox) geom {
 		g.mr += free
 	}
 	return g
+}
+
+// capWidth applies max-width to the content width w of a box whose padding and
+// border take extra px.
+func capWidth(st *style.Computed, w, base, extra float64) float64 {
+	if st.MaxWidth.Kind == style.DimNone {
+		return w
+	}
+	return math.Min(w, contentWidth(st, px(st.MaxWidth, base), extra))
+}
+
+// autoMargin resolves a margin of a box that has no free space to share (an
+// atomic inline, a flex item): auto is 0.
+func autoMargin(d style.Dim, base float64) float64 {
+	if d.Kind == style.DimAuto {
+		return 0
+	}
+	return clampCoord(px(d, base))
 }
 
 func contentWidth(st *style.Computed, specified, extra float64) float64 {

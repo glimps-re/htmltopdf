@@ -39,6 +39,8 @@ const (
 	// padding, border and margin and its decoration.
 	itemOpen
 	itemClose
+	// itemAtom is an atomic inline: its fragment is laid out as a block.
+	itemAtom
 )
 
 // lineItem is a piece of a line: a text run or an inline box edge.
@@ -56,4 +58,6 @@ type lineItem struct {
 	// margin is the horizontal margin of an inline box edge, which the
 	// background and borders do not cover.
 	margin float64
+	// atom is set for an itemAtom.
+	atom *atomBox
 }

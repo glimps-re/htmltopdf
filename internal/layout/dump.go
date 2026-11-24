@@ -59,5 +59,11 @@ func dumpFrag(sb *strings.Builder, f *frag, depth int) {
 			}
 		}
 		fmt.Fprintf(sb, "%s  line %s,%s %sx%s base %s %q\n", ind, num(ln.rect.X), num(ln.rect.Y), num(ln.rect.W), num(ln.rect.H), num(ln.baseline), t.String())
+		for _, it := range ln.items {
+			if it.atom != nil {
+				fmt.Fprintf(sb, "%s  atom base %s\n", ind, num(it.atom.base))
+				dumpFrag(sb, it.atom.f, depth+2)
+			}
+		}
 	}
 }

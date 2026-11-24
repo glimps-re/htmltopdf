@@ -172,6 +172,9 @@ type level struct {
 	pre, post    float64
 	childrenDone bool
 	cur          cursor
+	// off is the height of the line, taller than a page, already placed on the
+	// previous pages: the line at cur resumes there.
+	off float64
 }
 
 type result struct {

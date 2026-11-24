@@ -149,6 +149,13 @@ func emitLine(ln *lineFrag, out display.List) display.List {
 			out = append(out, t)
 		}
 	}
+	// Atomic inlines are painted after the text of their line: they are
+	// inline-blocks, painted atomically above the inline content (CSS 2.1 App. E).
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			out = emit(a.f, out)
+		}
+	}
 	return emitLinks(ln, out)
 }
 

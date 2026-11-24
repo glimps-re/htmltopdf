@@ -131,10 +131,9 @@ func TestWhiteSpace(t *testing.T) {
 two  spaced
 three</pre>`, opts{extra: smallPage, css: "body { margin: 0 } p { margin: 0 }"})
 	pages := r.all(t)
-	// nowrap is not supported yet: the declaration is dropped and the text wraps.
 	ps := frags(pages, "p")[0]
-	if len(ps.lines) != 4 {
-		t.Errorf("nowrap is dropped, so the text wraps: %d lines", len(ps.lines))
+	if len(ps.lines) != 1 || ps.lines[0].items[0].w <= 50 {
+		t.Errorf("nowrap text stays on one overflowing line: %d lines", len(ps.lines))
 	}
 	pre := frags(pages, "pre")[0]
 	if len(pre.lines) != 3 {

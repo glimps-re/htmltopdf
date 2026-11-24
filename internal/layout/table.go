@@ -445,28 +445,9 @@ func (l *layouter) layCell(tl *tableLayout, c *tableCell, x, w float64, decor st
 	return f, nil
 }
 
-func shiftContent(f *frag, dy float64) {
-	if dy == 0 {
-		return
-	}
-	for _, c := range f.children {
-		shiftFrag(c, dy)
-	}
-	for _, ln := range f.lines {
-		ln.rect.Y += dy
-		ln.baseline += dy
-		for i := range ln.items {
-			if t := ln.items[i].text; t != nil {
-				t.Baseline += dy
-			}
-		}
-	}
-}
+func shiftContent(f *frag, dy float64) { moveContent(f, 0, dy) }
 
-func shiftFrag(f *frag, dy float64) {
-	f.rect.Y += dy
-	shiftContent(f, dy)
-}
+func shiftFrag(f *frag, dy float64) { moveFrag(f, 0, dy) }
 
 // firstBaseline is the y of the first line of f, or the bottom of its content.
 func firstBaseline(f *frag) float64 {
@@ -664,18 +645,9 @@ func cutFrag(f *frag, from, to float64) *frag {
 		}
 	}
 	for _, ln := range f.lines {
-		if ln.baseline < from || ln.baseline >= to {
-			continue
+		if nl := cutLine(ln, from, to); nl != nil {
+			nf.lines = append(nf.lines, nl)
 		}
-		nl := *ln
-		nl.items = append([]lineItem(nil), ln.items...)
-		for i := range nl.items {
-			if t := nl.items[i].text; t != nil {
-				c := *t
-				nl.items[i].text = &c
-			}
-		}
-		nf.lines = append(nf.lines, &nl)
 	}
 	return &nf
 }

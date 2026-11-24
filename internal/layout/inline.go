@@ -50,6 +50,8 @@ type shapedText struct {
 	ends      []int32
 	lastBreak bool
 	ls        float64
+	// nowrap: the text never wraps (white-space: nowrap or pre).
+	nowrap bool
 }
 
 // locate returns the run and the index in it of the global glyph g.
@@ -140,6 +142,8 @@ const (
 	uOpen
 	uClose
 	uBreak
+	// uAtom is an atomic inline: laid out as a block, placed as one box.
+	uAtom
 )
 
 // info is what a text box or an inline box contributes to its lines, computed
@@ -162,8 +166,9 @@ type unit struct {
 	kind unitKind
 	st   *shapedText
 	info *info
-	// w is the advance of an inline box edge.
-	w float64
+	// w is the advance of an inline box edge, or the margin box width of an atom.
+	w    float64
+	atom *atomBox
 }
 
 // cursor is a position in a paragraph: a unit and, in a text unit, a byte
@@ -181,9 +186,14 @@ type paragraph struct {
 	align                 style.TextAlign
 	// breakWord: a word wider than the line may be broken anywhere.
 	breakWord bool
-	// collapsible: the text wraps at spaces and trailing spaces are removed
-	// (white-space: normal); false for pre.
+	// collapsible: white space collapses and trailing spaces are removed
+	// (white-space: normal and nowrap); false for pre.
 	collapsible bool
+	// nowrap: no soft wrap opportunity, around atomic inlines either.
+	nowrap bool
+	// mid is the height of the middle of the lowercase letters above the
+	// baseline, for vertical-align: middle (half of an x-height of 0.5 em).
+	mid float64
 }
 
 // lineHeightParts returns the contribution above and below the baseline of a
@@ -224,6 +234,8 @@ func (l *layouter) paragraphOf(b *box.Box, decor style.TextDecoration, cbw float
 		align:       st.TextAlign,
 		breakWord:   st.OverflowWrap != style.WrapNormal,
 		collapsible: st.WhiteSpace != style.WhiteSpacePre,
+		nowrap:      st.WhiteSpace != style.WhiteSpaceNormal,
+		mid:         st.FontSize / 4,
 	}
 	_, p.strutTop, p.strutBottom = l.boxMetrics(st)
 	if err := l.flatten(p, b.Children, decor, cbw); err != nil {
@@ -254,7 +266,7 @@ func (l *layouter) primaryFace(st *style.Computed) (*text.Face, float32) {
 }
 
 func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecoration, cbw float64) error {
-	for i, c := range boxes {
+	for _, c := range boxes {
 		switch c.Kind {
 		case box.KindText:
 			if err := l.textUnit(p, c, decor); err != nil {
@@ -262,16 +274,13 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			}
 		case box.KindLineBreak:
 			p.units = append(p.units, unit{kind: uBreak})
-		case box.KindBlock:
-			// Only inside an inline-block, which is laid out as an inline box
-			// until atomic inlines exist: its blocks flow as lines.
-			if err := l.flatten(p, c.Children, decor, cbw); err != nil {
+		case box.KindInlineBlock:
+			un, err := l.atomUnit(p, c, decor, cbw)
+			if err != nil {
 				return err
 			}
-			if i < len(boxes)-1 {
-				p.units = append(p.units, unit{kind: uBreak})
-			}
-		case box.KindInline, box.KindInlineBlock:
+			p.units = append(p.units, un)
+		case box.KindInline:
 			cst := c.Style
 			d := decor | cst.TextDecoration
 			openW, closeW := inlineEdges(cst, cbw, !c.Continuation)
@@ -318,25 +327,36 @@ func inlineEdges(st *style.Computed, cbw float64, first bool) (open, closeW floa
 	return open, closeW
 }
 
-// textUnit shapes a text box. Its segments are not materialized: the unit keeps
-// the break offsets and the line breaker walks them.
+// textUnit adds the shaped text box c to the paragraph.
 func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration) error {
+	sh, err := l.shapeBox(c, decor)
+	if err != nil || sh == nil {
+		return err
+	}
+	p.units = append(p.units, unit{kind: uText, st: sh, info: sh.info})
+	return nil
+}
+
+// shapeBox shapes a text box. Its segments are not materialized: the result
+// keeps the break offsets and the line breaker walks them. It is nil for a box
+// without anything to draw.
+func (l *layouter) shapeBox(c *box.Box, decor style.TextDecoration) (*shapedText, error) {
 	st := c.Style
 	if c.Text == "" || st.FontSize <= 0 {
-		return nil
+		return nil, nil
 	}
 	// Shaping is charged by the shaper (glyphs); the rest of the work by length.
 	if err := l.b.Charge(budget.Work, int64(len(c.Text)/64+1)); err != nil {
-		return err
+		return nil, err
 	}
 	runs, err := l.sh.Shape(c.Text, fontSpec(st), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(runs) == 0 {
-		return nil
+		return nil, nil
 	}
-	sh := &shapedText{text: c.Text, runs: runs, ls: st.LetterSpacing}
+	sh := &shapedText{text: c.Text, runs: runs, ls: st.LetterSpacing, nowrap: st.WhiteSpace != style.WhiteSpaceNormal}
 	sh.first = make([]int, len(runs)+1)
 	sh.clusters = make([]int32, len(runs))
 	var asc, desc, gap float64
@@ -353,18 +373,18 @@ func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 	top, bottom := lineHeightParts(st, asc, desc, gap)
 	sh.info = &info{box: c, href: c.Href, decor: decor, color: st.Color, asc: asc, desc: desc, top: top, bottom: bottom}
 
-	wrap := st.WhiteSpace != style.WhiteSpacePre
+	wrap := !sh.nowrap
 	l.breaks = l.breaks[:0]
 	if wrap {
 		l.breaks = text.Breaks(c.Text, l.breaks)
 	}
 	if err := l.b.Charge(budget.Work, int64(len(l.breaks))); err != nil {
-		return err
+		return nil, err
 	}
 	if wrap && st.WordBreak == style.WordBreakAll {
 		// One end per rune at most.
 		if err := l.b.Charge(budget.Work, int64(len(c.Text))); err != nil {
-			return err
+			return nil, err
 		}
 		sh.ends = appendBreakAll(make([]int32, 0, len(c.Text)+1), c.Text, l.breaks)
 	} else {
@@ -375,8 +395,7 @@ func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 	}
 	sh.ends = append(sh.ends, clamp32(len(c.Text)))
 	sh.lastBreak = wrap && c.Text[len(c.Text)-1] == ' '
-	p.units = append(p.units, unit{kind: uText, st: sh, info: sh.info})
-	return nil
+	return sh, nil
 }
 
 // seg is a piece of the line being built.
@@ -434,6 +453,22 @@ loop:
 			w += un.w
 			u, off = u+1, 0
 			continue
+		case uAtom:
+			if hasText && !p.nowrap && segs[len(segs)-1].un.kind != uOpen {
+				lastBreak, lastCur = len(segs), cursor{unit: u}
+			}
+			if w+un.w > avail+1e-6 && lastBreak >= 0 {
+				segs, u, off = segs[:lastBreak], lastCur.unit, lastCur.off
+				break loop
+			}
+			segs = append(segs, seg{un: un, w: un.w})
+			w += un.w
+			hasText = true
+			if !p.nowrap {
+				lastBreak, lastCur = len(segs), cursor{unit: u + 1}
+			}
+			u, off = u+1, 0
+			continue
 		}
 		st := un.st
 		start, end, last := st.segment(off)
@@ -473,7 +508,7 @@ loop:
 			segs, u, off = segs[:lastBreak], lastCur.unit, lastCur.off
 			break loop
 		}
-		if p.breakWord {
+		if p.breakWord && !st.nowrap {
 			k := l.fitCluster(st, a, end, avail-w)
 			if k <= a && !hasText {
 				k = l.nextCluster(st, a, end)
@@ -555,6 +590,9 @@ func (l *layouter) finishLine(p *paragraph, ln *lineOut, segs []seg, strip bool)
 	if strip {
 		for i := len(segs) - 1; i >= 0; i-- {
 			s := &segs[i]
+			if s.un.kind == uAtom {
+				break
+			}
 			if s.un.kind != uText {
 				continue
 			}
@@ -570,6 +608,7 @@ func (l *layouter) finishLine(p *paragraph, ln *lineOut, segs []seg, strip bool)
 		}
 	}
 	ln.top, ln.bottom = p.strutTop, p.strutBottom
+	var tallTop, tallBottom float64
 	x := 0.0
 	for i := 0; i < len(segs); i++ {
 		s := segs[i]
@@ -577,6 +616,19 @@ func (l *layouter) finishLine(p *paragraph, ln *lineOut, segs []seg, strip bool)
 		switch un.kind {
 		case uOpen, uClose:
 			ln.items = append(ln.items, edgeItem(un, x, s.w))
+			x += s.w
+		case uAtom:
+			a := un.atom
+			above, below := a.extents()
+			switch {
+			case !a.spansLine():
+				ln.top, ln.bottom = math.Max(ln.top, above), math.Max(ln.bottom, below)
+			case a.valign == style.VAlignTop:
+				tallTop = math.Max(tallTop, above+below)
+			default:
+				tallBottom = math.Max(tallBottom, above+below)
+			}
+			ln.items = append(ln.items, lineItem{kind: itemAtom, x: x, w: s.w, atom: a})
 			x += s.w
 		default:
 			// Merge the following pieces that continue this one.
@@ -592,6 +644,12 @@ func (l *layouter) finishLine(p *paragraph, ln *lineOut, segs []seg, strip bool)
 				x += it.w
 			}
 		}
+	}
+	if h := ln.height(); tallTop > h {
+		ln.bottom += tallTop - h
+	}
+	if h := ln.height(); tallBottom > h {
+		ln.top += tallBottom - h
 	}
 	ln.w = x
 }

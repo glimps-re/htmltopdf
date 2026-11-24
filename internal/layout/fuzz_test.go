@@ -18,6 +18,9 @@ func FuzzLayout(f *testing.F) {
 		"<h2 style='break-after:avoid'>h</h2><h3 style='break-after:avoid'>h</h3><p style='break-inside:avoid'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h</p>",
 		"<table><tr style='break-inside:avoid'><td>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h<br>i<br>j</td></tr><tr style='break-inside:avoid'><td>x</td></tr></table>",
 		"<div style='break-inside:avoid'><div style='break-inside:avoid'><h2 style='break-before:avoid'>a</h2><p>b</p></div></div>",
+		"<p>a <span style='display:inline-block;padding:2px 9px;margin:0 1e9px 3px;background:red;border-radius:9px'>pill</span> b <span style='display:inline-block;vertical-align:middle'>c d e f</span></p>",
+		"<div style='width:50px;white-space:nowrap'><span style='display:inline-block;width:1e9px'>a</span> b c <span style='display:inline-block;vertical-align:top;overflow:hidden'>x<br>y</span></div>",
+		"<span style='display:inline-block'><span style='display:inline-block'><span style='display:inline-block;word-break:break-all;overflow-wrap:anywhere'>abc def</span></span><table><tr><td>t</table></span>",
 		"<p style='letter-spacing:1e9px'>abc</p>", "<span style='margin:0 1e9px;padding:1e9px'>x</span>",
 	} {
 		f.Add(s, "p { margin: 3px }")

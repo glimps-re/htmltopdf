@@ -50,6 +50,13 @@ func walk(f *frag, fn func(*frag)) {
 	for _, c := range f.children {
 		walk(c, fn)
 	}
+	for _, ln := range f.lines {
+		for _, it := range ln.items {
+			if it.atom != nil {
+				walk(it.atom.f, fn)
+			}
+		}
+	}
 }
 
 // frags returns the fragments of the elements with the given tag, in order, on

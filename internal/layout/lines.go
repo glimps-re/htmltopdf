@@ -1,6 +1,8 @@
 package layout
 
 import (
+	"math"
+
 	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/display"
 	"github.com/glimps-re/htmltopdf/internal/style"
@@ -13,7 +15,7 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 	if err != nil {
 		return complete, nil, err
 	}
-	cur := lv.cur
+	cur, off := lv.cur, lv.off
 	placed, flushed := 0, false
 	// The margins adjoining the first line are applied before it is known to
 	// fit: if it does not, they belong to the break, and the state the flush
@@ -41,7 +43,17 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			p.releaseBefore(cur)
 			return partial, []level{{cur: cur}}, nil
 		}
-		l.place(f, &ln, inner, p.align)
+		if l.pageEmpty && ln.hasAtom() && ln.height() > l.bottom {
+			start := l.y
+			if l.sliceLine(f, &ln, inner, p.align, start-off) {
+				l.pend, l.truncate = margins{}, true
+				p.releaseBefore(cur)
+				return partial, []level{{cur: cur, off: off + l.bottom - start}}, nil
+			}
+		} else {
+			l.place(f, &ln, inner, p.align)
+		}
+		off = 0
 		placed++
 		cur = next
 		if cur.unit >= len(p.units) {
@@ -54,6 +66,40 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 
 // place puts the line at the cursor, aligned in the content box.
 func (l *layouter) place(f *frag, ln *lineOut, inner cbox, align style.TextAlign) {
+	f.lines = append(f.lines, l.build(ln, inner, align, l.y))
+	l.y += ln.height()
+	l.pageEmpty = false
+}
+
+// sliceLine places on the page the part of the line ln that fits it, for a line
+// taller than a page area (an atomic inline taller than a page: design §3.2,
+// a monolithic box is sliced). The line starts at y0, above the page when it
+// resumes. It reports whether part of it is left for the next page.
+func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0 float64) bool {
+	end := y0 + ln.height()
+	lf := l.build(ln, inner, align, y0)
+	piece := cutFrag(&frag{lines: []*lineFrag{lf}}, l.y, math.Min(end, l.bottom))
+	f.lines = append(f.lines, piece.lines...)
+	l.pageEmpty = false
+	if end > l.bottom+cutEps {
+		l.y = l.bottom
+		return true
+	}
+	l.y = end
+	return false
+}
+
+func (ln *lineOut) hasAtom() bool {
+	for i := range ln.items {
+		if ln.items[i].atom != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// build makes the line box at y, aligned in the content box.
+func (l *layouter) build(ln *lineOut, inner cbox, align style.TextAlign, y float64) *lineFrag {
 	h := ln.height()
 	off := 0.0
 	free := inner.w - ln.w
@@ -67,8 +113,8 @@ func (l *layouter) place(f *frag, ln *lineOut, inner cbox, align style.TextAlign
 		off = 0
 	}
 	lf := &lineFrag{
-		rect:     display.Rect{X: inner.x, Y: l.y, W: inner.w, H: h},
-		baseline: l.y + ln.top,
+		rect:     display.Rect{X: inner.x, Y: y, W: inner.w, H: h},
+		baseline: y + ln.top,
 		items:    ln.items,
 	}
 	for i := range lf.items {
@@ -77,10 +123,11 @@ func (l *layouter) place(f *frag, ln *lineOut, inner cbox, align style.TextAlign
 		if it.text != nil {
 			it.text.X, it.text.Baseline = it.x, lf.baseline
 		}
+		if a := it.atom; a != nil {
+			a.moveTo(it.x+a.ml, a.top(y, h, ln.top))
+		}
 	}
-	f.lines = append(f.lines, lf)
-	l.y += h
-	l.pageEmpty = false
+	return lf
 }
 
 // dropParagraph forgets the finished paragraph. The reused segment buffer is
@@ -103,6 +150,7 @@ type flushState struct {
 }
 
 func (l *layouter) save(s *flushState) {
+	s.tops, s.set = s.tops[:0], s.set[:0]
 	s.y, s.pend, s.truncate = l.y, l.pend, l.truncate
 	s.waiting = append(s.waiting[:0], l.waiting...)
 	for _, f := range l.waiting {

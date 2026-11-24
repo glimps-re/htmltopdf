@@ -53,6 +53,7 @@ type layouter struct {
 	primaries map[*style.Computed]primary
 	ext       map[extKey]extVal
 	tables    map[*box.Box]*tableLayout
+	sizes     map[*box.Box]sizeEntry
 }
 
 func newLayouter(root *box.Box, cfg Config, width, height float64) *layouter {

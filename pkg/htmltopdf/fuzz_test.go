@@ -21,6 +21,8 @@ func FuzzRender(f *testing.F) {
 		"<table><tr><td>a<td>b</table>", "<div style='width:1e999px;margin:-99999px'>x</div>",
 		"<a href='javascript:1'>x</a><img src=x>", "<style>@page{size:1px 1px;margin:99in}</style>x",
 		"<p style='font-size:0;line-height:-1;padding:1e9px'>\x00\xff\xfe</p>",
+		"<p>a <span style='display:inline-block;padding:2px 6px;border-radius:9px;background:#eee;margin:0 4px 3px 0'>pill</span> <span style='display:inline-block;vertical-align:middle;white-space:nowrap'>b c d</span></p>",
+		"<div style='width:40px;white-space:nowrap'><span style='display:inline-block'><span style='display:inline-block;width:1e9px;overflow:hidden'>x<br>y</span></span> z</div><table><tr><td><span style='display:inline-block'>t</span></table>",
 		"<title>\x00)>></title><body>\u202e\ufffe", "<div><div><div>" + string(bytes.Repeat([]byte("<b>"), 2000)),
 	} {
 		f.Add([]byte(s))

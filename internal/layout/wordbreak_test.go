@@ -88,6 +88,11 @@ func lineTexts(pages []*Page) []string {
 				}
 			}
 			out = append(out, sb.String())
+			for _, it := range ln.items {
+				if it.atom != nil {
+					walk(it.atom.f)
+				}
+			}
 		}
 	}
 	for _, pg := range pages {
