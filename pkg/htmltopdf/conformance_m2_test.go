@@ -121,8 +121,6 @@ type m2Row struct {
 	current  int
 	textLoss int
 	gating   bool
-	// provisional explains a current that is a temporary ceiling, not a record.
-	provisional string
 }
 
 // bar returns the allowed page range.
@@ -148,21 +146,11 @@ func (r m2Row) excess(n int) float64 {
 // strips from the stream as a footer.
 var m2Rows = []m2Row{
 	{name: "01S", template: "01-modern", size: testcorpus.Small, chrome: 3, tol: 1, absolute: true, current: 3, gating: true},
-	{name: "01L", template: "01-modern", size: testcorpus.Large, chrome: 21, tol: 0.15, current: 22, gating: true},
+	{name: "01L", template: "01-modern", size: testcorpus.Large, chrome: 21, tol: 0.15, current: 21, gating: true},
 	{name: "02S", template: "02-executive", size: testcorpus.Small, chrome: 5, tol: 1, absolute: true, current: 5, gating: true},
 	{name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 37, gating: true},
 	{name: "03vS", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 2, textLoss: 1, gating: true},
-	{
-		name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 16, textLoss: 1,
-		provisional: "floor of 16 until M3-01 (::before/::after, counters); the flex of .archive-head is Chrome-faithful",
-	},
-}
-
-func provisionalNote(r m2Row) string {
-	if r.provisional == "" {
-		return ""
-	}
-	return " (" + r.provisional + ")"
+	{name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 20, textLoss: 1, gating: true},
 }
 
 func TestM2PageCounts(t *testing.T) {
@@ -176,7 +164,7 @@ func TestM2PageCounts(t *testing.T) {
 			case r.gating && ex > 0:
 				t.Errorf("%s: %d pages, gating row outside the bar %.2f-%.2f (Chrome %d)", r.name, res.Pages, lo, hi, r.chrome)
 			case ex > base:
-				t.Errorf("%s: %d pages is %.2f outside the bar, further than the recorded %d (%.2f outside); Chrome %d%s", r.name, res.Pages, ex, r.current, base, r.chrome, provisionalNote(r))
+				t.Errorf("%s: %d pages is %.2f outside the bar, further than the recorded %d (%.2f outside); Chrome %d", r.name, res.Pages, ex, r.current, base, r.chrome)
 			case ex == 0 && !r.gating:
 				t.Logf("%s is inside the bar: make it gating", r.name)
 			}
@@ -588,5 +576,41 @@ func BenchmarkM2Render(b *testing.B) {
 			}
 			b.ReportMetric(float64(maxPeak)/(1<<20), "heap-max-MiB")
 		})
+	}
+}
+
+// M2_OUT_DIR=<dir> writes the PDFs of the report corpus the M2 way for the
+// side-by-side review: 00 with the host-connector options, 01-03 with the
+// paper-only ones (03 as the portrait one-column variant).
+func TestM2WriteCorpusPDFs(t *testing.T) {
+	dir := os.Getenv("M2_OUT_DIR")
+	if dir == "" {
+		t.Skip("M2_OUT_DIR is not set")
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := root.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	write := func(name string, data []byte) {
+		if err := root.WriteFile(name+".pdf", data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, size := range []testcorpus.Size{testcorpus.Small, testcorpus.Large} {
+		_, data, _ := renderReport(t, "00-host-connector", size)
+		write(testcorpus.FixtureName("00-host-connector", size), data)
+	}
+	for _, r := range m2Rows {
+		_, data, _ := renderM2(t, r.template, r.size)
+		name := testcorpus.FixtureName(r.template, r.size)
+		if r.template == analyst {
+			name += "_portrait1col"
+		}
+		write(name, data)
 	}
 }

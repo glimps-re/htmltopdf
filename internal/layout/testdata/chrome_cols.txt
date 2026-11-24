@@ -1,0 +1,51 @@
+# Chrome column widths of a fixed table (M2-07): one JSON object per line, the case and the x and width of
+# each cell of the first row relative to the table, as Chromium 156.0.8078.73 laid them out (headless, getBoundingClientRect).
+# Source: tmp/colprobe/probe.html, 2026-11-24 (dev-only, never committed). Wrapper of 800px, table-layout fixed,
+# cells without padding. Percentages are of the table width minus the spacing (cases "separate sp10").
+# Deliberate deviation: "px 1e7 x3" is 3e7 wide in Chrome; the px columns are bounded to 1e7 in total (WarnClamped).
+{"case":{"name":"px>=avail + pct 900px,50%","cols":["900px","50%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,900],[900,0]],"table":900}
+{"case":{"name":"px=avail + pct 800px,50%","cols":["800px","50%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,800],[800,0]],"table":800}
+{"case":{"name":"two px + two pct over 100px,200px,50%,50%","cols":["100px","200px","50%","50%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,100],[100,200],[300,250],[550,250]],"table":800}
+{"case":{"name":"px over + pct + auto 900px,50%,auto","cols":["900px","50%",""],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,900],[900,0],[900,0]],"table":900}
+{"case":{"name":"pct 100 exact + px 100px,40%,60%","cols":["100px","40%","60%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,100],[100,280],[380,420]],"table":800}
+{"case":{"name":"pct 100 exact only 40,60","cols":["40%","60%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,320],[320,480]],"table":800}
+{"case":{"name":"separate sp10 px over 600px,500px","cols":["600px","500px"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,600],[620,500]],"table":1130}
+{"case":{"name":"separate sp10 pct 130 60,70","cols":["60%","70%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,355.38],[375.38,414.63]],"table":800}
+{"case":{"name":"03 colgroup","cols":["8mm","25%","22%","7%","17%","12%","8%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,72],[72,200],[272,176],[448,56],[504,136],[640,96],[736,64]],"table":800}
+{"case":{"name":"px+pct<100 two cols","cols":["100px","25%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,600],[600,200]],"table":800}
+{"case":{"name":"px+pct<100 three cols","cols":["100px","25%","30%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,360],[360,200],[560,240]],"table":800}
+{"case":{"name":"px+px+pct<100","cols":["100px","200px","30%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,186.66],[186.66,373.33],[559.98,240.02]],"table":800}
+{"case":{"name":"pct only 30,30","cols":["30%","30%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,400],[400,400]],"table":800}
+{"case":{"name":"pct only 20,20,20","cols":["20%","20%","20%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,266.66],[266.66,266.66],[533.31,266.69]],"table":800}
+{"case":{"name":"pct 60 one col + auto","cols":["60%",""],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,480],[480,320]],"table":800}
+{"case":{"name":"px only 100,200","cols":["100px","200px"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,266.66],[266.66,533.34]],"table":800}
+{"case":{"name":"px only 600,500 (over)","cols":["600px","500px"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,600],[600,500]],"table":1100}
+{"case":{"name":"px zero + pct","cols":["0px","25%","25%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,0],[0,400],[400,400]],"table":800}
+{"case":{"name":"px zero + px zero","cols":["0px","0px"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,400],[400,400]],"table":800}
+{"case":{"name":"pct 130 (60,70)","cols":["60%","70%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,369.22],[369.22,430.78]],"table":800}
+{"case":{"name":"pct 130 three","cols":["50%","40%","40%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,307.69],[307.69,246.14],[553.83,246.17]],"table":800}
+{"case":{"name":"px+pct > width 500px,60%","cols":["500px","60%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,500],[500,300]],"table":800}
+{"case":{"name":"px+pct > width 100px,50%,50%","cols":["100px","50%","50%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,100],[100,350],[450,350]],"table":800}
+{"case":{"name":"px+pct > width 150px,90%,auto","cols":["150px","90%",""],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,150],[150,650],[800,0]],"table":800}
+{"case":{"name":"px+pct+auto","cols":["100px","25%",""],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,100],[100,200],[300,500]],"table":800}
+{"case":{"name":"pct+auto+auto","cols":["30%","",""],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,240],[240,280],[520,280]],"table":800}
+{"case":{"name":"auto only","cols":["","",""],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,266.66],[266.66,266.66],[533.31,266.69]],"table":800}
+{"case":{"name":"100px,auto,300px","cols":["100px","","300px"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,100],[100,400],[500,300]],"table":800}
+{"case":{"name":"pct 1e6","cols":["1000000%","1000000%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,400],[400,400]],"table":800}
+{"case":{"name":"px 1e7 x3","cols":["10000000px","10000000px","10000000px"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,10000000],[10000000,10000000],[20000000,10000000]],"table":30000000}
+{"case":{"name":"cells px+pct","cols":null,"cells":[["100px",1],["25%",1],["",1]],"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,100],[100,200],[300,500]],"table":800}
+{"case":{"name":"cells colspan2 with width","cols":null,"cells":[["300px",2],["",1],["",1]],"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,300],[300,250],[550,250]],"table":800}
+{"case":{"name":"cells colspan2 pct","cols":null,"cells":[["50%",2],["",1],["",1]],"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,400],[400,200],[600,200]],"table":800}
+{"case":{"name":"cells mixed px pct <100","cols":null,"cells":[["100px",1],["25%",1],["30%",1]],"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,360],[360,200],[560,240]],"table":800}
+{"case":{"name":"separate sp10 pct 50,50","cols":["50%","50%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,385],[405,385]],"table":800}
+{"case":{"name":"separate sp10 pct 25,30","cols":["25%","30%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,350],[370,420]],"table":800}
+{"case":{"name":"separate sp10 100px,25%","cols":["100px","25%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,577.5],[597.5,192.5]],"table":800}
+{"case":{"name":"separate sp10 100px,50%,50%","cols":["100px","50%","50%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,100],[120,330],[460,330]],"table":800}
+{"case":{"name":"separate sp10 px 100,200","cols":["100px","200px"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,256.66],[276.66,513.34]],"table":800}
+{"case":{"name":"separate sp10 03 colgroup","cols":["8mm","25%","22%","7%","17%","12%","8%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,64.84],[84.84,180],[274.84,158.39],[443.23,50.39],[503.63,122.39],[636.02,86.39],[732.41,57.59]],"table":800}
+{"case":{"name":"collapse 100px,25%,30%","cols":["100px","25%","30%"],"cells":null,"collapse":true,"spacing":0,"tw":"100%"},"cells":[[0,360],[360,200],[560,240]],"table":800}
+{"case":{"name":"collapse 03 colgroup","cols":["8mm","25%","22%","7%","17%","12%","8%"],"cells":null,"collapse":true,"spacing":0,"tw":"100%"},"cells":[[0,72],[72,200],[272,176],[448,56],[504,136],[640,96],[736,64]],"table":800}
+{"case":{"name":"collapse px 100,200","cols":["100px","200px"],"cells":null,"collapse":true,"spacing":0,"tw":"100%"},"cells":[[0,266.66],[266.66,533.34]],"table":800}
+{"case":{"name":"px zero + pct zero","cols":["0px","0%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,0],[0,800]],"table":800}
+{"case":{"name":"pct zero x2","cols":["0%","0%"],"cells":null,"collapse":false,"spacing":0,"tw":"100%"},"cells":[[0,400],[400,400]],"table":800}
+{"case":{"name":"pct zero x3 sp10","cols":["0%","0%","0%"],"cells":null,"collapse":false,"spacing":10,"tw":"100%"},"cells":[[10,253.33],[273.33,253.33],[536.66,253.34]],"table":800}

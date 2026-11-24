@@ -79,10 +79,12 @@ func TestTableSpecifiedAndColspan(t *testing.T) {
 	}
 }
 
-func TestTableOverflowingWidthsScaleDown(t *testing.T) {
+// px columns wider than the table keep their widths and the table overflows
+// (Chrome, testdata/chrome_cols.txt case "px only 600,500 (over)").
+func TestTableOverflowingWidthsDoNotShrink(t *testing.T) {
 	r := newRun(t, `<table style="width:400px"><tr><td style="width:600px">a<td style="width:200px">b</table>`, opts{css: tableDoc})
 	tds := fragsOf(r.all(t), "td")
-	if !near(tds[0].rect.W, 300) || !near(tds[1].rect.W, 100) {
+	if !near(tds[0].rect.W, 600) || !near(tds[1].rect.W, 200) || !near(tds[1].rect.X, 600) {
 		t.Fatalf("widths %s", rects(tds))
 	}
 }

@@ -79,7 +79,7 @@ type rowState struct {
 }
 
 func (tl *tableLayout) span(c *tableCell) float64 {
-	return tl.colX[c.t1] - tl.colX[c.t0] - tl.gap()
+	return math.Max(0, tl.colX[c.t1]-tl.colX[c.t0]-tl.gap())
 }
 
 // gap is the spacing that ends each track in the separated model.
@@ -196,7 +196,9 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 	if err := l.b.Charge(budget.Work, int64(len(tl.colRuns))); err != nil {
 		return nil, err
 	}
-	tl.columns(max(ncols, tl.colTotal))
+	if tl.columns(max(ncols, tl.colTotal)) {
+		l.b.Warn(budget.WarnClamped, "table width")
+	}
 	if tl.collapse {
 		tl.resolveBorders(st)
 	} else {
@@ -212,15 +214,26 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 	return tl, nil
 }
 
-// columns sets the track widths from the cells of the first row (CSS 2.1
-// §17.5.2.1): a cell width spreads over its columns, the other columns share
-// what is left. Widths that do not fit are scaled down; free space goes to the
-// specified columns when there are no others. Columns that no cell starts or
-// ends at make one track, so a colspan of 1000 costs two tracks, not 1000.
-func (tl *tableLayout) columns(n int) {
+// columns sets the track widths from the cells of the first row and the col
+// elements (CSS 2.1 §17.5.2.1, with Chrome's distribution of what is left, which
+// CSS leaves open): a column is specified in px or in % of the table width minus
+// the spacing, or it is auto. With F the sum of the px columns and P that of the
+// resolved % columns, the table width avail being known:
+//   - F + P ≤ avail: the remainder goes to the auto columns in equal shares, else
+//     to the px columns in proportion to their widths, else to the % columns
+//     (in proportion to their percentages, equally if all are 0%), else to the
+//     0 px columns equally;
+//   - F + P > avail: the px columns keep their widths, the % columns share what
+//     they leave in proportion to their percentages and the auto columns get 0; a
+//     table of px columns only is as wide as they are and overflows.
+//
+// Columns that no cell starts or ends at make one track, so a colspan of 1000
+// costs two tracks, not 1000. It reports whether a width was bounded to
+// css.MaxLengthPx: the px columns, the spacing or a coordinate.
+func (tl *tableLayout) columns(n int) (clamped bool) {
 	tl.ncols = n
 	if n == 0 {
-		return
+		return false
 	}
 	mark := make([]bool, n+1)
 	mark[0], mark[n] = true, true
@@ -248,9 +261,16 @@ func (tl *tableLayout) columns(n int) {
 		}
 	}
 	weight := func(t int) float64 { return float64(bounds[t+1] - bounds[t]) }
+	// The n+1 gaps take at most half of the coordinate bound, so the clamped
+	// column edges of a hostile table do not saturate on the gaps alone.
+	if limit := css.MaxLengthPx / 2 / float64(n+1); !tl.collapse && tl.spacing[0] > limit {
+		tl.spacing[0], clamped = limit, true
+	}
 	gap := tl.gap()
 	avail := math.Max(0, tl.width-gap*float64(n+1))
-	spec := make([]float64, tracks) // specified width of one column of the track
+	// A px width of 0 is specified.
+	spec := make([]float64, tracks)
+	kind := make([]colKind, tracks)
 	if tl.firstRow < len(tl.rows) {
 		for i := range tl.rows[tl.firstRow].cells {
 			c := &tl.rows[tl.firstRow].cells[i]
@@ -258,14 +278,15 @@ func (tl *tableLayout) columns(n int) {
 			if st.Width.Kind != style.DimPx && st.Width.Kind != style.DimPercent {
 				continue
 			}
-			cw := math.Max(0, px(st.Width, tl.width))
+			// A % width is of the room left by the spacing, a % padding of the table width (CSS 2.1 §8.4).
+			cw := math.Max(0, px(st.Width, avail))
 			if st.BoxSizing != style.BorderBox {
 				cw += padPx(st.Padding[style.Left], tl.width) + padPx(st.Padding[style.Right], tl.width)
 				cw += st.Border[style.Left].Width + st.Border[style.Right].Width
 			}
 			per := cw / float64(c.span)
 			for t := c.t0; t < c.t1; t++ {
-				spec[t] = per
+				spec[t], kind[t] = per, kindOf(st.Width)
 			}
 		}
 	}
@@ -274,42 +295,87 @@ func (tl *tableLayout) columns(n int) {
 		if !run.sized() {
 			continue
 		}
-		w := math.Max(0, px(run.width, tl.width))
+		w := math.Max(0, px(run.width, avail))
 		for t := sort.SearchInts(bounds, run.start); t < sort.SearchInts(bounds, run.start+run.n); t++ {
-			spec[t] = w
+			spec[t], kind[t] = w, kindOf(run.width)
 		}
 	}
-	sum, auto := 0.0, 0.0
+	var fixed, pct, auto, pctW, pxW float64 // F, P, and the auto, % and px weights
 	for t, v := range spec {
-		if v > 0 {
-			sum += v * weight(t)
-		} else {
+		switch kind[t] {
+		case colPx:
+			fixed += v * weight(t)
+			pxW += weight(t)
+		case colPct:
+			pct += v * weight(t)
+			pctW += weight(t)
+		default:
 			auto += weight(t)
 		}
 	}
-	colw := make([]float64, tracks)
-	switch {
-	case sum > 0 && (sum >= avail || auto == 0):
-		for t, v := range spec {
-			colw[t] = v * avail / sum
-		}
-	case auto > 0:
-		share := (avail - sum) / auto
-		for t, v := range spec {
-			colw[t] = share
-			if v > 0 {
-				colw[t] = v
+	scaleKind := func(k colKind, f float64) {
+		for t := range spec {
+			if kind[t] == k {
+				spec[t] *= f
 			}
+		}
+	}
+	setKind := func(k colKind, w float64) {
+		for t := range spec {
+			if kind[t] == k {
+				spec[t] = w
+			}
+		}
+	}
+	if fixed > css.MaxLengthPx {
+		scaleKind(colPx, css.MaxLengthPx/fixed)
+		fixed, clamped = css.MaxLengthPx, true
+	}
+	room := avail - fixed - pct
+	switch {
+	case room >= 0 && auto > 0:
+		setKind(colAuto, room/auto)
+	case room >= 0 && fixed > 0:
+		scaleKind(colPx, (avail-pct)/fixed)
+	case room >= 0 && pct > 0:
+		scaleKind(colPct, avail/pct)
+	case room >= 0 && pctW > 0:
+		setKind(colPct, avail/pctW)
+	case room >= 0:
+		setKind(colPx, avail/pxW)
+	default:
+		setKind(colAuto, 0)
+		if pct > 0 {
+			scaleKind(colPct, math.Max(0, avail-fixed)/pct)
 		}
 	}
 	tl.colX = make([]float64, tracks+1)
 	x := gap
-	for t, w := range colw {
+	for t, w := range spec {
 		tl.colX[t] = x
-		x += w*weight(t) + (weight(t)-1)*gap + gap
+		next := x + w*weight(t) + (weight(t)-1)*gap + gap
+		if x = clampCoord(next); x != next {
+			clamped = true
+		}
 	}
 	tl.colX[tracks] = x
 	tl.total = x
+	return clamped
+}
+
+type colKind uint8
+
+const (
+	colAuto colKind = iota
+	colPx
+	colPct
+)
+
+func kindOf(d style.Dim) colKind {
+	if d.Kind == style.DimPercent {
+		return colPct
+	}
+	return colPx
 }
 
 func (tl *tableLayout) coverAt(r, col int) *tableCell {
@@ -661,6 +727,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 	if err != nil {
 		return complete, nil, err
 	}
+	f.rect.W += math.Max(0, tl.total-inner.w)
 	rows := tl.rows
 	next := lv.child
 	if next >= len(rows) {
