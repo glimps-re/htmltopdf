@@ -309,7 +309,7 @@ func (r *renderer) paginate(root *box.Box, title string, dst io.Writer, res *Res
 	w := pdf.NewWriter(dst, r.b)
 	defer func() { *written = w.Written() }()
 	shaper := text.NewShaper(r.c.fonts, r.b)
-	pag := layout.NewPaginator(root, layout.Config{Page: r.page, Pages: r.pages, Scale: r.c.scale, Fonts: r.c.fonts, Shaper: shaper, Budget: r.b})
+	pag := layout.NewPaginator(root, layout.Config{Page: r.page, Pages: r.pages, Scale: r.c.scale, Fonts: r.c.fonts, Shaper: shaper, Budget: r.b, KeepTree: r.c.pageHook != nil})
 	painter := paint.NewPainter(w, shaper, r.b)
 	var deferred []deferredPage
 	for {
@@ -319,6 +319,9 @@ func (r *renderer) paginate(root *box.Box, title string, dst io.Writer, res *Res
 		}
 		if err != nil {
 			return err
+		}
+		if r.c.pageHook != nil {
+			r.c.pageHook(root, pg)
 		}
 		content := &pdf.Content{}
 		geom := paint.Geometry{Width: pg.Width, Height: pg.Height, Area: pg.Area, Scale: pg.Scale}

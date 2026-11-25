@@ -88,6 +88,14 @@ func (l *layouter) flush() {
 		l.pend, l.truncate = margins{}, false
 	}
 	l.y = clampCoord(l.y + l.pend.resolve())
+	if l.y < 0 {
+		// A negative margin moves a box up within its page, never above the top of
+		// the page area (or of a cell or item laid out apart, which is placed on a
+		// page): what is drawn there is on no page, so its text would be lost.
+		// Chrome puts such a box on an earlier page, which the page-by-page layout
+		// cannot do.
+		l.y = 0
+	}
 	l.pend = margins{}
 	for _, f := range l.waiting {
 		f.rect.Y, f.yset = l.y, true

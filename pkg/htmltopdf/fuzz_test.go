@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/budget"
+	"github.com/glimps-re/htmltopdf/internal/layout"
 	"github.com/glimps-re/htmltopdf/internal/testcorpus"
 )
 
@@ -71,12 +73,19 @@ func FuzzRender(f *testing.F) {
 		if len(data)%2 == 1 {
 			conv = paper
 		}
-		res, err := conv.Render(context.Background(), bytes.NewReader(data), &buf)
+		var tree *box.Box
+		var pages []*layout.Page
+		hooked := *conv
+		hooked.pageHook = func(root *box.Box, pg *layout.Page) { tree = root; pages = append(pages, pg) }
+		res, err := hooked.Render(context.Background(), bytes.NewReader(data), &buf)
 		if res == nil {
 			t.Fatal("nil Result")
 		}
 		switch {
 		case err == nil:
+			if lost := layout.TextLost(tree, pages); lost != "" {
+				t.Fatalf("text lost: %s", lost)
+			}
 			if res.Pages < 1 || res.Bytes != int64(buf.Len()) || !bytes.HasPrefix(buf.Bytes(), []byte("%PDF-")) || !bytes.HasSuffix(bytes.TrimSpace(buf.Bytes()), []byte("%%EOF")) {
 				t.Fatalf("bad success: %+v, %d bytes", res, buf.Len())
 			}

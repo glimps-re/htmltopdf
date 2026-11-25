@@ -50,6 +50,9 @@ func FuzzLayout(f *testing.F) {
 		"<style>@page a{size:1e9px 5px;margin:1e9px} @page b{margin:0;@top-left{content:'x'}}</style><div style='page:a'>x</div><p style='page:b'>y</p><div style='page:a;break-before:avoid'><p style='page:b'>z</p></div><table style='page:a'><tr><td style='page:b'>q</td></tr></table>",
 		"<div style='display:flex;page:a'><div style='page:b'>k</div></div>" + strings.Repeat("<i style='display:block;page:x'>1</i><i style='display:block'>2</i>", 40),
 		"<p style='letter-spacing:1e9px'>abc</p>", "<span style='margin:0 1e9px;padding:1e9px'>x</span>",
+		"<table><tr><td><div style='margin-top:-1e9px'>w1</div></td></tr></table><div style='display:flex;align-items:flex-end'><div style='margin-bottom:-1e9px'>w2</div><div style='height:30px;margin-top:-300px'>w3</div></div>",
+		"<div style='display:grid;grid-template-columns:1fr 1fr;align-items:center'><div style='margin:-1e9px 0'>w1</div><div style='margin-bottom:-400px'>w2</div></div><p>x <span style='display:inline-block'><span style='display:block;margin-top:-300px'>w3</span></span></p>",
+		"<div style='position:relative;left:1px'><div style='margin-top:-1e7px'>w1</div></div><div style='height:300px;break-inside:avoid'>f</div>w2<div style='margin-top:-250px'><div>w3</div></div><div style='margin-bottom:-1e7px'>w4</div>",
 		"<div style='columns:1000;column-gap:0;column-rule:2px solid red'><p>aaa bbb ccc ddd</p></div><div style='columns:1e9;column-gap:1e9px;column-rule:1e9px dotted #00f'><p>x y z</p></div>",
 		"<div style='columns:3;column-gap:4px;column-rule:1px solid'><table><thead><tr><th>h</th></tr></thead>" + strings.Repeat("<tr><td>r<br>s<br>t</td></tr>", 60) + "</table></div>",
 		"<div style='columns:2'><div style='columns:3'><p>nested a b c d e f</p><div style='columns:2'><p>deeper</p></div></div><p style='break-before:page'>x</p><p style='break-after:page'>y</p></div>",
@@ -72,15 +75,23 @@ func FuzzLayout(f *testing.F) {
 				l[budget.Glyphs] = 200_000
 			},
 		})
+		var pages []*Page
 		for range 60 {
 			pg, err := r.pag.Next()
+			if errors.Is(err, io.EOF) {
+				if lost := TextLost(r.root, pages); lost != "" {
+					t.Fatalf("text lost: %s", lost)
+				}
+				return
+			}
 			if err != nil {
 				var le *budget.LimitError
-				if errors.Is(err, io.EOF) || errors.As(err, &le) {
+				if errors.As(err, &le) {
 					return
 				}
 				t.Fatal(err)
 			}
+			pages = append(pages, pg)
 			for _, it := range pg.Items {
 				checkFinite(t, it)
 			}

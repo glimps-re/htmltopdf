@@ -325,6 +325,7 @@ func (l *layouter) layLine(line []*flexItem, inner cbox, gap float64, st *style.
 		default:
 			y, h = alignItem(st.AlignItems, it.mt, it.mb, f.rect.H, cross)
 		}
+		y = clampInBand(y, h, cross)
 		f.rect.H = h
 		moveFrag(f, inner.x+x+ml[i], y)
 		out.frags = append(out.frags, f)

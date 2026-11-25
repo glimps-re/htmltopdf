@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("<p stYle= font-size:0;A:00;A0\xe900:00>000")

@@ -8,8 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/css"
+	"github.com/glimps-re/htmltopdf/internal/layout"
 	"github.com/glimps-re/htmltopdf/internal/pdf"
 	"github.com/glimps-re/htmltopdf/internal/style"
 	"github.com/glimps-re/htmltopdf/internal/text"
@@ -30,6 +32,9 @@ type Converter struct {
 	// hook receives the stage names of a render, for the heap measurements of
 	// the tests; nil in production.
 	hook func(stage string)
+	// pageHook receives the box tree and each laid out page, for the fuzz tests
+	// that check that no text is lost; nil in production.
+	pageHook func(root *box.Box, pg *layout.Page)
 }
 
 // New validates opts and returns a Converter. It returns an error wrapping

@@ -121,15 +121,23 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 
 // alignItem returns the top and the height, in a band of cross size cross, of an
 // item of height h and vertical margins mt and mb under align-items a: stretch
-// grows the item to the band, the others move it.
+// grows the item to the band, the others move it. The top is never above the
+// band: an item pulled up by a negative margin would leave the page.
 func alignItem(a style.ItemAlign, mt, mb, h, cross float64) (y, height float64) {
+	y, height = mt, h
 	switch a {
 	case style.ItemStretch:
-		return mt, math.Max(h, cross-mt-mb)
+		height = math.Max(h, cross-mt-mb)
 	case style.ItemEnd:
-		return cross - mb - h, h
+		y = cross - mb - h
 	case style.ItemCenter:
-		return (cross-mt-h-mb)/2 + mt, h
+		y = (cross-mt-h-mb)/2 + mt
 	}
-	return mt, h
+	return clampInBand(y, height, cross), height
+}
+
+// clampInBand keeps an item of height h inside a band of cross size cross (at
+// the top when it is taller): margins pull items out of it, off the page.
+func clampInBand(y, h, cross float64) float64 {
+	return math.Min(math.Max(0, y), math.Max(0, cross-h))
 }

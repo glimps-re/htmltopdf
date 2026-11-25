@@ -40,7 +40,9 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			l.flush()
 			flushed = true
 		}
-		if l.y+ln.height() > l.bottom && !l.pageEmpty {
+		// A margin can push the first line of a page past its bottom: it goes on the
+		// next page, where the margin is truncated, not out of sight.
+		if l.y > l.bottom || l.y+ln.height() > l.bottom && !l.pageEmpty {
 			if placed == 0 && !resuming && !emptyAtEntry {
 				l.restore(&saved)
 				return nothing, nil, nil
