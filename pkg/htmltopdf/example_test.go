@@ -88,3 +88,22 @@ func ExamplePageSize() {
 	fmt.Println(strings.Contains(pdf.String(), "/MediaBox [0 0 792 612]"))
 	// Output: true
 }
+
+func ExampleOptions_referenceConfiguration() {
+	conv, err := htmltopdf.New(htmltopdf.Options{
+		PageSize: htmltopdf.PageSize{Width: 794.56, Height: 1122.56},
+		Scale:    0.9,
+		ExtraCSS: `@page { margin: 96px 28px 124px 28px;
+			@bottom-right { content: "Page " counter(page) " of " counter(pages) } }`,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	var pdf bytes.Buffer
+	res, err := conv.Render(context.Background(), strings.NewReader("<h1>Report</h1>"), &pdf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(res.Pages, strings.Contains(pdf.String(), "/MediaBox [0 0 595.92 841.92]"))
+	// Output: 1 true
+}

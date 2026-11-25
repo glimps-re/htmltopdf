@@ -17,7 +17,7 @@ explicitly, otherwise `go-licenses` fails on standard-library packages.
 | Module | Version | License | Use |
 |---|---|---|---|
 | `golang.org/x/net` | v0.63.0 | BSD-3-Clause | `html` tokenizer and parser |
-| `golang.org/x/text` | v0.44.0 | BSD-3-Clause | indirect (`unicode/bidi` via go-text) |
+| `golang.org/x/text` | v0.44.0 | BSD-3-Clause | `unicode/norm` (text clusters), and `unicode/bidi` through go-text |
 | `golang.org/x/image` | v0.48.0 | BSD-3-Clause | `font/gofont` (embedded Go fonts), `colornames` (named CSS colors) |
 | `github.com/go-text/typesetting` | v0.3.5 | Unlicense OR BSD-3-Clause, used under BSD-3-Clause | font parsing, shaping, segmenter, language |
 | `github.com/go-text/typesetting/harfbuzz` | v0.3.5 | MIT | shaping engine (subpackage with its own LICENSE) |
