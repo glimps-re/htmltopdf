@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/paint"
@@ -90,11 +91,20 @@ func h4Markers(prefix string, n int) (words []string, html string) {
 	return words, sb.String()
 }
 
+// h4Tokens counts the words (runs of letters and digits) of the extracted text of r.
+func h4Tokens(r h4Run) map[string]int {
+	tokens := map[string]int{}
+	for _, w := range strings.FieldsFunc(pagesText(r.doc), func(c rune) bool { return !unicode.IsLetter(c) && !unicode.IsDigit(c) }) {
+		tokens[w]++
+	}
+	return tokens
+}
+
 func h4TextOnce(t *testing.T, r h4Run, markers []string) {
 	t.Helper()
-	txt := pagesText(r.doc)
+	tokens := h4Tokens(r)
 	for _, w := range markers {
-		if n := strings.Count(txt, w); n != 1 {
+		if n := tokens[w]; n != 1 {
 			t.Errorf("text %q appears %d times in the PDF, want once", w, n)
 			return
 		}
