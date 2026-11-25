@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/go-text/typesetting/shaping"
+	"github.com/go-text/typesetting/harfbuzz"
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
 )
@@ -349,15 +349,15 @@ func TestHugeWordHeap(t *testing.T) {
 	word := strings.Repeat("a", n+1)
 	max, runs, err := heapMax(t, int64(n), word)
 	var le *budget.LimitError
-	if !errors.As(err, &le) || le.Kind != budget.Glyphs || len(runs) != 0 || max > 64<<20 {
+	if !errors.As(err, &le) || le.Kind != budget.Glyphs || len(runs) != 0 || max > 48<<20 {
 		t.Fatalf("over: err=%v runs=%d heap-max=%d MiB", err, len(runs), max>>20)
 	}
 	max, runs, err = heapMax(t, int64(n), word[:n])
 	if err != nil || len(runs) != 1 || len(runs[0].Glyphs) != n {
 		t.Fatalf("at the limit: err=%v runs=%d", err, len(runs))
 	}
-	if max > 64<<20 {
-		t.Fatalf("heap-max = %d MiB, want <= 64", max>>20)
+	if max > 48<<20 {
+		t.Fatalf("heap-max = %d MiB, want <= 48", max>>20)
 	}
 	t.Logf("2M-glyph word: heap-max %d MiB", max>>20)
 }
@@ -408,7 +408,7 @@ func TestChunkEnd(t *testing.T) {
 
 func TestShaperPanicFallsBackToNominal(t *testing.T) {
 	s, b := newShaper(t)
-	s.shapeFn = func(shaping.Input) shaping.Output { panic("boom") }
+	s.afterShape = func(*harfbuzz.Buffer) { panic("boom") }
 	runs, err := s.Shape("Hé!", sans, nil)
 	if err != nil || len(runs) != 1 || len(runs[0].Glyphs) != 3 {
 		t.Fatalf("runs = %+v, %v", runs, err)
@@ -540,4 +540,140 @@ func BenchmarkNewFontSet(b *testing.B) {
 	b.ReportMetric(float64(fileBytes)/(1<<20), "font-file-MiB")
 	b.ReportMetric(float64(after.HeapAlloc-min(after.HeapAlloc, before.HeapAlloc))/(1<<20), "parsed-faces-MiB")
 	runtime.KeepAlive(fs)
+}
+
+// The direct engine drive gives the glyphs of shaping.HarfbuzzShaper: ids,
+// advances and clusters, whatever the text (kerning, ligatures, spaces the font
+// lacks, marks, scripts it does not cover, emoji, controls).
+func TestDirectShapingMatchesTheEngineWrapper(t *testing.T) {
+	texts := []string{
+		"Hello, World! AV To Ty fi ffi fl", "a b c d e　f", "é ạ̈ กิ้",
+		"مرحبا بالعالم", "नमस्ते दुनिया", "日本語のテキスト 한국어", "😀👨‍👩‍👧 🇫🇷 \u200d\u200c", "tab\there\nnewline\x00nul\x7f", strings.Repeat("The quick brown fox. ", 200),
+		"1234567890 ½ ⅓ ℃ ﬁ ﬂ", "ab\xc3\x28cd\xe2\x82", "\xf0\x9f\x98 x\xed\xa0\x80 y", "\U0010ffff\ufffd\uFEFF",
+	}
+	for _, chunk := range []int{0, 8, 3} {
+		for _, spec := range []FontSpec{sans, {Families: []string{"serif"}, Weight: 700, Size: 13}, {Families: []string{"monospace"}, Weight: 400, Italic: true, Size: 7.5}} {
+			for _, text := range texts {
+				fs := referenceSet(t)
+				direct, lib := NewShaper(fs, newBudget(1<<30, nil)), NewShaper(fs, newBudget(1<<30, nil))
+				if chunk > 0 {
+					direct.chunk, lib.chunk = chunk, chunk
+				}
+				lib.chunkFn = wrapperChunk()
+				got, err := direct.Shape(text, spec, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want, err := lib.Shape(text, spec, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(got) != len(want) {
+					t.Fatalf("%q: %d runs, want %d", text, len(got), len(want))
+				}
+				for i := range got {
+					if got[i].Face != want[i].Face || got[i].Size != want[i].Size || len(got[i].Glyphs) != len(want[i].Glyphs) {
+						t.Fatalf("%q run %d: %d glyphs, want %d", text, i, len(got[i].Glyphs), len(want[i].Glyphs))
+					}
+					for k := range got[i].Glyphs {
+						if got[i].Glyphs[k] != want[i].Glyphs[k] {
+							t.Fatalf("%q run %d glyph %d: %+v, want %+v", text, i, k, got[i].Glyphs[k], want[i].Glyphs[k])
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// FuzzShape shapes arbitrary text with the direct engine drive and with the
+// engine wrapper: same glyphs, and the glyph count and clusters stay in range.
+func FuzzShape(f *testing.F) {
+	for _, s := range []string{"Hello AV", "a b́", "مرحبا", "नमस्ते", "😀‍👨", "\x00\xff\xfe", strings.Repeat("ab ", 400)} {
+		f.Add(s)
+	}
+	fs := referenceSet(f)
+	f.Fuzz(func(t *testing.T, text string) {
+		direct, lib := NewShaper(fs, newBudget(1<<24, nil)), NewShaper(fs, newBudget(1<<24, nil))
+		lib.chunkFn = wrapperChunk()
+		got, err1 := direct.Shape(text, sans, nil)
+		want, err2 := lib.Shape(text, sans, nil)
+		if (err1 == nil) != (err2 == nil) || len(got) != len(want) {
+			t.Fatalf("%q: %v/%v, %d/%d runs", text, err1, err2, len(got), len(want))
+		}
+		for i := range got {
+			if len(got[i].Glyphs) != len(want[i].Glyphs) {
+				t.Fatalf("%q run %d: %d glyphs, want %d", text, i, len(got[i].Glyphs), len(want[i].Glyphs))
+			}
+			for k, g := range got[i].Glyphs {
+				if g != want[i].Glyphs[k] || int(g.Cluster) > len(text) {
+					t.Fatalf("%q run %d glyph %d: %+v, want %+v", text, i, k, g, want[i].Glyphs[k])
+				}
+			}
+		}
+	})
+}
+
+// The production fallbacks of the engine drive: a panic of the engine, a cluster
+// outside the text, a negative one. Each gives the nominal glyphs, one warning,
+// leaves the glyphs of the earlier chunks alone and does not spoil the next call.
+func TestEngineFailuresFallBackToNominal(t *testing.T) {
+	tests := map[string]func(*harfbuzz.Buffer){
+		"panic":           func(*harfbuzz.Buffer) { panic("boom") },
+		"cluster too big": func(b *harfbuzz.Buffer) { b.Info[len(b.Info)-1].Cluster = 1 << 20 },
+		"negative":        func(b *harfbuzz.Buffer) { b.Info[0].Cluster = -1 },
+	}
+	for name, fail := range tests {
+		t.Run(name, func(t *testing.T) {
+			s, b := newShaper(t)
+			s.chunk = 8
+			text := "abc def ghi jkl mno pqr"
+			calls := 0
+			s.afterShape = func(buf *harfbuzz.Buffer) {
+				if calls++; calls == 2 {
+					fail(buf)
+				}
+			}
+			runs, err := s.Shape(text, sans, nil)
+			if err != nil || len(runs) != 1 || len(runs[0].Glyphs) != len(text) {
+				t.Fatalf("runs %+v, %v", runs, err)
+			}
+			for i, g := range runs[0].Glyphs {
+				if g.ID == 0 || g.Advance <= 0 || int(g.Cluster) != i {
+					t.Fatalf("glyph %d = %+v", i, g)
+				}
+			}
+			if ws, _ := b.Warnings(); len(ws) != 1 || ws[0].Code != budget.WarnShapingFallback || ws[0].Count != 1 {
+				t.Errorf("warnings %+v", ws)
+			}
+			s.afterShape = nil
+			again, err := s.Shape(text, sans, nil)
+			if err != nil || len(again) != 1 || len(again[0].Glyphs) != len(text) {
+				t.Fatalf("next call: %+v, %v", again, err)
+			}
+			plain, _ := newShaper(t)
+			plain.chunk = 8
+			want, _ := plain.Shape(text, sans, nil)
+			if len(want) == 1 && len(again[0].Glyphs) == len(want[0].Glyphs) {
+				for i := range want[0].Glyphs {
+					if again[0].Glyphs[i].Advance != want[0].Glyphs[i].Advance {
+						t.Fatalf("the next call is spoiled at glyph %d", i)
+					}
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkShapeLongWord(b *testing.B) {
+	fs := referenceSet(b)
+	word := strings.Repeat("a", 1<<20)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(word)))
+	for b.Loop() {
+		s := NewShaper(fs, newBudget(1<<30, nil))
+		if _, err := s.Shape(word, sans, nil); err != nil {
+			b.Fatal(err)
+		}
+	}
 }

@@ -9,10 +9,9 @@ import (
 
 	"github.com/go-text/typesetting/di"
 	"github.com/go-text/typesetting/font"
+	"github.com/go-text/typesetting/harfbuzz"
 	"github.com/go-text/typesetting/language"
 	"github.com/go-text/typesetting/segmenter"
-	"github.com/go-text/typesetting/shaping"
-	"golang.org/x/image/math/fixed"
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
 )
@@ -60,7 +59,6 @@ type FontSpec struct {
 type Shaper struct {
 	fs       *FontSet
 	b        *budget.Budget
-	hb       shaping.HarfbuzzShaper
 	faces    map[*Face]*font.Face
 	chain    []*Face
 	resolved []*font.Face
@@ -68,9 +66,16 @@ type Shaper struct {
 	win      []rune
 	offs     []int32
 	back     []Glyph
-	// chunk and shapeFn are test seams: the chunk size and the shaping engine.
-	chunk   int
-	shapeFn func(shaping.Input) shaping.Output
+	// chunk, afterShape and chunkFn are test seams: the chunk size, a hook run
+	// on the buffer right after the engine shaped it (inside the recover), and a
+	// replacement of shapeChunk (the oracle of the differential tests).
+	chunk      int
+	afterShape func(*harfbuzz.Buffer)
+	chunkFn    func(s *Shaper, dst []Glyph, ff *font.Face, runes []rune, offs []int32, script language.Script, scale float32) []Glyph
+	// buf and hbFonts are the reused buffer and fonts of the engine; a face
+	// whose font could not be built maps to nil.
+	buf     *harfbuzz.Buffer
+	hbFonts map[*font.Face]*harfbuzz.Font
 	// last is the chain of the previous Shape call: consecutive texts of a
 	// document mostly share their font.
 	last    chainKey
@@ -113,7 +118,6 @@ const (
 // NewShaper returns a Shaper charging b.
 func NewShaper(fs *FontSet, b *budget.Budget) *Shaper {
 	s := &Shaper{fs: fs, b: b, faces: map[*Face]*font.Face{}, chunk: ChunkRunes}
-	s.shapeFn = s.hb.ShapeNoExtents
 	return s
 }
 
@@ -373,27 +377,10 @@ func (s *Shaper) shapeChunk(dst []Glyph, ff *font.Face, runes []rune, offs []int
 	if !script.Strong() {
 		script = language.Latin
 	}
-	in := shaping.Input{
-		Text: runes, RunStart: 0, RunEnd: len(runes), Direction: di.DirectionLTR,
-		Face: ff, Size: fixed.Int26_6(ff.Upem()) << 6, Script: script,
+	if s.chunkFn != nil {
+		return s.chunkFn(s, dst, ff, runes, offs, script, scale)
 	}
-	out, ok := s.safeShape(in)
-	if !ok {
-		return s.nominal(dst, ff, runes, offs, scale)
-	}
-	appended := 0
-	for _, g := range out.Glyphs {
-		if g.TextIndex() >= len(runes) {
-			return s.nominal(dst[:len(dst)-appended], ff, runes, offs, scale)
-		}
-		dst = append(dst, Glyph{
-			ID:      glyphID(g.GlyphID),
-			Advance: float32(g.Advance) / 64 * scale,
-			Cluster: offs[g.TextIndex()],
-		})
-		appended++
-	}
-	return dst
+	return s.shapeDirect(dst, ff, runes, offs, script, scale)
 }
 
 // clampInt32 never triggers: Shape rejects texts longer than MaxInt32 bytes.
@@ -409,13 +396,78 @@ func glyphID[T ~uint32](g T) uint16 {
 	return uint16(g)
 }
 
-func (s *Shaper) safeShape(in shaping.Input) (out shaping.Output, ok bool) {
+// shapeDirect drives the engine's buffer itself instead of going through
+// shaping.HarfbuzzShaper, which allocates a 64-byte glyph per rune on each call
+// (about 5 times what the shaper keeps: a 2 M-glyph word doubled its heap in
+// garbage). The glyphs are read from the buffer into dst.
+func (s *Shaper) shapeDirect(dst []Glyph, ff *font.Face, runes []rune, offs []int32, script language.Script, scale float32) []Glyph {
+	info, pos, ok := s.safeBuffer(ff, runes, script)
+	if !ok {
+		return s.nominal(dst, ff, runes, offs, scale)
+	}
+	start := len(dst)
+	for i := range info {
+		if c := info[i].Cluster; c < 0 || c >= len(runes) {
+			return s.nominal(dst[:start], ff, runes, offs, scale)
+		}
+		dst = append(dst, Glyph{
+			ID:      glyphID(info[i].Glyph),
+			Advance: float32(pos[i].XAdvance) / 64 * scale,
+			Cluster: offs[info[i].Cluster],
+		})
+	}
+	return dst
+}
+
+// safeBuffer shapes runes left to right into the reused buffer and returns its
+// glyphs; ok is false when the engine panicked on a hostile font, in which case
+// the buffer and the font are dropped so that the next call starts clean.
+func (s *Shaper) safeBuffer(ff *font.Face, runes []rune, script language.Script) (info []harfbuzz.GlyphInfo, pos []harfbuzz.GlyphPosition, ok bool) {
 	defer func() {
 		if recover() != nil {
-			out, ok = shaping.Output{}, false
+			s.buf = nil
+			if s.hbFonts[ff] != nil {
+				// The font may be left in a bad state; one that could not be built
+				// stays nil (cached failure) and is not retried.
+				delete(s.hbFonts, ff)
+			}
+			info, pos, ok = nil, nil, false
 		}
 	}()
-	return s.shapeFn(in), true
+	hf := s.engineFont(ff)
+	if hf == nil {
+		return nil, nil, false
+	}
+	if s.buf == nil {
+		s.buf = harfbuzz.NewBuffer()
+	} else {
+		s.buf.Clear()
+	}
+	s.buf.AddRunes(runes, 0, len(runes))
+	s.buf.Props.Direction = di.DirectionLTR.Harfbuzz()
+	s.buf.Props.Script = script
+	hf.XScale = int32(ff.Upem()) << 6
+	hf.YScale = hf.XScale
+	s.buf.Shape(hf, nil)
+	if s.afterShape != nil {
+		s.afterShape(s.buf)
+	}
+	return s.buf.Info, s.buf.Pos, true
+}
+
+// engineFont returns the engine font of ff, built once; nil when it cannot be
+// built or panicked before (the face is then drawn from its cmap).
+func (s *Shaper) engineFont(ff *font.Face) (hf *harfbuzz.Font) {
+	if s.hbFonts == nil {
+		s.hbFonts = map[*font.Face]*harfbuzz.Font{}
+	}
+	if hf, found := s.hbFonts[ff]; found {
+		return hf
+	}
+	s.hbFonts[ff] = nil
+	hf = harfbuzz.NewFont(ff)
+	s.hbFonts[ff] = hf
+	return hf
 }
 
 // nominal draws one glyph per rune from the cmap and hmtx, without any layout

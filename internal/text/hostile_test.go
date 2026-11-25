@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/go-text/typesetting/shaping"
+	"github.com/go-text/typesetting/harfbuzz"
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
 )
@@ -120,13 +120,11 @@ func TestShaperPanicInTheMiddleOfAChunkedText(t *testing.T) {
 	b := newBudget(budget.Defaults()[budget.Glyphs], nil)
 	s := NewShaper(referenceSet(t), b)
 	calls := 0
-	real := s.shapeFn
-	s.shapeFn = func(in shaping.Input) shaping.Output {
+	s.afterShape = func(*harfbuzz.Buffer) {
 		calls++
 		if calls%3 == 2 {
 			panic("injected")
 		}
-		return real(in)
 	}
 	text := strings.Repeat("word ", 20000)
 	runs, err := s.Shape(text, sans, nil)
