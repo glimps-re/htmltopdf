@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"slices"
 	"strings"
@@ -552,6 +553,32 @@ func TestOverflowInColumnsDoesNotRunAway(t *testing.T) {
 	})
 }
 
+// A negative margin at the end of the content of columns, however large, does
+// not make their balanced height smaller than the content: every word is drawn
+// on a page, within two pages.
+func TestNegativeEndMarginInColumnsDoesNotRunAway(t *testing.T) {
+	two, twoW := numberedLines("a", 2)
+	six, sixW := numberedLines("s", 6)
+	after := func(w ...string) []string { return append(slices.Clone(w), "AFTER") }
+	cols := func(style, body string) string {
+		return `<div style="columns:2;` + style + `">` + body + `</div><p>AFTER</p>`
+	}
+	checkOverflowCases(t, []overflowCase{
+		{"p margin -19px", `<div style="columns:2"><p style="margin:0 0 -19px">w0</p></div>`, []string{"w0"}, 2},
+		{"div margin -30px", `<div style="columns:2"><div style="margin-bottom:-30px">w0</div></div>`, []string{"w0"}, 2},
+		{"margin -500px", cols("", `<p style="margin:0 0 -500px">w0</p>`), after("w0"), 2},
+		{"margin -1e7px", cols("", `<p style="margin:0 0 -10000000px">w0</p>`), after("w0"), 2},
+		{"two lines -1e7px", cols("", `<div style="margin-bottom:-10000000px">`+two+`</div>`), after(twoW...), 2},
+		{"nested through the last child", cols("", `<div><div><p style="margin:0 0 -50px">w0</p></div></div>`), after("w0"), 2},
+		{"three columns", cols("columns:3", `<p>w0</p><p style="margin:0 0 -100px">`+six+`</p>`), after(slices.Concat(sixW, []string{"w0"})...), 2},
+		{"unbreakable block", cols("", `<div style="break-inside:avoid;margin-bottom:-30px">`+six+`</div>`), after(sixW...), 2},
+		{"nested columns, unsupported: inner one is plain flow", cols("", `<div style="columns:2"><p style="margin:0 0 -40px">w0</p></div>`), after("w0"), 2},
+		{"with a height", cols("height:40px", `<p style="margin:0 0 -40px">`+two+`</p>`), after(twoW...), 2},
+		{"in a flex item", `<div style="display:flex"><div style="columns:2"><p style="margin:0 0 -40px">w0</p></div></div><p>AFTER</p>`, after("w0"), 2},
+		{"in a cell", `<table><tr><td><div style="columns:2"><p style="margin:0 0 -40px">w0</p></div></td></tr></table><p>AFTER</p>`, after("w0"), 2},
+	})
+}
+
 // flexWrapped is a document of groups × 25 lines, about 2.5 groups a page, in
 // block flow or wrapped in an item of the given display.
 func flexWrapped(display string, groups int) string {
@@ -622,5 +649,60 @@ func TestGlyphOverflowDoesNotGrowColumns(t *testing.T) {
 	}
 	if float64(work) > 1.5*float64(twinWork) {
 		t.Errorf("work %d with 30px glyphs, %d with 16px", work, twinWork)
+	}
+}
+
+// A small negative end margin in columns leaves what follows where margin 0
+// puts it: the margin is not applied after the container either. Divs, not
+// paragraphs: colPage zeroes the margins of p.
+func TestNegativeEndMarginInColumnsKeepsWhatFollows(t *testing.T) {
+	after := func(margin string) (page int, baseline float64) {
+		html := `<div style="columns:2"><div style="margin-bottom:` + margin + `">w0</div></div><div>AFTER</div>`
+		pages := newRun(t, html, opts{extra: colPage}).all(t)
+		for i, pg := range pages {
+			for _, tx := range texts(pg.Items) {
+				if tx.Text == "AFTER" {
+					return i, tx.Baseline
+				}
+			}
+		}
+		t.Fatalf("margin %s: AFTER not drawn", margin)
+		return 0, 0
+	}
+	p0, b0 := after("0")
+	p5, b5 := after("-5px")
+	if p0 != p5 || math.Abs(b0-b5) > balanceEps {
+		t.Errorf("AFTER on page %d at %v with margin -5px, page %d at %v with 0", p5, b5, p0, b0)
+	}
+}
+
+// A negative end margin still cancels the margins that a column break truncated
+// (Fragmentation 3 §5.2): a0-a2 fill the first column, b0-b2 the second, and the
+// columns are as tall as three lines.
+func TestNegativeEndMarginCancelsTruncatedMargins(t *testing.T) {
+	html := `<div style="columns:2;column-rule:2px solid red"><p style="margin:0 0 60px">a0<br>a1<br>a2</p>` +
+		`<p style="margin:0 0 -60px">b0<br>b1<br>b2</p></div><p style="margin:0">AFTER</p>`
+	pages := newRun(t, html, opts{}).all(t)
+	if len(pages) != 1 {
+		t.Fatalf("%d pages", len(pages))
+	}
+	var rules []display.Rect
+	for _, f := range fragsOf(pages, "div") {
+		rules = append(rules, f.rules...)
+	}
+	if len(rules) != 1 || rules[0].H != 54 {
+		t.Errorf("column rules %v, want one 54 px tall", rules)
+	}
+	found := false
+	for _, tx := range texts(pages[0].Items) {
+		if tx.Text == "AFTER" {
+			found = true
+			if tx.Baseline != 76.5 {
+				t.Errorf("AFTER at %v, want 76.5", tx.Baseline)
+			}
+		}
+	}
+	if !found {
+		t.Error("AFTER not drawn")
 	}
 }

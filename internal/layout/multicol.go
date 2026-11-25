@@ -101,11 +101,22 @@ func (p *colPass) fitsHeight(y0, h float64) bool {
 
 // total is the height of the content laid out as a single column.
 func (p *colPass) total(y0 float64) float64 {
+	return p.span(y0) + p.endMargin
+}
+
+// span is the sum of the heights of the columns, without the end margin.
+func (p *colPass) span(y0 float64) float64 {
 	t := 0.0
 	for _, c := range p.cols {
 		t += c.bottom - y0
 	}
-	return t + p.endMargin
+	return t
+}
+
+// fitBound is the column height from y0 that always holds the content: total,
+// never below span.
+func (p *colPass) fitBound(y0 float64) float64 {
+	return math.Max(p.total(y0), p.span(y0))
 }
 
 func (p *colPass) tallest() float64 {
@@ -239,7 +250,8 @@ func (l *layouter) fillColumns(b *box.Box, in []level, lv level, resuming bool, 
 			p.stat, p.tok = partial, curIn
 			continue
 		}
-		// The margin that adjoins the end of a column is not part of its height.
+		// Kept even when negative: it cancels the margins that a column break
+		// truncated (Fragmentation 3 §5.2).
 		if stat == complete {
 			p.endMargin = l.pend.resolve()
 		}
@@ -317,16 +329,16 @@ func (l *layouter) multicol(b *box.Box, f *frag, in []level, lv level, inner cbo
 		return nothing, nil, nil
 	}
 	h := room
-	if apart && pass.fits() && pass.total(y0) >= css.MaxLengthPx {
+	if apart && pass.fits() && pass.fitBound(y0) >= css.MaxLengthPx {
 		// The content is as tall as the clamp lets it be, so the one-column height
 		// says nothing about it: the unbounded pass is the layout.
 		h = math.Max(0, pass.tallest()-y0)
 	} else if pass.fits() {
 		l.b.RewindGlyphs(glyphs)
 		oneColumn := len(pass.cols) < 2 || pass.cols[1].empty()
-		total := pass.total(y0)
+		total, bound := pass.total(y0), pass.fitBound(y0)
 		pass = colPass{}
-		if pass, h, err = l.balance(b, in, lv, resuming, inner, mc, y0, room, oneColumn, total, &entry, decor); err != nil {
+		if pass, h, err = l.balance(b, in, lv, resuming, inner, mc, y0, room, oneColumn, total, bound, &entry, decor); err != nil {
 			return complete, nil, err
 		}
 		if apart && pass.stat == partial && !pass.forced {
@@ -363,9 +375,10 @@ func (l *layouter) multicol(b *box.Box, f *frag, in []level, lv level, inner cbo
 
 // balance returns the pass that spreads the content that ended in the columns over
 // the columns as Chrome does, and the column height used. It makes at most
-// maxBalancePasses layouts, the first included (total is its height as one column, oneColumn tells it was laid out in one); the layouter is left in the state
-// after the returned pass.
-func (l *layouter) balance(b *box.Box, in []level, lv level, resuming bool, inner cbox, mc colGeom, y0, room float64, oneColumn bool, total float64, entry *colSnap, decor style.TextDecoration) (colPass, float64, error) {
+// maxBalancePasses layouts, the first included (total is its height as one column
+// and bound its fitBound, oneColumn tells it was laid out in one); the layouter is
+// left in the state after the returned pass.
+func (l *layouter) balance(b *box.Box, in []level, lv level, resuming bool, inner cbox, mc colGeom, y0, room float64, oneColumn bool, total, bound float64, entry *colSnap, decor style.TextDecoration) (colPass, float64, error) {
 	passes := 1
 	if !oneColumn {
 		l.restoreColumns(entry)
@@ -374,12 +387,12 @@ func (l *layouter) balance(b *box.Box, in []level, lv level, resuming bool, inne
 		if err != nil {
 			return one, 0, err
 		}
-		total = one.total(y0)
+		total, bound = one.total(y0), one.fitBound(y0)
 		l.b.RewindGlyphs(glyphs)
 		passes++
 	}
-	lo := total / float64(mc.n)
-	hi := math.Min(room, total+balanceEps)
+	lo := math.Max(0, total) / float64(mc.n)
+	hi := math.Min(room, bound+balanceEps)
 	best := hi
 	try := lo
 	for first := true; lo < hi && passes < maxBalancePasses-1; first = false {
