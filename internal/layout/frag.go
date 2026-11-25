@@ -19,6 +19,7 @@ type frag struct {
 	// first and last tell whether this is the first and last fragment of the box.
 	first, last bool
 	borderColor *[4]css.Color
+	borderLine  *lines
 	children    []*frag
 	lines       []*lineFrag
 	// abs are the layers of the absolute boxes whose containing block is this

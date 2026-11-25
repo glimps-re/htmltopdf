@@ -365,6 +365,13 @@ func (s *pageState) border(it display.Border) {
 	if !ok {
 		return
 	}
+	if it.Radii.IsZero() && hasDashes(it, w) {
+		s.dashedBorder(it, r, w)
+		return
+	}
+	if !it.Radii.IsZero() && s.roundedDashed(it, r, w, it.Radii) {
+		return
+	}
 	if !it.Radii.IsZero() {
 		var colors [4]pdf.Color
 		same := true
@@ -486,6 +493,9 @@ func (s *pageState) text(it *display.Text) {
 	}
 	line := func(center float64) {
 		thick := lineThickness * size
+		if it.Thickness > 0 {
+			thick = s.length(it.Thickness)
+		}
 		s.c.Rect(s.x(it.X), s.y(it.Baseline)+center*size-thick/2, s.length(width), thick)
 		s.c.Fill()
 	}

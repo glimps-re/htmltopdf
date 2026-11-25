@@ -387,7 +387,7 @@ type Computed struct {
 	// ColumnRule is the rule drawn between the columns: the width is 0 unless the
 	// style is solid, dashed or dotted.
 	ColumnRule Border
-	// TextDecorationThickness is auto (the font's underline thickness, also from-font) or px.
+	// TextDecorationThickness is auto (the font's underline thickness, also from-font), px or a percentage of the font size.
 	TextDecorationThickness Dim
 
 	// Position is not inherited. Inset is top, right, bottom and left.

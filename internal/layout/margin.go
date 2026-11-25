@@ -393,5 +393,5 @@ func mergeTexts(items display.List) display.List {
 
 func sameLook(a, b *display.Text) bool {
 	return a.Face == b.Face && a.Size == b.Size && a.Color == b.Color &&
-		a.Underline == b.Underline && a.LineThrough == b.LineThrough && a.Baseline == b.Baseline
+		a.Underline == b.Underline && a.LineThrough == b.LineThrough && a.Thickness == b.Thickness && a.Baseline == b.Baseline
 }

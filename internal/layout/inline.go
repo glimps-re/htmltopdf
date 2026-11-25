@@ -153,6 +153,8 @@ type info struct {
 	href  string
 	decor style.TextDecoration
 	color css.Color
+	// thick is the thickness in px of the decoration lines, 0 for the font's.
+	thick float64
 	// asc and desc are the content area; top and bottom the line box
 	// contribution once the half-leading of the line-height is added.
 	asc, desc, top, bottom float64
@@ -197,6 +199,26 @@ type paragraph struct {
 	// mid is the height of the middle of the lowercase letters above the
 	// baseline, for vertical-align: middle (half of an x-height of 0.5 em).
 	mid float64
+	// thick is the decoration thickness of the box being flattened that declared
+	// a decoration.
+	thick float64
+}
+
+// decorThickness returns the thickness in px of the decoration lines declared by
+// st: Chrome rounds it to whole px, at least 1; 0 is auto.
+func decorThickness(st *style.Computed) float64 {
+	d := st.TextDecorationThickness
+	var v float64
+	switch d.Kind {
+	case style.DimPx:
+		v = d.Value
+	case style.DimPercent:
+		v = d.Value / 100 * st.FontSize
+	}
+	if d.Kind != style.DimPx && d.Kind != style.DimPercent {
+		return 0
+	}
+	return math.Max(1, math.Round(clampCoord(math.Max(v, 0))))
 }
 
 // lineHeightParts returns the contribution above and below the baseline of a
@@ -241,6 +263,9 @@ func (l *layouter) paragraphOf(b *box.Box, decor style.TextDecoration, cbw float
 		mid:         st.FontSize / 4,
 	}
 	_, p.strutTop, p.strutBottom = l.boxMetrics(st)
+	if st.TextDecoration != 0 {
+		p.thick = decorThickness(st)
+	}
 	if err := l.flatten(p, b.Children, decor, cbw, 0); err != nil {
 		return nil, err
 	}
@@ -300,7 +325,13 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			e, in.top, in.bottom = l.boxMetrics(cst)
 			in.asc, in.desc = e.asc, e.desc
 			p.units = append(p.units, unit{kind: uOpen, info: in, w: openW})
-			if err := l.flatten(p, c.Children, d, cbw, inRise); err != nil {
+			outer := p.thick
+			if cst.TextDecoration != 0 {
+				p.thick = decorThickness(cst)
+			}
+			err := l.flatten(p, c.Children, d, cbw, inRise)
+			p.thick = outer
+			if err != nil {
 				return err
 			}
 			p.units = append(p.units, unit{kind: uClose, info: in, w: closeW})
@@ -341,6 +372,7 @@ func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 		return err
 	}
 	sh.info.rise = rise
+	sh.info.thick = p.thick
 	sh.info.top += rise
 	sh.info.bottom -= rise
 	p.units = append(p.units, unit{kind: uText, st: sh, info: sh.info})
@@ -710,6 +742,7 @@ func (l *layouter) appendTextItems(items []lineItem, st *shapedText, a, b int, x
 				Face: run.Face, Size: float64(run.Size), Color: in.color, Glyphs: glyphs, Text: st.text[lo:hi],
 				Underline:   in.decor&style.DecorationUnderline != 0,
 				LineThrough: in.decor&style.DecorationLineThrough != 0,
+				Thickness:   in.thick,
 			},
 		})
 		x += wsum

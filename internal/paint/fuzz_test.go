@@ -19,6 +19,9 @@ func FuzzPaint(f *testing.F) {
 	f.Add([]byte{7, 9, 10, 2, 8, 9}, 10.0, 20.0, 300.0, 400.0, 1.0)
 	f.Add([]byte{7, 7, 10, 3, 8, 8, 9, 4}, 1e30, math.NaN(), 5.0, math.Inf(-1), 0.5)
 	f.Add([]byte{10, 21, 32, 9, 8}, 5.0, 5.0, 100.0, 100.0, 3.0)
+	f.Add([]byte{11, 12, 27, 28, 43}, 10.0, 20.0, 300.0, 120.0, 1.0)
+	f.Add([]byte{11, 12, 3, 12}, 1e30, math.NaN(), 1e9, math.Inf(-1), 0.5)
+	f.Add([]byte{12, 12, 7, 11, 8, 23}, -5.0, 1e7, 1e7, 40.0, 2.0)
 	f.Fuzz(func(t *testing.T, ops []byte, x, y, w, h, scale float64) {
 		e := newEnv(t)
 		rect := display.Rect{X: x, Y: y, W: w, H: h}
@@ -26,7 +29,7 @@ func FuzzPaint(f *testing.F) {
 		side := display.BorderSide{Width: math.Abs(w) / 10, Color: red}
 		var l display.List
 		for _, op := range ops {
-			switch op % 11 {
+			switch op % 13 {
 			case 0:
 				l = append(l, display.FillRect{Rect: rect, Radii: radii, Color: css.Color{R: x, G: y, B: w, A: h}})
 			case 1:
@@ -54,6 +57,12 @@ func FuzzPaint(f *testing.F) {
 					Fill:   css.Color{R: x, G: y, B: w, A: h},
 					Stroke: css.Color{B: 1, A: scale}, Width: w / 10, Join: op, Cap: op >> 1, EvenOdd: op&1 == 0,
 				})
+			case 11:
+				d := display.BorderSide{Width: math.Abs(w)/10 + 1, Color: red, Style: display.LineStyle(op>>4%3 + 1), PatternWidth: h / 50, Lead: x / 20, Trail: y / 20}
+				l = append(l, display.Border{Rect: rect, Sides: [4]display.BorderSide{d, side, d, {Width: 3, Color: blue, Style: display.LineDotted}}})
+			case 12:
+				d := display.BorderSide{Width: math.Abs(w)/10 + 1, Color: red, Style: display.LineStyle(op>>4%2 + 1)}
+				l = append(l, display.Border{Rect: rect, Radii: radii, Sides: [4]display.BorderSide{d, d, d, d}})
 			case 10:
 				l = append(l, display.FillGradient{Rect: rect, Radii: radii, Gradient: css.Gradient{
 					Shape: css.GradientShape(op%3 + 0), Angle: x,

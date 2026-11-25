@@ -371,14 +371,15 @@ func columnRuleShorthand(props []prop, toks []css.Token) ([]propSpec, bool) {
 	return []propSpec{{props[0], vals[0]}, {props[1], vals[1]}, {props[2], vals[2]}}, true
 }
 
-// parseDecorationThickness parses auto, from-font (the same) or a length.
+// parseDecorationThickness parses auto, from-font (the same), a length or a
+// percentage of the font size.
 func parseDecorationThickness(toks []css.Token) (spec, bool) {
 	toks = trim(toks)
 	if kw, ok := ident(toks); ok {
 		return spec{auto: true}, kw == "auto" || kw == "from-font"
 	}
 	l, ok := css.ParseLength(toks)
-	if !ok || l.Value < 0 || l.Unit == css.UnitPercent {
+	if !ok || l.Value < 0 {
 		return spec{}, false
 	}
 	return spec{len: l}, true

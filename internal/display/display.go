@@ -52,10 +52,33 @@ type FillGradient struct {
 	Gradient css.Gradient
 }
 
-// BorderSide is one side of a border: Width 0 means no border.
+// LineStyle is how a border side is drawn.
+type LineStyle uint8
+
+// Line styles: the zero value is a solid line.
+const (
+	LineSolid LineStyle = iota
+	LineDashed
+	LineDotted
+)
+
+// BorderSide is one side of a border.
+//
+// A cell of a collapsed table draws half of the border it shares, which is
+// right for a solid line; a dashed or dotted one is drawn whole, as a single
+// stroke along the edge: PatternWidth is then its full width and the stroke is
+// centered on the edge of Rect instead of inside it.
 type BorderSide struct {
+	// Width is the width drawn inside the border box; 0 means no border.
 	Width float64
 	Color css.Color
+	Style LineStyle
+	// PatternWidth, when positive, is the full width of a collapsed edge shared
+	// with the next cell.
+	PatternWidth float64
+	// Lead and Trail move the start and the end of the stroke along the side
+	// (px, in the direction of the stroke: left to right, top to bottom).
+	Lead, Trail float64
 }
 
 // Border draws the border of Rect, the border box: Sides are indexed top, right,
@@ -79,6 +102,9 @@ type Text struct {
 	// Underline and LineThrough are the decoration lines, drawn over the advance
 	// of the run.
 	Underline, LineThrough bool
+	// Thickness is the thickness in px of the decoration lines; 0 is the one of
+	// the font.
+	Thickness float64
 }
 
 // Width returns the advance of the run.

@@ -80,3 +80,33 @@ func (c *Content) EllipticRect(x, y, w, h float64, rx, ry [4]float64) {
 	c.curve(x, y+ry[0]-ky[0], x+rx[0]-kx[0], y, x+rx[0], y)
 	c.op("h")
 }
+
+// Dash sets the dash pattern (d): on units drawn, then off units skipped. They
+// are non-negative and, once written, not both 0 (a zero on with a round cap draws
+// dots); anything else is an error.
+func (c *Content) Dash(on, off float64) {
+	if on < 0 || off < 0 || !(on+off > 0) || appendedZero(on) && appendedZero(off) {
+		c.fail(ErrNumber)
+		return
+	}
+	c.bracket("[")
+	c.num(on)
+	c.num(off)
+	c.bracket("] 0 ")
+	c.op("d")
+}
+
+// appendedZero reports whether v is written as 0.
+func appendedZero(v float64) bool {
+	b, err := appendNum(nil, v)
+	return err == nil && (len(b) == 1 && b[0] == '0')
+}
+
+func (c *Content) bracket(s string) {
+	if c.err != nil {
+		return
+	}
+	prev := len(c.buf)
+	c.buf = append(c.buf, s...)
+	c.commit(prev)
+}

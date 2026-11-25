@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/glimps-re/htmltopdf/internal/display"
+	"github.com/glimps-re/htmltopdf/internal/style"
 )
 
 type mcWord struct {
@@ -97,8 +98,6 @@ func mcOwner(name string) string {
 		return "min-height is not supported (css-coverage)"
 	case strings.HasPrefix(name, "height 400 columns 2 fill auto"):
 		return "Chrome adds columns past the count when a height is set; we continue on the next page (Q-M4-2)"
-	case strings.HasPrefix(name, "columns 3, rule 2px dotted"), strings.HasPrefix(name, "columns 2, rule 1px dashed"):
-		return "dashed and dotted rules: owned by M4-06 (display border style), which un-skips them when it merges"
 	}
 	return ""
 }
@@ -199,11 +198,41 @@ func TestMulticolMatchesChrome(t *testing.T) {
 				}
 				var rules [][]float64
 				for _, it := range pg.Items {
-					if fr, ok := it.(display.FillRect); ok && fr.Color.R == 1 && fr.Color.G == 0 {
-						rules = append(rules, []float64{(pg.Area.X + fr.Rect.X*pg.Scale) * 0.75, (pg.Area.Y + fr.Rect.Y*pg.Scale) * 0.75, fr.Rect.W * pg.Scale * 0.75, fr.Rect.H * pg.Scale * 0.75})
+					var rc display.Rect
+					switch v := it.(type) {
+					case display.FillRect:
+						if v.Color.R != 1 || v.Color.G != 0 {
+							continue
+						}
+						rc = v.Rect
+					case display.Border:
+						if v.Sides[style.Left].Color.R != 1 || v.Sides[style.Left].Style == display.LineSolid || v.Sides[style.Left].Width == 0 {
+							continue
+						}
+						rc = v.Rect
+					default:
+						continue
 					}
+					rules = append(rules, []float64{(pg.Area.X + rc.X*pg.Scale) * 0.75, (pg.Area.Y + rc.Y*pg.Scale) * 0.75, rc.W * pg.Scale * 0.75, rc.H * pg.Scale * 0.75})
 				}
 				sort.Slice(rules, func(i, j int) bool { return rules[i][0] < rules[j][0] })
+				if strings.Contains(c.Case, "dotted") {
+					// Chrome lists the first dots of the rule, not its box: the rule is
+					// at their x with their width, from the first dot to the end of the last.
+					if len(rules) == 0 || len(want.Rules) == 0 {
+						t.Errorf("page %d: %d rules, Chrome %d dots", want.Page, len(rules), len(want.Rules))
+						continue
+					}
+					top, bottom := want.Rules[0][1], want.Rules[0][1]+want.Rules[0][3]
+					for _, d := range want.Rules {
+						top, bottom = math.Min(top, d[1]), math.Max(bottom, d[1]+d[3])
+					}
+					got := rules[0]
+					if math.Abs(got[0]-want.Rules[0][0]) > tol || math.Abs(got[2]-want.Rules[0][2]) > tol || math.Abs(got[1]-top) > tol || math.Abs(got[1]+got[3]-bottom) > tol {
+						t.Errorf("page %d: rule %.2f, Chrome dots from x %.2f w %.2f over y %.2f..%.2f", want.Page, got, want.Rules[0][0], want.Rules[0][2], top, bottom)
+					}
+					continue
+				}
 				if len(rules) != len(want.Rules) {
 					t.Errorf("page %d: %d rules, Chrome %d", want.Page, len(rules), len(want.Rules))
 					continue

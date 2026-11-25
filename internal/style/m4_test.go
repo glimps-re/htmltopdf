@@ -51,6 +51,7 @@ func TestM4Properties(t *testing.T) {
 		{"text-decoration-thickness: 3px", func(c *Computed) bool { return c.TextDecorationThickness == px(3) }},
 		{"text-decoration-thickness: 0.1em", func(c *Computed) bool { return nearPx(c.TextDecorationThickness.Value, 1.6) }},
 		{"text-decoration-thickness: 0", func(c *Computed) bool { return c.TextDecorationThickness == px(0) }},
+		{"text-decoration-thickness: 10%", func(c *Computed) bool { return c.TextDecorationThickness == Dim{Kind: DimPercent, Value: 10} }},
 		{"border-style: dashed", func(c *Computed) bool {
 			return c.Border[Top].Style == BorderDashed && c.Border[Left].Style == BorderDashed
 		}},
@@ -108,7 +109,6 @@ func TestM4InvalidValues(t *testing.T) {
 		{"column-rule-width: 50%", "column-rule-width"},
 		{"column-rule-color: 5", "column-rule-color"},
 		{"text-decoration-thickness: -1px", "text-decoration-thickness"},
-		{"text-decoration-thickness: 10%", "text-decoration-thickness"},
 		{"text-decoration-thickness: thin", "text-decoration-thickness"},
 		{"text-decoration-thickness: 1", "text-decoration-thickness"},
 		{"text-decoration-thickness: auto 2px", "text-decoration-thickness"},

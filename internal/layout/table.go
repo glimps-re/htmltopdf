@@ -23,6 +23,20 @@ type tableCell struct {
 	// and colors of the cell.
 	border [4]float64
 	color  [4]css.Color
+	line   lines
+}
+
+// collapsedLine is how a cell draws a side of its collapsed border: the style
+// of the winning border and its full width, which the dashes follow when the
+// cell draws only half of it.
+type collapsedLine struct {
+	style display.LineStyle
+	full  float64
+	// shared: a dashed or dotted edge shared with the cell on the right or below,
+	// drawn whole by this cell; skip: the same edge on the left or above, which
+	// the other cell draws.
+	shared, skip bool
+	lead, trail  float64
 }
 
 // tableRow is a row, or a caption (cells is empty and box is the caption).
@@ -224,6 +238,7 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 				c := &tl.rows[i].cells[j]
 				for s := range c.border {
 					c.border[s], c.color[s] = c.box.Style.Border[s].Width, c.box.Style.Border[s].Color
+					c.line[s] = collapsedLine{style: lineStyle(c.box.Style.Border[s].Style)}
 				}
 			}
 		}
@@ -431,14 +446,14 @@ func (tl *tableLayout) coverAt(r, col int) *tableCell {
 // edge resolves the border shared by a (the cell before, above or left) and b:
 // the wider wins and a wins ties (CSS 2.1 §17.6.2.1, without rows and groups);
 // hidden suppresses it.
-func edge(a, b style.Border) (float64, css.Color) {
+func edge(a, b style.Border) style.Border {
 	if a.Style == style.BorderHidden || b.Style == style.BorderHidden {
-		return 0, css.Color{}
+		return style.Border{}
 	}
 	if b.Width > a.Width {
-		return b.Width, b.Color
+		return b
 	}
-	return a.Width, a.Color
+	return a
 }
 
 // resolveBorders sets the used borders of the cells in the collapsed model:
@@ -463,6 +478,7 @@ func (tl *tableLayout) resolveBorders(table *style.Computed) {
 			for s := 0; s < 4; s++ {
 				var w float64
 				var col css.Color
+				var ln collapsedLine
 				if nb[s] != nil {
 					other := nb[s].box.Style.Border
 					var first, second style.Border
@@ -471,10 +487,12 @@ func (tl *tableLayout) resolveBorders(table *style.Computed) {
 					} else {
 						first, second = own[s], other[opposite(s)]
 					}
-					w, col = edge(first, second)
-					w /= 2
+					win := edge(first, second)
+					w, col = win.Width/2, win.Color
+					ln = collapsedLine{style: lineStyle(win.Style), full: win.Width}
 				} else {
 					w, col = own[s].Width, own[s].Color
+					ln = collapsedLine{style: lineStyle(own[s].Style)}
 					if own[s].Style == style.BorderHidden {
 						w = 0
 					}
@@ -484,8 +502,41 @@ func (tl *tableLayout) resolveBorders(table *style.Computed) {
 						w = 0
 					}
 				}
-				c.border[s], c.color[s] = w, col
+				c.border[s], c.color[s], c.line[s] = w, col, ln
 			}
+			c.line.dash(nb)
+		}
+	}
+}
+
+// lines is the collapsedLine of the four sides of a cell.
+type lines [4]collapsedLine
+
+// dash decides who draws the dashed and dotted edges that the cell shares with
+// its neighbours nb (top, right, bottom, left) and how far each stroke runs:
+// Chrome draws such an edge whole, as one stroke from the middle of the border
+// at its start to the middle of the one at its end.
+func (ls *lines) dash(nb [4]*tableCell) {
+	for s := range ls {
+		if ls[s].style == display.LineSolid || nb[s] == nil || ls[s].full <= 0 {
+			continue
+		}
+		ls[s].skip = s == style.Top || s == style.Left
+		ls[s].shared = !ls[s].skip
+	}
+	for s := range ls {
+		if ls[s].style == display.LineSolid {
+			continue
+		}
+		a, b := style.Left, style.Right
+		if s == style.Left || s == style.Right {
+			a, b = style.Top, style.Bottom
+		}
+		if nb[a] != nil {
+			ls[s].lead = ls[a].full / 2
+		}
+		if nb[b] != nil {
+			ls[s].trail = ls[b].full / 2
 		}
 	}
 }
@@ -527,7 +578,7 @@ func (l *layouter) layCell(tl *tableLayout, c *tableCell, x, w float64, decor st
 	f.border = c.border
 	pad := func(side int) float64 { return padPx(st.Padding[side], tl.width) }
 	f.padding = [4]float64{pad(style.Top), pad(style.Right), pad(style.Bottom), pad(style.Left)}
-	f.borderColor = &c.color
+	f.borderColor, f.borderLine = &c.color, &c.line
 	f.rect = display.Rect{X: x, W: w}
 	cw := math.Max(0, w-f.border[style.Left]-f.border[style.Right]-f.padding[style.Left]-f.padding[style.Right])
 	inner := cbox{x: x + f.border[style.Left] + f.padding[style.Left], w: cw}
@@ -1068,11 +1119,20 @@ func (l *layouter) repeatHeader(tl *tableLayout, f *frag, inner cbox, decor styl
 
 // recolorBorder sets the colors of the border at the end of out: the colors of
 // a collapsed border are resolved per edge, not taken from the style.
-func recolorBorder(out display.List, colors *[4]css.Color) display.List {
+func recolorBorder(out display.List, colors *[4]css.Color, ls *lines) display.List {
 	if b, ok := out[len(out)-1].(display.Border); ok {
 		for i := range b.Sides {
 			if b.Sides[i].Width > 0 {
+				ln := ls[i]
 				b.Sides[i].Color = colors[i]
+				b.Sides[i].Style = ln.style
+				if ln.skip {
+					b.Sides[i].Width = 0
+				}
+				if ln.shared {
+					b.Sides[i].PatternWidth = ln.full
+				}
+				b.Sides[i].Lead, b.Sides[i].Trail = ln.lead, ln.trail
 			}
 		}
 		out[len(out)-1] = b

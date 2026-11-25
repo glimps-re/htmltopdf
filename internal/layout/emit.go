@@ -60,11 +60,11 @@ func (e *emitter) emitBox(f *frag, out display.List) display.List {
 	n := len(out)
 	out = appendBorder(out, st, r, rad, widths)
 	if f.borderColor != nil && len(out) > n {
-		out = recolorBorder(out, f.borderColor)
+		out = recolorBorder(out, f.borderColor, f.borderLine)
 	}
 	out = emitSVGBox(f, out)
 	for _, r := range f.rules {
-		out = append(out, display.FillRect{Rect: r, Color: st.ColumnRule.Color})
+		out = append(out, columnRule(r, st.ColumnRule))
 	}
 	clip := st.OverflowHidden && r.W > 0 && r.H > 0
 	if clip {
@@ -125,13 +125,34 @@ func appendBorder(out display.List, st *style.Computed, r display.Rect, rad disp
 		if w <= 0 {
 			continue
 		}
-		b.Sides[i] = display.BorderSide{Width: w, Color: st.Border[i].Color}
+		b.Sides[i] = display.BorderSide{Width: w, Color: st.Border[i].Color, Style: lineStyle(st.Border[i].Style)}
 		visible = true
 	}
 	if !visible {
 		return out
 	}
 	return append(out, b)
+}
+
+// columnRule returns the item of a rule between columns: a filled rectangle, or
+// the left side of a border for a dashed or dotted rule, which Chrome draws as
+// one.
+func columnRule(r display.Rect, rule style.Border) display.Item {
+	if ls := lineStyle(rule.Style); ls != display.LineSolid {
+		return display.Border{Rect: r, Sides: [4]display.BorderSide{style.Left: {Width: r.W, Color: rule.Color, Style: ls}}}
+	}
+	return display.FillRect{Rect: r, Color: rule.Color}
+}
+
+// lineStyle maps a border style to the way its side is drawn.
+func lineStyle(s style.BorderStyle) display.LineStyle {
+	switch s {
+	case style.BorderDashed:
+		return display.LineDashed
+	case style.BorderDotted:
+		return display.LineDotted
+	}
+	return display.LineSolid
 }
 
 // paddingBox is the border box of f minus the borders it draws.
