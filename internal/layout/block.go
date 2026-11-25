@@ -6,6 +6,7 @@ import (
 
 	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/budget"
+	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/style"
 	"github.com/glimps-re/htmltopdf/internal/text"
 )
@@ -71,6 +72,15 @@ type layouter struct {
 	stripes   map[*box.Box]*stripeState
 	sizes     map[*box.Box]sizeEntry
 }
+
+// scratchBottom is the bottom of the unbounded page that cells, items and atoms
+// are laid out on, and the largest column height of a balancing pass. Every
+// length and coordinate is clamped to css.MaxLengthPx. The tests of whether a
+// line, a box or a band fits are skipped while l.unbounded is set, so no sum of
+// clamped lengths cuts content there; lines past the clamp pile up inside their
+// box and a single line taller than the clamp starts at its box top (documented
+// in docs/css-support.md).
+const scratchBottom = 4 * css.MaxLengthPx
 
 func newLayouter(root *box.Box, cfg Config, width, height float64) *layouter {
 	return &layouter{root: root, sh: cfg.Shaper, probe: newProbe(cfg), b: cfg.Budget, width: width, bottom: height, ext: make(map[extKey]extVal), primaries: make(map[*style.Computed]primary)}
@@ -183,7 +193,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 	default:
 		l.flush()
 		f.rect.Y, f.yset = l.y, true
-		if l.y > l.bottom {
+		if !l.unbounded && l.y > l.bottom {
 			l.truncate = true
 			return result{status: nothing}, nil
 		}
@@ -191,7 +201,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 
 	// Top decoration (border and padding), sliced when it cannot fit.
 	if rem := pre - lv.pre; rem > 0 {
-		if room := l.bottom - l.y; rem > room {
+		if room := l.bottom - l.y; !l.unbounded && rem > room {
 			if !emptyAtEntry {
 				l.unwait(f)
 				return result{status: nothing}, nil
@@ -203,7 +213,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 			f.rect.H = math.Max(0, l.y-f.rect.Y)
 			return result{f: f, status: partial, tok: []level{{child: lv.child, pre: lv.pre + consume, cur: lv.cur, used: lv.used}}}, nil
 		}
-		l.y += rem
+		l.y = clampCoord(l.y + rem)
 		l.pageEmpty = false
 	}
 
@@ -323,13 +333,13 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		used += contentHere(f, l.y, pre, lv.pre)
 		if fill := hh - used; fill > 0 {
 			room := l.bottom - l.y
-			if b.Kind == box.KindSVG && fill > room && !l.pageEmpty {
+			if !l.unbounded && b.Kind == box.KindSVG && fill > room && !l.pageEmpty {
 				// A replaced box is not sliced: it moves whole to the next page; one
 				// taller than a page stays and the page clips it.
 				l.unwait(f)
 				return result{status: nothing}, nil
 			}
-			if fill > room && b.Kind != box.KindSVG {
+			if !l.unbounded && fill > room && b.Kind != box.KindSVG {
 				consume := math.Max(room, 0)
 				if l.pageEmpty {
 					consume = math.Max(room, 1)
@@ -342,7 +352,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 				f.rect.H = math.Max(0, l.y-f.rect.Y)
 				return result{f: f, status: partial, tok: []level{{childrenDone: true, pre: pre, post: lv.post, used: used + consume}}}, nil
 			}
-			l.y += fill
+			l.y = clampCoord(l.y + fill)
 			used = hh
 			l.pageEmpty = false
 		} else if fill < 0 {
@@ -356,7 +366,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		}
 	}
 	if rem := post - lv.post; rem > 0 {
-		if room := l.bottom - l.y; rem > room {
+		if room := l.bottom - l.y; !l.unbounded && rem > room {
 			// Slice the decoration: what fits stays here, the rest goes on. When
 			// the page already holds content, nothing of it stays: the
 			// decoration starts the next page.
@@ -369,7 +379,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 			f.rect.H = math.Max(0, l.y-f.rect.Y)
 			return result{f: f, status: partial, tok: []level{{childrenDone: true, pre: pre, post: lv.post + consume, used: used}}}, nil
 		}
-		l.y += rem
+		l.y = clampCoord(l.y + rem)
 		l.pageEmpty = false
 	}
 	if !f.yset {

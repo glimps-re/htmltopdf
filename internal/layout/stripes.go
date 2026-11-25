@@ -83,7 +83,7 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 			y = clampCoord(y + gap)
 		}
 		top := y - off
-		if y+s.h-off > l.bottom+cutEps {
+		if !l.unbounded && y+s.h-off > l.bottom+cutEps {
 			if !l.pageEmpty {
 				if placed == 0 && !resuming && !emptyAtEntry {
 					return nothing, nil, nil

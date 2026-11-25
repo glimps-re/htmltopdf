@@ -452,8 +452,14 @@ func TestTableMoreColumnsThanTheLimit(t *testing.T) {
 	}
 	sb.WriteString("</table>")
 	r := newRun(t, sb.String(), opts{css: tableDoc})
-	if n := len(fragsOf(r.all(t), "td")); n != 1000 {
-		t.Fatalf("%d cells laid out, want 1000", n)
+	// The content of the cells past column 1000 is folded into the last one,
+	// which can make the row taller than a page: count the cells, not the pieces.
+	cells := map[*box.Box]bool{}
+	for _, f := range fragsOf(r.all(t), "td") {
+		cells[f.box] = true
+	}
+	if len(cells) != 1000 {
+		t.Fatalf("%d cells laid out, want 1000", len(cells))
 	}
 	found := false
 	for _, w := range warningList(r.b) {

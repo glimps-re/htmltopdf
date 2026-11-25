@@ -93,7 +93,7 @@ type marginSlot struct {
 func (p *Paginator) MarginBoxes(pg *Page, total int) (display.List, error) {
 	ps := p.pageStyle(pg.Name)
 	if p.mb == nil {
-		p.mb = newLayouter(nil, p.cfg, measureWidth, math.MaxInt32)
+		p.mb = newLayouter(nil, p.cfg, measureWidth, scratchBottom)
 		p.pieces = make(map[pieceKey]*piece)
 		p.mstyles = make(map[*style.MarginBox]*marginStyles)
 		p.wraps = make(map[wrapKey]*wrapped)
@@ -217,7 +217,7 @@ func textBox(st *style.Computed, text string) *box.Box {
 // origin and its height. p.mb lays out one margin box at a time.
 func (p *Paginator) layoutBlock(root *box.Box, w float64) (display.List, float64, error) {
 	l := p.mb
-	l.root, l.width, l.bottom = root, w, math.MaxInt32
+	l.root, l.width, l.bottom = root, w, scratchBottom
 	l.startPage(false)
 	res, err := l.block(root, nil, cbox{x: 0, w: w}, 0)
 	if err != nil {

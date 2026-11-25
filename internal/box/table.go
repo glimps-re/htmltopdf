@@ -12,6 +12,10 @@ import (
 // MaxColSpan is the largest colspan, also the largest number of table columns.
 const MaxColSpan = 1000
 
+// ClampedColumns is the detail of the WarnClamped that a row with cells past the
+// last column gets.
+const ClampedColumns = "table columns > 1000"
+
 // spanAttr sets bx.ColSpan from the attribute name of el: [1, MaxColSpan], 1
 // when absent or invalid; clamped values are warned.
 func (bd *builder) spanAttr(el *dom.Element, bx *Box, name string) {
@@ -230,7 +234,7 @@ func (bd *builder) looseRow(ts *tableStyles, loose []*Box) (*Box, error) {
 }
 
 // fixRow wraps the runs of non-cell children of a row in anonymous cells.
-func (bd *builder) fixRow(ts *tableStyles, r *Box) error {
+func (bd *builder) fixRow(ts *tableStyles, r *Box) (err error) {
 	out := make([]*Box, 0, len(r.Children))
 	var loose []*Box
 	flush := func() error {
@@ -275,8 +279,47 @@ func (bd *builder) fixRow(ts *tableStyles, r *Box) error {
 	if err := flush(); err != nil {
 		return err
 	}
-	r.Children = out
-	return nil
+	r.Children, err = bd.foldOverflowCells(ts, out)
+	return err
+}
+
+// foldOverflowCells keeps the cells of a row that start before column MaxColSpan
+// and moves the content of the others, in order, to the end of the last kept
+// cell, one anonymous block per moved cell: the grid does not grow, and no text
+// is dropped by the clamp. The moved cell's own box (background, border,
+// visibility) is not kept, only what it holds (absolute boxes included) and its id, which
+// links point to.
+func (bd *builder) foldOverflowCells(ts *tableStyles, cells []*Box) ([]*Box, error) {
+	col, kept := 0, 0
+	for kept < len(cells) && col < MaxColSpan {
+		col += max(cells[kept].ColSpan, 1)
+		kept++
+	}
+	if kept == len(cells) {
+		return cells, nil
+	}
+	bd.b.Warn(budget.WarnClamped, ClampedColumns)
+	last := cells[kept-1]
+	extra := last.Children
+	for _, c := range cells[kept:] {
+		if err := bd.b.Charge(budget.Work, 1); err != nil {
+			return nil, err
+		}
+		if len(c.Children) == 0 && len(c.OutOfFlow) == 0 {
+			continue
+		}
+		moved, err := bd.anon(&ts.block, ts.parent, style.DisplayBlock, c.Children)
+		if err != nil {
+			return nil, err
+		}
+		moved.OutOfFlow, moved.ID, moved.Anchor = c.OutOfFlow, c.ID, c.Anchor
+		extra = append(extra, moved)
+	}
+	var err error
+	if last.Children, err = bd.blockify(ts, extra); err != nil {
+		return nil, err
+	}
+	return cells[:kept], nil
 }
 
 // blockify returns boxes fit to be the children of a block: when they mix

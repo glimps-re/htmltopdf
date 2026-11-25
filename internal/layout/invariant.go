@@ -69,21 +69,7 @@ func (t *treeText) walk(b *box.Box, parent textClass) {
 			t.need[b] = n
 		}
 	}
-	// The cells of a row past column maxTableCols are dropped, with a warning: a
-	// documented clamp, not a loss.
-	var kept map[*box.Box]bool
-	if b.Style != nil && b.Style.Display == style.DisplayTableRow {
-		if cells, dropped := rowCells(b); dropped {
-			kept = map[*box.Box]bool{}
-			for _, c := range cells {
-				kept[c.box] = true
-			}
-		}
-	}
 	for _, c := range b.Children {
-		if kept != nil && c.Style != nil && c.Style.Display == style.DisplayTableCell && !kept[c] {
-			continue
-		}
 		t.walk(c, class)
 	}
 	for _, c := range b.OutOfFlow {

@@ -208,11 +208,19 @@ func (l *layouter) fillColumns(b *box.Box, in []level, lv level, resuming bool, 
 		l.onColumns()
 	}
 	l.cols++
-	defer func() { l.cols-- }()
+	// Columns are fragmentainers with a height, also inside a cell or an item laid
+	// out apart: what does not fit goes on to the next one. There the last column
+	// has no next one, so it is unbounded and the content that is left runs down
+	// it (Chrome adds columns beside the others); the pass at the height of the
+	// unbounded page is unbounded in every column.
+	unbounded := l.unbounded
+	wholePage := unbounded && h >= scratchBottom-y0
+	defer func() { l.cols--; l.unbounded = unbounded }()
 	l.bottom, l.measures, l.forced, l.sliced = y0+h, 0, false, false
 	defer func() { p.sliced = l.sliced }()
 	cur, curIn := lv, in
 	for k := 0; k < mc.n; k++ {
+		l.unbounded = wholePage || unbounded && k == mc.n-1
 		cf := &frag{box: b, rect: display.Rect{X: inner.x, Y: y0, W: mc.w}, yset: true, first: true, last: true}
 		col := inner
 		col.x += float64(k) * (mc.w + mc.gap)
@@ -284,6 +292,7 @@ func (l *layouter) multicol(b *box.Box, f *frag, in []level, lv level, inner cbo
 		l.dropParagraph()
 	}()
 
+	apart := l.unbounded
 	glyphs := l.b.Used(budget.Glyphs)
 	pass, err := l.fillColumns(b, in, lv, resuming, inner, mc, y0, room, decor)
 	if err != nil {
@@ -297,13 +306,28 @@ func (l *layouter) multicol(b *box.Box, f *frag, in []level, lv level, inner cbo
 		return nothing, nil, nil
 	}
 	h := room
-	if pass.fits() {
+	if apart && pass.fits() && pass.total(y0) >= css.MaxLengthPx {
+		// The content is as tall as the clamp lets it be, so the one-column height
+		// says nothing about it: the unbounded pass is the layout.
+		h = math.Max(0, pass.tallest()-y0)
+	} else if pass.fits() {
 		l.b.RewindGlyphs(glyphs)
 		oneColumn := len(pass.cols) < 2 || pass.cols[1].empty()
 		total := pass.total(y0)
 		pass = colPass{}
 		if pass, h, err = l.balance(b, in, lv, resuming, inner, mc, y0, room, oneColumn, total, &entry, decor); err != nil {
 			return complete, nil, err
+		}
+		if apart && pass.stat == partial && !pass.forced {
+			// A cell or item laid out apart has no next page: the clamped lengths made
+			// the one-column height too small, so what the columns left over goes back
+			// in the column of the unbounded page.
+			l.restoreColumns(&entry)
+			l.b.RewindGlyphs(glyphs)
+			if pass, err = l.fillColumns(b, in, lv, resuming, inner, mc, y0, room, decor); err != nil {
+				return complete, nil, err
+			}
+			h = math.Max(0, pass.tallest()-y0)
 		}
 	}
 
@@ -335,7 +359,7 @@ func (l *layouter) balance(b *box.Box, in []level, lv level, resuming bool, inne
 	if !oneColumn {
 		l.restoreColumns(entry)
 		glyphs := l.b.Used(budget.Glyphs)
-		one, err := l.fillColumns(b, in, lv, resuming, inner, mc, y0, css.MaxLengthPx-y0, decor)
+		one, err := l.fillColumns(b, in, lv, resuming, inner, mc, y0, scratchBottom-y0, decor)
 		if err != nil {
 			return one, 0, err
 		}

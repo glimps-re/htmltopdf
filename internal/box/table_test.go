@@ -1,6 +1,7 @@
 package box
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -211,5 +212,78 @@ func TestColumnSpanAttribute(t *testing.T) {
 		if has := strings.Contains(strings.Join(warnings(b), ","), "clamped:span"); has != tc.warn {
 			t.Errorf("%q: warning %v, want %v", tc.attr, has, tc.warn)
 		}
+	}
+}
+
+func TestOverflowCellsAreFoldedIntoTheLastKeptCell(t *testing.T) {
+	got, b := buildHTML(t, `<table><tr><td colspan=1000>decoy</td><td>one <b>x</b></td><td></td><td><p>two</p></td></tr></table>`)
+	want := `block table
+  block tbody
+    block tr
+      block td colspan=1000
+        anon-block
+          text "decoy"
+        anon-block
+          text "one "
+          inline b
+            text "x"
+        anon-block
+          block p
+            text "two"`
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	ws, _ := b.Warnings()
+	if len(ws) != 1 || ws[0].Detail != ClampedColumns {
+		t.Errorf("warnings %v, want one %q", ws, ClampedColumns)
+	}
+}
+
+func TestRowWithinTheLimitIsNotFolded(t *testing.T) {
+	got, b := buildHTML(t, `<table><tr><td colspan=999>a</td><td>b</td></tr></table>`)
+	if strings.Contains(got, "anon-block") {
+		t.Errorf("a row of 1000 columns was folded:\n%s", got)
+	}
+	if ws, _ := b.Warnings(); len(ws) != 0 {
+		t.Errorf("warnings %v", ws)
+	}
+}
+
+func countTextAndAbs(b *Box) (texts, outOfFlow int) {
+	if b.Kind == KindText {
+		texts++
+	}
+	outOfFlow += len(b.OutOfFlow)
+	for _, c := range append(append([]*Box(nil), b.Children...), b.OutOfFlow...) {
+		ct, co := countTextAndAbs(c)
+		texts, outOfFlow = texts+ct, outOfFlow+co
+	}
+	return texts, outOfFlow
+}
+
+// Folding the cells past column 1000 loses no text box and no absolute box, and
+// keeps the id that links point to.
+func TestFoldKeepsEveryBoxAndTheID(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("<table><tr>")
+	for i := range 1003 {
+		sb.WriteString(`<td id="c` + strconv.Itoa(i) + `">t` + strconv.Itoa(i) + `<span style="position:absolute">a` + strconv.Itoa(i) + `</span></td>`)
+	}
+	sb.WriteString("</tr></table>")
+	got, _ := buildHTML(t, sb.String())
+	for _, id := range []string{"#c0", "#c999", "#c1000", "#c1002"} {
+		if strings.Count(got, id+"\n") != 1 {
+			t.Errorf("id %s not kept once", id)
+		}
+	}
+	b := testBudget(nil)
+	d := parseDoc(t, sb.String(), b)
+	root, err := Build(d, newStyler(t, d, b), b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts, abs := countTextAndAbs(root)
+	if texts != 2*1003 || abs != 1003 {
+		t.Errorf("%d text boxes and %d absolute boxes, want %d and 1003", texts, abs, 2*1003)
 	}
 }

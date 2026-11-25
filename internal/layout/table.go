@@ -133,8 +133,9 @@ func (l *layouter) tableOf(b *box.Box, w float64) (*tableLayout, error) {
 	return tl, nil
 }
 
-// rowCells returns the cells of a row; dropped is true when cells past column
-// maxTableCols were left out or a colspan was shortened to end there.
+// rowCells returns the cells of a row; dropped is true when a colspan was
+// shortened to end at column maxTableCols (the builder folds the cells past it
+// into the last one; a tree built otherwise has them left out here).
 func rowCells(r *box.Box) (cells []tableCell, dropped bool) {
 	cells = make([]tableCell, 0, len(r.Children))
 	col := 0
@@ -143,6 +144,7 @@ func rowCells(r *box.Box) (cells []tableCell, dropped bool) {
 			continue
 		}
 		if col >= maxTableCols {
+			// Defence for a tree that the builder did not make: it folds these cells.
 			return cells, true
 		}
 		span := max(c.ColSpan, 1)
@@ -210,7 +212,7 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 		var dropped bool
 		r.cells, dropped = rowCells(r.box)
 		if dropped {
-			l.b.Warn(budget.WarnClamped, "table columns > 1000")
+			l.b.Warn(budget.WarnClamped, box.ClampedColumns)
 		}
 		cellCount += len(r.cells)
 		if n := len(r.cells); n > 0 {
@@ -560,7 +562,7 @@ func (l *layouter) enterScratch() scratch {
 	s := scratch{y: l.y, pend: l.pend, waiting: l.waiting, truncate: l.truncate, pageEmpty: l.pageEmpty, bottom: l.bottom, para: l.para, unbounded: l.unbounded}
 	l.unbounded = true
 	l.y, l.pend, l.waiting, l.truncate = 0, margins{}, nil, false
-	l.pageEmpty, l.bottom, l.para = true, css.MaxLengthPx, nil
+	l.pageEmpty, l.bottom, l.para = true, scratchBottom, nil
 	return s
 }
 
@@ -917,7 +919,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 		tl.cur = nil
 		need := rowNeed(row, consumed-cur.from, sv, i == len(rows)-1)
 		work, wrf, wconsumed := cur, rf, consumed
-		if l.y+need > l.bottom {
+		if !l.unbounded && l.y+need > l.bottom {
 			// A row that breaks has its cells flow from the top (as in Chrome):
 			// centered cells would have lines on no common cut position. The
 			// top-aligned row decides the cut; a row that finally is not cut
@@ -958,7 +960,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				return partial, []level{{child: i}}, nil
 			}
 		}
-		if work != cur && l.y+sv+consumed-cur.from > l.bottom {
+		if work != cur && !l.unbounded && l.y+sv+consumed-cur.from > l.bottom {
 			// Top-aligned, the row fits where it laid out first does not (baseline
 			// cells make a row taller): it is the one to place.
 			rf, consumed, cur = wrf, wconsumed, work

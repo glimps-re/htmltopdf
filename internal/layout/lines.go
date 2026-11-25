@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/glimps-re/htmltopdf/internal/box"
+	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/display"
 	"github.com/glimps-re/htmltopdf/internal/style"
 )
@@ -42,7 +43,7 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 		}
 		// A margin can push the first line of a page past its bottom: it goes on the
 		// next page, where the margin is truncated, not out of sight.
-		if l.y > l.bottom || l.y+ln.height() > l.bottom && !l.pageEmpty {
+		if !l.unbounded && (l.y > l.bottom || l.y+ln.height() > l.bottom && !l.pageEmpty) {
 			if placed == 0 && !resuming && !emptyAtEntry {
 				l.restore(&saved)
 				return nothing, nil, nil
@@ -70,7 +71,7 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			p.releaseBefore(cur)
 			return partial, []level{{cur: cur, off: pulledOff}}, nil
 		}
-		if l.pageEmpty && ln.hasAtom() && ln.height() > l.bottom {
+		if !l.unbounded && l.pageEmpty && ln.hasAtom() && ln.height() > l.bottom {
 			start := l.y
 			if l.sliceLine(f, &ln, inner, p.align, start-off) {
 				l.pend, l.truncate = margins{}, true
@@ -94,8 +95,11 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 
 // place puts the line at the cursor, aligned in the content box.
 func (l *layouter) place(f *frag, ln *lineOut, inner cbox, align style.TextAlign) {
-	f.lines = append(f.lines, l.build(ln, inner, align, l.y))
-	l.y += ln.height()
+	// Lines past the clamp pile up inside it, overlapping, instead of leaving the
+	// extent of their box; none starts above that box.
+	y := math.Max(f.rect.Y, math.Min(l.y, math.Max(0, css.MaxLengthPx-ln.height())))
+	f.lines = append(f.lines, l.build(ln, inner, align, y))
+	l.y = clampCoord(l.y + ln.height())
 	l.pageEmpty = false
 }
 
