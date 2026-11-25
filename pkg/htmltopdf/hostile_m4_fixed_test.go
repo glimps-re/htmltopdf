@@ -1,7 +1,6 @@
 package htmltopdf
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -138,8 +137,7 @@ func TestM4FixedEmptyFlood(t *testing.T) {
 	}
 	t.Run("over MaxNodes", func(t *testing.T) {
 		r := h4Render(t, referenceOptions(t), empties("fixed", DefaultLimits().MaxNodes+1), false)
-		var le *LimitError
-		if !errors.As(r.err, &le) || le.Limit != LimitNodes {
+		if !h4IsLimit(r.err, LimitNodes) {
 			t.Fatalf("%v, want a LimitError on MaxNodes", r.err)
 		}
 	})

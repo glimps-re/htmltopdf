@@ -3,6 +3,7 @@ package htmltopdf
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -139,4 +140,21 @@ func h4Warnings(res *Result) []string {
 		out = append(out, fmt.Sprintf("%s: %s", w.Code, w.Detail))
 	}
 	return out
+}
+
+// h4Items returns n items of the template (one %s receives the marker) and their markers, from prefix.
+func h4Items(prefix string, n int, tmpl string) (html string, words []string) {
+	var sb strings.Builder
+	for i := range n {
+		w := fmt.Sprintf("%s%05d", prefix, i)
+		words = append(words, w)
+		fmt.Fprintf(&sb, tmpl, w)
+	}
+	return sb.String(), words
+}
+
+// h4IsLimit reports whether err is a LimitError on the given limit.
+func h4IsLimit(err error, limit Limit) bool {
+	var le *LimitError
+	return errors.As(err, &le) && le.Limit == limit
 }
