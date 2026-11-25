@@ -6,9 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/display"
+	"github.com/glimps-re/htmltopdf/internal/style"
 )
 
 // findAny returns the fragment of the box with the id, in the layers too, with
@@ -407,7 +409,7 @@ func TestAbsoluteBoxWithoutContainingBlockIsWarnedNotDropped(t *testing.T) {
 	r := newRun(t, `<p>x</p>`, opts{extra: smallPage})
 	r.all(t)
 	l := &layouter{b: r.b}
-	l.registerAbs(nil, cbox{})
+	l.registerAbs(&box.Box{Style: &style.Computed{}}, cbox{})
 	ws, _ := r.b.Warnings()
 	found := false
 	for _, w := range ws {

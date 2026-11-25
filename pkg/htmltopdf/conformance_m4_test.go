@@ -18,14 +18,12 @@ import (
 // against chrome09. The paper is the caller's (Options.PageSize), as for 01 and 02;
 // the template's own @page size turns it landscape.
 
-// Gates: each flips to true when the task that closes it merges.
+// Gates: each flips to true when the task that closes it merges. Every page of
+// 03L has its first and last file row within one row of Chrome's, and the idx
+// numbers of the blocked-files table equal Chrome's, from M4-01.
 const (
-	// m4FlowGatesBlocked: pages 1-17 within one row of Chrome's (M4-01).
-	m4FlowGatesBlocked = false
-	// m4FlowGatesArchives: pages 18-23 within one row of Chrome's (M4-02).
-	m4FlowGatesArchives = false
-	// m4CountersGate: the idx numbers of every page equal Chrome's.
-	m4CountersGate = false
+	// m4FlowGatesPages: 03L has Chrome's page count (M4-02).
+	m4FlowGatesPages = false
 	// m4WarningsGate: only string-set and content: ... string() are warned (M4-04).
 	m4WarningsGate = false
 )
@@ -33,14 +31,12 @@ const (
 // m4Today is the recorded state (M3 tree, design 11.4 rev. M4): a figure may
 // not get worse, the gates above turn them into bars.
 const (
-	m4TodayPagesL            = 24
-	m4TodayMaxOffset         = 2
-	m4TodayMaxOffsetArchives = 4
-	m4TodayPagesS            = 2
-	m4ChromePagesL           = 23
-	m4ChromePagesS           = 2
-	m4FlowBar                = 1
-	m4FirstArchivePage       = 18
+	m4TodayPagesL  = 24
+	m4TodayPagesS  = 2
+	m4ChromePagesL = 23
+	m4ChromePagesS = 2
+	m4FlowBar      = 1
+	m4BlockedPages = 17
 )
 
 // m4HTML is the fixture of the real template 03 (landscape, columns).
@@ -117,8 +113,14 @@ type m4FileRow struct {
 	page      int
 }
 
-// m4Rows lists the file rows of a document in text order. The number of a row is
-// the text run just before its path.
+// m4Marker is the td.idx of an archive member: the template draws it in a run of
+// its own, before the path. chrome09's pdftotext merges it with the path, so the
+// Chrome table (m4Chrome03L) lists the rows of the archive tables only, not their
+// members.
+const m4Marker = "↳"
+
+// m4Rows lists the file rows of a document in text order, without the members of
+// archives. The number of a row is the text run just before its path.
 func m4Rows(doc *pdftest.Doc) []m4FileRow {
 	var rows []m4FileRow
 	for pi, p := range doc.Pages {
@@ -127,7 +129,11 @@ func m4Rows(doc *pdftest.Doc) []m4FileRow {
 			if m == nil || i == 0 {
 				continue
 			}
-			rows = append(rows, m4FileRow{name: m[1], idx: strings.TrimSpace(p.Text[i-1]), page: pi + 1})
+			idx := strings.TrimSpace(p.Text[i-1])
+			if idx == m4Marker {
+				continue
+			}
+			rows = append(rows, m4FileRow{name: m[1], idx: idx, page: pi + 1})
 		}
 	}
 	return rows
@@ -231,9 +237,9 @@ func TestM4PageCounts(t *testing.T) {
 	}
 }
 
-// TestM4FlowMatchesChrome logs, per page of 03L, how far our first and last file
-// row are from chrome09's. It gates at one row on pages 1-17 from M4-01 and on
-// pages 18-23 from M4-02; before that the worst offset may not grow.
+// TestM4FlowMatchesChrome gates, per page of 03L, how far our first and last file
+// row are from chrome09's: at most one row. The members of the archives are not
+// rows (see m4Marker). The page count equals Chrome's from M4-02.
 func TestM4FlowMatchesChrome(t *testing.T) {
 	if len(m4Chrome03L) != m4ChromePagesL {
 		t.Fatalf("%d pages in the Chrome table, want %d", len(m4Chrome03L), m4ChromePagesL)
@@ -241,38 +247,22 @@ func TestM4FlowMatchesChrome(t *testing.T) {
 	res, doc := renderM4(t, testcorpus.Large)
 	offs := m4FlowOffsets(m4Rows(doc))
 	t.Logf("03L: %d pages (Chrome %d); row offsets first/last per page: %s", res.Pages, m4ChromePagesL, m4Summary(offs))
-	if m4FlowGatesBlocked && m4FlowGatesArchives && res.Pages != m4ChromePagesL {
-		t.Errorf("%d pages, Chrome %d", res.Pages, m4ChromePagesL)
-	}
-	var blocked, archives int
 	for _, o := range offs {
-		if o.page < m4FirstArchivePage {
-			blocked = max(blocked, o.worst())
-		} else {
-			archives = max(archives, o.worst())
+		if o.worst() > m4FlowBar {
+			t.Errorf("page %d: offset %+d/%+d rows (math.MaxInt: a page without file rows), bar %d", o.page, o.first, o.last, m4FlowBar)
 		}
 	}
-	t.Logf("worst offset: %d rows on pages 1-%d, %d on pages %d-%d", blocked, m4FirstArchivePage-1, archives, m4FirstArchivePage, m4ChromePagesL)
-	if m4FlowGatesBlocked && blocked > m4FlowBar {
-		t.Errorf("pages 1-%d: worst offset %d rows, bar %d", m4FirstArchivePage-1, blocked, m4FlowBar)
-	}
-	if m4FlowGatesArchives && archives > m4FlowBar {
-		t.Errorf("pages %d-%d: worst offset %d rows, bar %d", m4FirstArchivePage, m4ChromePagesL, archives, m4FlowBar)
-	}
-	if !m4FlowGatesBlocked && blocked > m4TodayMaxOffset {
-		t.Errorf("pages 1-%d: worst offset %d rows (math.MaxInt: a page without file rows), recorded %d", m4FirstArchivePage-1, blocked, m4TodayMaxOffset)
-	}
-	if !m4FlowGatesArchives && archives > m4TodayMaxOffsetArchives {
-		t.Errorf("pages %d-%d: worst offset %d rows (math.MaxInt: a page without file rows), recorded %d", m4FirstArchivePage, m4ChromePagesL, archives, m4TodayMaxOffsetArchives)
+	if m4FlowGatesPages && res.Pages != m4ChromePagesL {
+		t.Errorf("%d pages, Chrome %d", res.Pages, m4ChromePagesL)
 	}
 }
 
 // TestM4CountersContinuous checks the td.idx numbers of the blocked-files table
 // (pages 1-17 of 03L): they run 01, 02, ... without a gap or a restart across
-// the page breaks (gating today; the table ends at the first row whose number is not numeric or restarts at 01: the next table), and the first and last number of each page
-// equal chrome09's once m4CountersGate is set (M4-01). The archive tables
-// (pages 18-23) number their members with the marker the template draws and are
-// not compared.
+// the page breaks, and the first and last number of each page equal chrome09's.
+// The table ends at the first row whose number is not numeric or restarts at 01
+// (the next table); the archive tables number their members with the marker the
+// template draws and are not compared.
 func TestM4CountersContinuous(t *testing.T) {
 	_, doc := renderM4(t, testcorpus.Large)
 	var blocked []m4FileRow
@@ -282,7 +272,7 @@ func TestM4CountersContinuous(t *testing.T) {
 		}
 		blocked = append(blocked, r)
 	}
-	want, err := strconv.Atoi(m4Chrome03L[m4FirstArchivePage-2].lastIdx)
+	want, err := strconv.Atoi(m4Chrome03L[m4BlockedPages-1].lastIdx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,14 +292,13 @@ func TestM4CountersContinuous(t *testing.T) {
 		last[r.page] = r.idx
 	}
 	diff := 0
-	for _, c := range m4Chrome03L[:m4FirstArchivePage-1] {
+	for _, c := range m4Chrome03L[:m4BlockedPages] {
 		if first[c.page] != c.firstIdx || last[c.page] != c.lastIdx {
 			diff++
 		}
 	}
-	t.Logf("%d of %d pages differ from Chrome's first/last idx (the page flow, see TestM4FlowMatchesChrome)", diff, m4FirstArchivePage-1)
-	if m4CountersGate && diff > 0 {
-		t.Errorf("%d pages with idx numbers different from Chrome's", diff)
+	if diff > 0 {
+		t.Errorf("%d of %d pages with first/last idx numbers different from Chrome's", diff, m4BlockedPages)
 	}
 }
 

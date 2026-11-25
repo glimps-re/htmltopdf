@@ -12,6 +12,10 @@ import (
 func FuzzLayout(f *testing.F) {
 	for _, s := range []string{
 		"<p>hello world</p>",
+		"<div style='position:fixed;top:0'>A<div style='position:fixed;left:20px'>B<div style='position:fixed;right:0'>C</div></div></div>" + strings.Repeat("<p>x</p>", 30),
+		"<div style='position:fixed;top:0;left:0;width:50px;height:50px;transform:rotate(-18deg);z-index:-1'>w</div><p>a</p><p style='break-before:page'>b</p>",
+		"<p>x</p><div style='position:fixed;left:1e9px;bottom:-1e9px;width:1e9%'>f<div style='position:fixed;top:1e30px'>g</div></div><div style='break-before:page'>y</div>",
+		"<div style='break-inside:avoid;height:90vh'><div style='position:fixed;right:0'>r</div></div><table><tr><td style='position:fixed'>c</td></tr></table>",
 		"<svg width=10 height=1e30 viewBox='0 0 1e-9 1'><path d='M0 0 L1 1'/></svg><svg style='display:block;width:1e9px;margin:auto'></svg>",
 		"<p>a<svg viewBox='0 0 24 24' stroke=red><rect width=1e300 height=5 rx=1e300 /><circle r=1e9 /></svg>b</p>",
 		"<div style='position:relative;overflow:hidden;height:50px'><div style='position:absolute;left:1e7px;top:-1e7px;right:1e7px;bottom:1e9%;width:50%;transform:rotate(3rad);z-index:-5'>x</div><p style='position:relative;top:50%;left:-1e9px'>r</p></div>",

@@ -222,7 +222,7 @@ func (bd *builder) element(f *flow, e int32, parent *style.Computed, href string
 	if err != nil {
 		return err
 	}
-	if cs.Position == style.PositionAbsolute && ((len(f.run) > 0 || len(f.open) > 0) && inlineByDefault(el.Tag) || isFlexOrGrid(f.style.Display)) {
+	if (cs.Position == style.PositionAbsolute || cs.Position == style.PositionFixed) && ((len(f.run) > 0 || len(f.open) > 0) && inlineByDefault(el.Tag) || isFlexOrGrid(f.style.Display)) {
 		// Out of flow in the middle of inline content, where an element that is
 		// inline by default stays on its line (a block one starts a new line), or
 		// in a flex or grid container (it is not an item).

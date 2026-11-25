@@ -50,6 +50,8 @@ type layouter struct {
 	onMeasure func(*box.Box)
 	// cbs are the containing blocks of the absolute boxes being laid out.
 	cbs []*absCtx
+	// fixedReqs are the fixed boxes met in the flow of the page being laid out.
+	fixedReqs []absReq
 
 	root      *box.Box
 	mono      monoBox
@@ -392,7 +394,7 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 		return partial, []level{{child: i}}, nil
 	}
 	for i := lv.child; i < len(b.Children); i++ {
-		if b.Children[i].Style.Position == style.PositionAbsolute {
+		if pos := b.Children[i].Style.Position; pos == style.PositionAbsolute || pos == style.PositionFixed {
 			l.registerAbs(b.Children[i], inner)
 			continue
 		}

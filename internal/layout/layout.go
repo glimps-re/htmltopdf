@@ -79,7 +79,10 @@ type Paginator struct {
 	mstyles map[*style.MarginBox]*marginStyles
 	wraps   map[wrapKey]*wrapped
 	area    display.Rect
-	tok     []level
+	// fixed is what is known of the fixed boxes of the document; nil without any.
+	fixed     *fixedSet
+	fixedInit bool
+	tok       []level
 	// styles are the page styles by name.
 	styles map[string]*style.PageStyle
 	// resumed is true once a page has been laid out: the next one starts at a
@@ -146,6 +149,16 @@ func (p *Paginator) Next() (*Page, error) {
 		return nil, err
 	}
 	p.number++
+	if !p.fixedInit {
+		p.fixedInit = true
+		boxes, err := collectFixed(p.root, p.cfg.Budget)
+		if err != nil {
+			return nil, err
+		}
+		if len(boxes) > 0 {
+			p.fixed = &fixedSet{pinned: boxes}
+		}
+	}
 	l := p.l
 	name := pageNameAt(p.root, p.tok)
 	ps := p.pageStyle(name)
@@ -179,7 +192,13 @@ func (p *Paginator) Next() (*Page, error) {
 		// The root could not start (a margin pushed it past the page): the same
 		// position is retried on the next page, with the margins truncated.
 	}
+	p.placeFixedRequests()
 	if res.f != nil {
+		layers, err := p.fixedLayers(p.number)
+		if err != nil {
+			return nil, err
+		}
+		res.f.abs = append(res.f.abs[:len(res.f.abs):len(res.f.abs)], layers...)
 		e := &emitter{}
 		pg.Items = e.emitStack(res.f, make(display.List, 0, 64))
 		if err := p.cfg.Budget.Charge(budget.Work, int64(e.shadows)); err != nil {

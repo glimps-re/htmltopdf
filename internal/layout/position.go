@@ -21,6 +21,9 @@ type layer struct {
 	// z is the z-index, auto for the tree order among the 0 ones.
 	z    int32
 	auto bool
+	// fixed layers paint above the absolute ones of the same z-index: a fixed
+	// box mostly comes later in the tree (they have no common ancestor to say).
+	fixed bool
 }
 
 // absReq is an absolute box waiting for its containing block: sx and sy are
@@ -82,7 +85,7 @@ func (l *layouter) block(b *box.Box, in []level, cb cbox, decor style.TextDecora
 	st := b.Style
 	page, isCB := l.isContainingBlock(b)
 	var outer *absCtx
-	mark := 0
+	mark, fixedMark := 0, len(l.fixedReqs)
 	if n := len(l.cbs); n > 0 {
 		outer = l.cbs[n-1]
 		mark = len(outer.pending)
@@ -103,6 +106,10 @@ func (l *layouter) block(b *box.Box, in []level, cb cbox, decor style.TextDecora
 		if outer != nil && len(outer.pending) > mark {
 			clear(outer.pending[mark:])
 			outer.pending = outer.pending[:mark]
+		}
+		if len(l.fixedReqs) > fixedMark {
+			clear(l.fixedReqs[fixedMark:])
+			l.fixedReqs = l.fixedReqs[:fixedMark]
 		}
 		return res, nil
 	}
@@ -149,6 +156,10 @@ func relativeOffset(st *style.Computed, cb cbox) (dx, dy float64) {
 // registerAbs records the absolute box c, a child of a box whose content box is
 // inner, at the static position of the cursor.
 func (l *layouter) registerAbs(c *box.Box, inner cbox) {
+	if c.Style.Position == style.PositionFixed {
+		l.registerFixed(c, inner)
+		return
+	}
 	if l.measuring {
 		return
 	}
@@ -316,7 +327,12 @@ func (e *emitter) emitStack(f *frag, out display.List) display.List {
 	if len(ls) == 0 {
 		return e.emit(f, out)
 	}
-	sort.SliceStable(ls, func(i, j int) bool { return ls[i].rank() < ls[j].rank() })
+	sort.SliceStable(ls, func(i, j int) bool {
+		if ri, rj := ls[i].rank(), ls[j].rank(); ri != rj {
+			return ri < rj
+		}
+		return !ls[i].fixed && ls[j].fixed
+	})
 	var open []display.PushClip
 	i := 0
 	for ; i < len(ls) && ls[i].rank() < 0; i++ {

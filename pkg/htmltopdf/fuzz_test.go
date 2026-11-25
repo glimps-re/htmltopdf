@@ -29,6 +29,9 @@ func FuzzRender(f *testing.F) {
 		"<a href='#a'>x</a><a href='#b'>y</a><h2 id=a style='page:p'>A</h2><span id=b style='display:inline-block;height:1e9px'>B</span><a href='#'>z</a><a href='#nothing'>q</a><div style='display:none'><i id=c>c</i></div><a href='#c'>to hidden</a>" + string(bytes.Repeat([]byte("<a href='#a'>r</a>"), 300)),
 		"<style>@page{size:landscape;margin:1e9px} @page w{size:5in 1in;@top-left{content:'x'}}</style><p>a</p><div style='page:w'>b</div>",
 		"<style>@page{size:1e9px 1px}</style>x",
+		"<div style='position:fixed;top:0'>A<div style='position:fixed;left:20px'>B</div></div><style>@page w{size:100px 50px}</style><p>a</p><p style='page:w;break-before:page'>b</p>",
+		"<style>.w{position:fixed;top:30%;left:0;right:0;z-index:-1;transform:rotate(-18deg);text-align:center;font-size:40px}</style><div class=w>WM</div>" + string(bytes.Repeat([]byte("<p style='break-after:page'>p</p>"), 20)),
+		"<p>a</p><div style='position:fixed;left:0;bottom:-1e9px;width:1e9px'>f<div style='position:fixed;top:1e30px;right:-1e9px'>g</div></div><div style='position:fixed;left:1px'>s</div><p style='break-before:page'>b</p>" + string(bytes.Repeat([]byte("<i style='position:fixed;top:0'>x</i>"), 200)),
 		"<title>\x00)>></title><body>\u202e\ufffe", "<div><div><div>" + string(bytes.Repeat([]byte("<b>"), 2000)),
 	} {
 		f.Add([]byte(s))
