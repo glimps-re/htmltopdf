@@ -31,6 +31,18 @@ type stackedRun struct {
 	fills int
 }
 
+// runStackedTwice renders the page twice and returns the first run with the
+// smaller and the larger peak heap of the two.
+func runStackedTwice(t *testing.T, n int, shadow string) (first stackedRun, lo, hi uint64) {
+	t.Helper()
+	first = runStacked(t, n, 1, shadow)
+	second := runStacked(t, n, 1, shadow)
+	if first.err != nil || second.err != nil {
+		t.Fatalf("render with %q: errors %v and %v", shadow, first.err, second.err)
+	}
+	return first, min(first.peak, second.peak), max(first.peak, second.peak)
+}
+
 func runStacked(t *testing.T, n, pad int, shadow string) stackedRun {
 	t.Helper()
 	c := mustNew(t, m2Options(t))
@@ -55,29 +67,22 @@ func runStacked(t *testing.T, n, pad int, shadow string) stackedRun {
 // densest page the limits allow (99 000 boxes on one page, 8 blurred shadows
 // each) the shadows must add a bounded amount of memory, and the render must
 // succeed with one clamping warning. The item count and the warning are the
-// guarantee; the heap figures are a guard (the twin is the larger peak of two
-// runs, as a single run varies by about 5 MiB, and by 12 MiB under the race detector at load).
+// guarantee; the heap figures are a guard. A run's peak only errs upwards (a late
+// collection), so the twin counts its larger peak of two runs and the shadowed
+// render its smaller one: the guard is as wide as the 16 MiB bound plus the
+// spread of the twin, and the fill count is the real guarantee.
 func TestShadowStackedBoxesOnOnePage(t *testing.T) {
 	const n = 99000
 	shadows := "box-shadow:" + strings.TrimSuffix(strings.Repeat("1px 2px 8px 1px red,", 8), ",")
-	plain := runStacked(t, n, 1, "")
-	if again := runStacked(t, n, 1, ""); again.peak > plain.peak {
-		plain.peak = again.peak
+	plain, _, plainHi := runStackedTwice(t, n, "")
+	with, withLo, withHi := runStackedTwice(t, n, shadows)
+	t.Logf("without shadows: %d pages, %d fills, peak heap %d MiB, %v", plain.res.Pages, plain.fills, plainHi>>20, plain.took)
+	t.Logf("with shadows: peak heap %d..%d MiB, %d fills, %v", withLo>>20, withHi>>20, with.fills, with.took)
+	if withHi > 256<<20 {
+		t.Errorf("peak heap %d MiB above the 256 MiB ceiling", withHi>>20)
 	}
-	with := runStacked(t, n, 1, shadows)
-	t.Logf("without shadows: err %v, %d pages, %d fills, peak heap %d MiB, %v", plain.err, plain.res.Pages, plain.fills, plain.peak>>20, plain.took)
-	t.Logf("with shadows: err %v, peak heap %d MiB, %d fills, %v", with.err, with.peak>>20, with.fills, with.took)
-	if plain.err != nil {
-		t.Fatalf("the twin without shadows fails: %v", plain.err)
-	}
-	if with.err != nil {
-		t.Fatalf("with shadows: %v (peak heap %d MiB)", with.err, with.peak>>20)
-	}
-	if with.peak > 256<<20 {
-		t.Errorf("peak heap %d MiB above the 256 MiB ceiling", with.peak>>20)
-	}
-	if with.peak > plain.peak+16<<20 {
-		t.Errorf("shadows add %d MiB of heap (%d with, %d without)", (with.peak-plain.peak)>>20, with.peak>>20, plain.peak>>20)
+	if withLo > plainHi+16<<20 {
+		t.Errorf("shadows add %d MiB of heap (%d with, %d without)", (withLo-plainHi)>>20, withLo>>20, plainHi>>20)
 	}
 	if with.fills > maxShadowItemsPerPage {
 		t.Errorf("%d fills on the page, bound %d", with.fills, maxShadowItemsPerPage)
