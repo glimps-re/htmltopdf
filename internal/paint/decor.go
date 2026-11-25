@@ -173,22 +173,95 @@ func midColor(stops []css.ColorStop) css.Color {
 	return css.Color{}
 }
 
+// pdfStops converts the stops of a gradient. CSS interpolates premultiplied
+// colors, so the color of a fully transparent stop is its neighbours': it is
+// replaced by the color of the nearest opaque-enough stop before it and, at
+// the same position, by that of the nearest one after it. This is exact for
+// transparent stops and approximate for partially transparent stops of
+// different colors, which are interpolated unpremultiplied. A split that would
+// exceed pdf.MaxGradientStops keeps only the nearest neighbour.
+func pdfStops(stops []css.ColorStop) []pdf.Stop {
+	out := make([]pdf.Stop, len(stops))
+	transparent := 0
+	for i, st := range stops {
+		out[i] = pdf.Stop{Pos: st.Pos, Color: pdfColor(st.Color)}
+		if st.Color.A <= 0 {
+			transparent++
+		}
+	}
+	if transparent == 0 || transparent == len(stops) {
+		return out
+	}
+	canSplit := len(stops)+transparent <= pdf.MaxGradientStops
+	res := make([]pdf.Stop, 0, len(stops)+transparent)
+	for i, st := range stops {
+		if st.Color.A > 0 {
+			res = append(res, out[i])
+			continue
+		}
+		prev, next := opaqueNeighbours(stops, i)
+		switch {
+		case prev >= 0 && next >= 0 && canSplit:
+			res = append(res, hiddenStop(st.Pos, stops[prev].Color), hiddenStop(st.Pos, stops[next].Color))
+		case prev >= 0:
+			res = append(res, hiddenStop(st.Pos, stops[prev].Color))
+		default:
+			res = append(res, hiddenStop(st.Pos, stops[next].Color))
+		}
+	}
+	return res
+}
+
+// opaqueNeighbours returns the indices of the nearest stops with some alpha
+// before and after stop i, -1 for none.
+func opaqueNeighbours(stops []css.ColorStop, i int) (prev, next int) {
+	prev, next = -1, -1
+	for j := i - 1; j >= 0 && prev < 0; j-- {
+		if stops[j].Color.A > 0 {
+			prev = j
+		}
+	}
+	for j := i + 1; j < len(stops) && next < 0; j++ {
+		if stops[j].Color.A > 0 {
+			next = j
+		}
+	}
+	return prev, next
+}
+
+// hiddenStop is a fully transparent stop with the color of c.
+func hiddenStop(pos float64, c css.Color) pdf.Stop {
+	return pdf.Stop{Pos: pos, Color: pdf.Color{R: c.R, G: c.G, B: c.B}}
+}
+
 // shading returns the shading of g, reusing the last one for a run of fills
 // that share their stops.
 func (p *Painter) shading(g *css.Gradient) (pdf.ShadingID, error) {
 	n := len(g.Stops)
-	if n > 0 && p.lastStops == &g.Stops[0] && p.lastLen == n {
+	radial := g.Shape != css.GradientLinear
+	if n > 0 && p.lastStops == &g.Stops[0] && p.lastLen == n && p.lastRadial == radial {
 		return p.lastID, nil
 	}
-	stops := make([]pdf.Stop, n)
-	for i, st := range g.Stops {
-		stops[i] = pdf.Stop{Pos: st.Pos, Color: pdfColor(st.Color)}
-	}
-	id, err := p.w.AddGradient(pdf.Gradient{Stops: stops})
+	id, err := p.w.AddGradient(pdf.Gradient{Stops: pdfStops(g.Stops), Radial: radial})
 	if err == nil && n > 0 {
-		p.lastStops, p.lastLen, p.lastID = &g.Stops[0], n, id
+		p.lastStops, p.lastLen, p.lastRadial, p.lastID = &g.Stops[0], n, radial, id
 	}
 	return id, err
+}
+
+// radialMatrix returns the unit-space matrix of a farthest-corner radial
+// gradient centered on r: a circle through the farthest corner, or the ellipse
+// of the sides' ratio through it. ok is false for a degenerate box.
+func radialMatrix(r ptRect, shape css.GradientShape) (m [6]float64, ok bool) {
+	hw, hh := r.w/2, r.h/2
+	rx, ry := math.Hypot(hw, hh), math.Hypot(hw, hh)
+	if shape == css.GradientEllipse {
+		rx, ry = hw*math.Sqrt2, hh*math.Sqrt2
+	}
+	if !(rx > 0 && ry > 0) || math.IsInf(rx, 0) || math.IsInf(ry, 0) {
+		return m, false
+	}
+	return [6]float64{rx, 0, 0, ry, r.x + hw, r.y + hh}, true
 }
 
 func (s *pageState) fillGradient(it display.FillGradient) {
@@ -199,21 +272,22 @@ func (s *pageState) fillGradient(it display.FillGradient) {
 	if !ok || !positive(r.w, r.h) {
 		return
 	}
-	visible, translucent := false, false
+	visible := false
 	for _, st := range it.Gradient.Stops {
 		visible = visible || st.Color.A > 0
-		translucent = translucent || (st.Color.A > 0 && st.Color.A < 1)
 	}
 	if !visible {
 		return
 	}
-	m, ok := gradientMatrix(r, it.Gradient.Angle, it.Gradient.Corner)
+	var m [6]float64
+	if it.Gradient.Shape == css.GradientLinear {
+		m, ok = gradientMatrix(r, it.Gradient.Angle, it.Gradient.Corner)
+	} else {
+		m, ok = radialMatrix(r, it.Gradient.Shape)
+	}
 	if !ok {
 		s.p.b.Warn(budget.WarnClamped, "gradient line")
 		return
-	}
-	if translucent {
-		s.p.b.Warn(budget.WarnUnsupportedProperty, "gradient alpha")
 	}
 	id, err := s.p.shading(&it.Gradient)
 	switch {
@@ -229,7 +303,7 @@ func (s *pageState) fillGradient(it display.FillGradient) {
 	}
 	s.c.Save()
 	// sh paints with the current alpha, which an earlier translucent fill left
-	// set: the gradient itself is opaque.
+	// set: the gradient itself is opaque, its alpha is the soft mask's.
 	s.c.FillColor(pdf.Color{A: 1})
 	s.path(r, it.Radii)
 	s.c.Clip()

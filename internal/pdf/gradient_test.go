@@ -167,7 +167,7 @@ func TestQuantizeKeepsBoundsStrictlyInside(t *testing.T) {
 		"descending": {{0.9, Color{}}, {0.1, Color{}}, {0.5, Color{}}},
 	} {
 		var q [MaxGradientStops]qstop
-		n, err := quantize(stops, &q)
+		n, _, err := quantize(stops, &q)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,12 +211,15 @@ func BenchmarkAddGradient(b *testing.B) {
 }
 
 func FuzzAddGradient(f *testing.F) {
-	f.Add(0.0, 1.0, 0.5, 0.2)
-	f.Add(math.NaN(), math.Inf(1), -1.0, 1e300)
-	f.Fuzz(func(t *testing.T, a, b, c, d float64) {
+	f.Add(0.0, 1.0, 0.5, 0.2, 1.0, false)
+	f.Add(math.NaN(), math.Inf(1), -1.0, 1e300, 0.0, true)
+	f.Add(0.0, 0.7, 0.5, 0.2, 0.5, true)
+	f.Add(0.3, 0.3, 1.0, 1.0, math.NaN(), false)
+	f.Add(0.0, 1.0, 0.1, 0.9, -5.0, true)
+	f.Fuzz(func(t *testing.T, a, b, c, d, alpha float64, radial bool) {
 		var buf bytes.Buffer
 		w := newTestWriter(&buf)
-		id, err := w.AddGradient(Gradient{Stops: []Stop{{a, Color{R: c, A: 1}}, {b, Color{G: d, A: 1}}, {a, Color{B: c, A: 1}}}})
+		id, err := w.AddGradient(Gradient{Radial: radial, Stops: []Stop{{a, Color{R: c, A: alpha}}, {b, Color{G: d, A: 1}}, {a, Color{B: c, A: alpha}}}})
 		if err != nil {
 			return
 		}

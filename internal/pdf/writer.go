@@ -59,6 +59,9 @@ type Info struct{ Title string }
 type Link struct {
 	Rect [4]float64
 	URI  string
+	// Dest is the id of an internal target, set instead of URI: the link goes to
+	// the destination of that id (Writer.Dest).
+	Dest string
 }
 
 type countingWriter struct {
@@ -108,6 +111,11 @@ type Writer struct {
 	shadings shadingSet
 	started  bool
 	closed   bool
+	// dests are the named destinations; firstHeight is the height of the first
+	// page, where a destination never placed points.
+	dests       destTable
+	firstHeight float64
+	links       int
 }
 
 // NewWriter returns a Writer that writes to w and charges every byte to b.
@@ -219,6 +227,12 @@ func validateLink(l Link) error {
 			return ErrInvalidLink
 		}
 	}
+	if l.Dest != "" {
+		if l.URI != "" {
+			return ErrInvalidLink
+		}
+		return nil
+	}
 	if len(l.URI) > MaxURIBytes || !isPrintableASCII(l.URI) {
 		return ErrInvalidLink
 	}
@@ -232,12 +246,33 @@ func validateLink(l Link) error {
 	return ErrInvalidLink
 }
 
+// emitLink writes a link annotation; it returns 0 and no error for an internal
+// link that has no destination name left (the link is dropped, with a warning).
 func (w *Writer) emitLink(l Link) (Ref, error) {
+	if w.links >= MaxLinks {
+		w.warnLinks()
+		return 0, nil
+	}
+	var name string
+	if l.Dest != "" {
+		var ok bool
+		if name, ok = w.Dest(l.Dest); !ok {
+			w.warnDests()
+			return 0, nil
+		}
+	}
+	w.links++
 	ref := w.reserve()
 	w.obj = append(w.obj[:0], "<< /Type /Annot /Subtype /Link /F 4 /Border [0 0 0] /Rect "...)
 	var err error
 	if w.obj, err = appendRect(w.obj, l.Rect); err != nil {
 		return 0, err
+	}
+	if name != "" {
+		w.obj = append(w.obj, " /Dest "...)
+		w.obj = append(w.obj, name...)
+		w.obj = append(w.obj, " >>"...)
+		return ref, w.emit(ref, w.obj)
 	}
 	w.obj = append(w.obj, " /A << /S /URI /URI "...)
 	w.obj = appendString(w.obj, l.URI)
@@ -294,7 +329,9 @@ func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool
 		if err != nil {
 			return 0, err
 		}
-		annots = append(annots, ref)
+		if ref != 0 {
+			annots = append(annots, ref)
+		}
 	}
 	page, contents := w.reserve(), w.reserve()
 	var first Ref
@@ -345,6 +382,9 @@ func (w *Writer) AddPage(widthPt, heightPt float64, body *Content, deferred bool
 	w.obj = append(w.obj, " >>"...)
 	if err := w.emit(page, w.obj); err != nil {
 		return 0, err
+	}
+	if len(w.pages) == 0 {
+		w.firstHeight = heightPt
 	}
 	w.pages = append(w.pages, page)
 	return page, nil
@@ -412,8 +452,16 @@ func (w *Writer) Close(info Info) error {
 }
 
 func (w *Writer) closeCatalog() error {
+	dests, err := w.closeDests()
+	if err != nil {
+		return err
+	}
 	w.obj = append(w.obj[:0], "<< /Type /Catalog /Pages "...)
 	w.obj = appendRef(w.obj, pagesRef)
+	if dests != 0 {
+		w.obj = append(w.obj, " /Dests "...)
+		w.obj = appendRef(w.obj, dests)
+	}
 	w.obj = append(w.obj, " >>"...)
 	return w.emit(catalogRef, w.obj)
 }
@@ -454,6 +502,16 @@ func (w *Writer) closeResources() error {
 		if t == 255 {
 			break
 		}
+	}
+	for _, m := range w.shadings.masks {
+		if first {
+			w.obj = append(w.obj, " /ExtGState <<"...)
+			first = false
+		}
+		w.obj = append(w.obj, " /"...)
+		w.obj = append(w.obj, m.name...)
+		w.obj = append(w.obj, ' ')
+		w.obj = appendRef(w.obj, m.ref)
 	}
 	if !first {
 		w.obj = append(w.obj, " >>"...)

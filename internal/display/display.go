@@ -94,17 +94,66 @@ func (t *Text) Width() float64 {
 type Link struct {
 	Rect Rect
 	URI  string
+	// Dest is the id of the target of an internal link, set instead of URI.
+	Dest string
+}
+
+// Anchor is the destination of the internal links to Name: the top of the first
+// fragment of the box with that id. Only At.Y is used, the destination being the
+// left edge of the page (Chrome).
+type Anchor struct {
+	Name string
+	At   Point
 }
 
 // PushClip clips the items up to the matching PopClip to Rect (rounded when
-// Radii is not zero).
+// Radii is not zero), or with Outside to everything but Rect.
 type PushClip struct {
-	Rect  Rect
-	Radii Radii
+	Rect    Rect
+	Radii   Radii
+	Outside bool
 }
 
 // PopClip ends the last PushClip.
 type PopClip struct{}
+
+// Point is a point in layout px.
+type Point struct{ X, Y float64 }
+
+// PushTransform applies the affine matrix M = [a b c d e f] (x' = a·x + c·y + e,
+// y' = b·x + d·y + f, in layout px, y down) to the items up to the matching
+// PopTransform.
+type PushTransform struct{ M [6]float64 }
+
+// PopTransform ends the last PushTransform.
+type PopTransform struct{}
+
+// Path operations of a PathSeg.
+const (
+	PathMoveTo uint8 = iota
+	PathLineTo
+	PathCubicTo
+	PathClose
+)
+
+// PathSeg is one segment of a Path: MoveTo and LineTo use P[0], CubicTo
+// P[0..2] (control points, then end point), Close none.
+type PathSeg struct {
+	Op uint8
+	P  [3]Point
+}
+
+// Path fills and strokes a path given in layout px. A Fill or Stroke with A == 0
+// is not drawn; EvenOdd selects the fill rule; Width, Join and Cap are the
+// stroke width in px and the PDF line join (0 miter, 1 round, 2 bevel) and cap
+// (0 butt, 1 round, 2 square) codes.
+type Path struct {
+	Segs         []PathSeg
+	Fill, Stroke css.Color
+	EvenOdd      bool
+	Width        float64
+	Join, Cap    uint8
+}
 
 // Translate implements Item.
 func (v FillRect) Translate(dx, dy float64) Item { v.Rect = v.Rect.Translate(dx, dy); return v }
@@ -126,15 +175,48 @@ func (t *Text) Translate(dx, dy float64) Item {
 func (v Link) Translate(dx, dy float64) Item { v.Rect = v.Rect.Translate(dx, dy); return v }
 
 // Translate implements Item.
+func (v Anchor) Translate(dx, dy float64) Item { v.At.X, v.At.Y = v.At.X+dx, v.At.Y+dy; return v }
+
+// Translate implements Item.
 func (v PushClip) Translate(dx, dy float64) Item { v.Rect = v.Rect.Translate(dx, dy); return v }
 
 // Translate implements Item.
 func (v PopClip) Translate(float64, float64) Item { return v }
 
-func (FillRect) isItem()     {}
-func (FillGradient) isItem() {}
-func (Border) isItem()       {}
-func (*Text) isItem()        {}
-func (Link) isItem()         {}
-func (PushClip) isItem()     {}
-func (PopClip) isItem()      {}
+// Translate implements Item: the matrix becomes the same transformation in the
+// moved frame.
+func (v PushTransform) Translate(dx, dy float64) Item {
+	m := v.M
+	m[4] += dx - m[0]*dx - m[2]*dy
+	m[5] += dy - m[1]*dx - m[3]*dy
+	return PushTransform{M: m}
+}
+
+// Translate implements Item.
+func (v PopTransform) Translate(float64, float64) Item { return v }
+
+// Translate implements Item; the segments are copied.
+func (v Path) Translate(dx, dy float64) Item {
+	segs := make([]PathSeg, len(v.Segs))
+	for i, sg := range v.Segs {
+		for k := range sg.P {
+			sg.P[k].X += dx
+			sg.P[k].Y += dy
+		}
+		segs[i] = sg
+	}
+	v.Segs = segs
+	return v
+}
+
+func (FillRect) isItem()      {}
+func (FillGradient) isItem()  {}
+func (Border) isItem()        {}
+func (*Text) isItem()         {}
+func (Link) isItem()          {}
+func (Anchor) isItem()        {}
+func (PushClip) isItem()      {}
+func (PopClip) isItem()       {}
+func (PushTransform) isItem() {}
+func (PopTransform) isItem()  {}
+func (Path) isItem()          {}

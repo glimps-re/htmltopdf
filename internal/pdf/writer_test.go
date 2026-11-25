@@ -325,21 +325,21 @@ func TestLinkValidation(t *testing.T) {
 		l    Link
 		ok   bool
 	}{
-		{"https", Link{rect, "https://example.com"}, true},
-		{"http upper", Link{rect, "HTTP://example.com"}, true},
-		{"mailto", Link{rect, "mailto:a@b.c"}, true},
-		{"at the limit", Link{rect, long(MaxURIBytes)}, true},
-		{"just over", Link{rect, long(MaxURIBytes + 1)}, false},
-		{"javascript", Link{rect, "javascript:alert(1)"}, false},
-		{"leading control", Link{rect, "\x01javascript:alert(1)"}, false},
-		{"file", Link{rect, "file:///etc/passwd"}, false},
-		{"no scheme", Link{rect, "https"}, false},
-		{"empty", Link{rect, ""}, false},
-		{"non-ascii", Link{rect, "https://é.com"}, false},
-		{"space ok", Link{rect, "https://a.b/ c"}, true},
-		{"newline", Link{rect, "https://a.b/\n"}, false},
-		{"nan rect", Link{[4]float64{math.NaN(), 0, 1, 1}, "https://a.b"}, false},
-		{"huge rect", Link{[4]float64{0, 0, MaxCoord + 1, 1}, "https://a.b"}, false},
+		{"https", Link{Rect: rect, URI: "https://example.com"}, true},
+		{"http upper", Link{Rect: rect, URI: "HTTP://example.com"}, true},
+		{"mailto", Link{Rect: rect, URI: "mailto:a@b.c"}, true},
+		{"at the limit", Link{Rect: rect, URI: long(MaxURIBytes)}, true},
+		{"just over", Link{Rect: rect, URI: long(MaxURIBytes + 1)}, false},
+		{"javascript", Link{Rect: rect, URI: "javascript:alert(1)"}, false},
+		{"leading control", Link{Rect: rect, URI: "\x01javascript:alert(1)"}, false},
+		{"file", Link{Rect: rect, URI: "file:///etc/passwd"}, false},
+		{"no scheme", Link{Rect: rect, URI: "https"}, false},
+		{"empty", Link{Rect: rect, URI: ""}, false},
+		{"non-ascii", Link{Rect: rect, URI: "https://é.com"}, false},
+		{"space ok", Link{Rect: rect, URI: "https://a.b/ c"}, true},
+		{"newline", Link{Rect: rect, URI: "https://a.b/\n"}, false},
+		{"nan rect", Link{Rect: [4]float64{math.NaN(), 0, 1, 1}, URI: "https://a.b"}, false},
+		{"huge rect", Link{Rect: [4]float64{0, 0, MaxCoord + 1, 1}, URI: "https://a.b"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -435,7 +435,7 @@ func TestManyPages(t *testing.T) {
 	var buf bytes.Buffer
 	w := newTestWriter(&buf)
 	for i := 0; i < 200; i++ {
-		if _, err := w.AddPage(100, 100, sampleContent(), false, []Link{{[4]float64{0, 0, 1, 1}, "https://a.b"}}); err != nil {
+		if _, err := w.AddPage(100, 100, sampleContent(), false, []Link{{Rect: [4]float64{0, 0, 1, 1}, URI: "https://a.b"}}); err != nil {
 			t.Fatal(err)
 		}
 	}

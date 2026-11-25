@@ -16,6 +16,9 @@ func FuzzPaint(f *testing.F) {
 	f.Add([]byte{0, 1, 2, 3, 4, 5, 6, 7}, 10.0, 20.0, 30.0, 40.0, 1.0)
 	f.Add([]byte{3, 3, 0, 4, 4, 5}, -1e30, math.Inf(1), math.NaN(), 1e300, 0.5)
 	f.Add([]byte{3, 0, 1, 2, 4, 3, 4}, 0.0, 0.0, 800.0, 1000.0, 2.0)
+	f.Add([]byte{7, 9, 10, 2, 8, 9}, 10.0, 20.0, 300.0, 400.0, 1.0)
+	f.Add([]byte{7, 7, 10, 3, 8, 8, 9, 4}, 1e30, math.NaN(), 5.0, math.Inf(-1), 0.5)
+	f.Add([]byte{10, 21, 32, 9, 8}, 5.0, 5.0, 100.0, 100.0, 3.0)
 	f.Fuzz(func(t *testing.T, ops []byte, x, y, w, h, scale float64) {
 		e := newEnv(t)
 		rect := display.Rect{X: x, Y: y, W: w, H: h}
@@ -23,7 +26,7 @@ func FuzzPaint(f *testing.F) {
 		side := display.BorderSide{Width: math.Abs(w) / 10, Color: red}
 		var l display.List
 		for _, op := range ops {
-			switch op % 7 {
+			switch op % 11 {
 			case 0:
 				l = append(l, display.FillRect{Rect: rect, Radii: radii, Color: css.Color{R: x, G: y, B: w, A: h}})
 			case 1:
@@ -40,6 +43,22 @@ func FuzzPaint(f *testing.F) {
 				l = append(l, &r)
 			case 6:
 				l = append(l, display.FillGradient{Rect: rect})
+			case 7:
+				l = append(l, display.PushTransform{M: [6]float64{w / 100, h / 100, -x / 100, y / 100, x, y}})
+			case 8:
+				l = append(l, display.PopTransform{})
+			case 9:
+				pt := func(dx float64) display.Point { return display.Point{X: x + dx, Y: y - dx} }
+				l = append(l, display.Path{
+					Segs:   []display.PathSeg{{Op: display.PathMoveTo, P: [3]display.Point{pt(0)}}, {Op: display.PathCubicTo, P: [3]display.Point{pt(5), pt(h), pt(w)}}, {Op: display.PathLineTo, P: [3]display.Point{pt(1)}}, {Op: display.PathClose}},
+					Fill:   css.Color{R: x, G: y, B: w, A: h},
+					Stroke: css.Color{B: 1, A: scale}, Width: w / 10, Join: op, Cap: op >> 1, EvenOdd: op&1 == 0,
+				})
+			case 10:
+				l = append(l, display.FillGradient{Rect: rect, Radii: radii, Gradient: css.Gradient{
+					Shape: css.GradientShape(op%3 + 0), Angle: x,
+					Stops: []css.ColorStop{{Color: css.Color{R: 1, A: scale}}, {Color: css.Color{}, Pos: 0.7}, {Color: css.Color{B: 1, A: 1}, Pos: 1}},
+				}})
 			}
 		}
 		g := Geometry{Width: 800, Height: 1000, Area: display.Rect{X: x / 10, Y: y / 10, W: 600, H: 800}, Scale: scale}

@@ -3,7 +3,6 @@ package paint
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -261,7 +260,7 @@ func TestGradientsInsideTheDeepestClips(t *testing.T) {
 	e.finish(t)
 }
 
-func TestGradientAlphaWarns(t *testing.T) {
+func TestTranslucentGradientsShareMasks(t *testing.T) {
 	e := newEnv(t)
 	half := css.Color{R: 1, A: 0.5}
 	got, _ := e.page(t, a4, display.List{
@@ -270,14 +269,10 @@ func TestGradientAlphaWarns(t *testing.T) {
 		gradientBox(stopsAt(red, css.Color{}, 0, 1)),
 	})
 	balanced(t, got)
-	ws, _ := e.b.Warnings()
-	var alpha []string
-	for _, w := range ws {
-		if w.Code == budget.WarnUnsupportedProperty && w.Detail == "gradient alpha" {
-			alpha = append(alpha, fmt.Sprint(w.Count))
-		}
+	if n := strings.Count(got, " gs\n/Sh"); n != 3 {
+		t.Errorf("%d soft masks set, want 3:\n%s", n, got)
 	}
-	if len(alpha) != 1 {
+	if ws, _ := e.b.Warnings(); len(ws) != 0 {
 		t.Errorf("warnings %+v", ws)
 	}
 	e.finish(t)

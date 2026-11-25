@@ -99,20 +99,15 @@ func TestFillGradientSkipped(t *testing.T) {
 	e.finish(t)
 }
 
-func TestFillGradientTranslucentWarns(t *testing.T) {
+func TestFillGradientTranslucentUsesASoftMask(t *testing.T) {
 	e := newEnv(t)
 	g := css.Gradient{Stops: []css.ColorStop{{Color: css.Color{R: 1, A: 0.5}}, {Color: blue, Pos: 1}}}
 	content, _ := e.page(t, a4, display.List{display.FillGradient{Rect: display.Rect{W: 50, H: 50}, Gradient: g}})
-	if !strings.Contains(content, " sh") {
-		t.Fatal("gradient not painted")
+	if !strings.Contains(content, "/SM1 gs\n/Sh1 sh") {
+		t.Fatalf("gradient not painted through its soft mask:\n%s", content)
 	}
-	found := false
-	warnings, _ := e.b.Warnings()
-	for _, w := range warnings {
-		found = found || w.Code == budget.WarnUnsupportedProperty
-	}
-	if !found {
-		t.Fatalf("no %s warning: %v", budget.WarnUnsupportedProperty, warnings)
+	if ws, _ := e.b.Warnings(); len(ws) != 0 {
+		t.Fatalf("warnings: %v", ws)
 	}
 	e.finish(t)
 }

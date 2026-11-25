@@ -76,10 +76,28 @@ type Painter struct {
 	fonts  map[*text.Face]pdf.FontID
 	glyphs []pdf.Glyph
 	// lastStops, lastLen and lastID memoize the shading of the last gradient.
-	lastStops *css.ColorStop
-	lastLen   int
-	lastID    pdf.ShadingID
+	lastStops  *css.ColorStop
+	lastLen    int
+	lastRadial bool
+	lastID     pdf.ShadingID
+	// anchors are the destinations of the last page painted.
+	anchors []Anchor
+	// anchored are the names of anchors, one destination per name and page (an
+	// inline box wrapped over lines has an anchor on each).
+	anchored map[string]struct{}
 }
+
+// Anchor is a destination on a page: the internal target Name, Y points above the
+// bottom of the page. It ignores transforms and the offset of relative boxes and
+// is unscaled, as Chrome writes it.
+type Anchor struct {
+	Name string
+	Y    float64
+}
+
+// Anchors returns the destinations of the page the last call of Page painted; the
+// slice is reused by the next call.
+func (p *Painter) Anchors() []Anchor { return p.anchors }
 
 // NewPainter returns a Painter that adds fonts to w, reads their metrics through
 // s and reports clamped values on b.
@@ -95,7 +113,9 @@ func pdfColor(c css.Color) pdf.Color { return pdf.Color{R: c.R, G: c.G, B: c.B, 
 // first error of c (pdf.ErrContentSize among them), a font that cannot be
 // embedded, or ErrUnbalancedClip.
 func (p *Painter) Page(c *pdf.Content, g Geometry, l display.List) ([]pdf.Link, error) {
-	s := &pageState{p: p, c: c, g: g}
+	p.anchors = p.anchors[:0]
+	clear(p.anchored)
+	s := &pageState{p: p, c: c, g: g, ctm: identity}
 	if !(g.Scale > 0) || math.IsInf(g.Scale, 0) {
 		s.g.Scale = 1
 	}
@@ -118,26 +138,37 @@ func (p *Painter) Page(c *pdf.Content, g Geometry, l display.List) ([]pdf.Link, 
 			s.text(v)
 		case display.Link:
 			s.link(v)
+		case display.Anchor:
+			s.anchor(v)
 		case display.PushClip:
 			s.pushClip(v)
 		case display.PopClip:
 			s.popClip()
+		case display.PushTransform:
+			s.pushTransform(v)
+		case display.PopTransform:
+			s.popTransform()
+		case display.Path:
+			s.drawPath(v)
 		case display.FillGradient:
 			s.fillGradient(v)
 		}
 	}
-	if s.err == nil && len(s.clips) > 0 {
+	if s.err == nil && len(s.stack) > 0 {
 		s.err = ErrUnbalancedClip
 	}
-	for _, drawn := range s.clips {
-		if drawn {
+	for _, g := range s.stack {
+		if g.drawn {
 			c.Restore()
 		}
+	}
+	if err := c.Err(); err != nil {
+		return nil, err
 	}
 	if s.err != nil {
 		return nil, s.err
 	}
-	return s.links, c.Err()
+	return s.links, nil
 }
 
 type pageState struct {
@@ -145,9 +176,20 @@ type pageState struct {
 	c     *pdf.Content
 	g     Geometry
 	links []pdf.Link
-	// clips has one entry per PushClip: true when it was drawn (q written).
-	clips []bool
-	err   error
+	// stack has one entry per open PushClip or PushTransform.
+	stack []group
+	// ctm is the product of the open transforms, in layout px; xforms counts
+	// the drawn ones.
+	ctm    [6]float64
+	xforms int
+	err    error
+}
+
+// group is an open clip or transform.
+type group struct {
+	// drawn is true when a q was written.
+	drawn, transform bool
+	prev             [6]float64
 }
 
 // positive reports whether w and h are both greater than 0 (false for NaN).
@@ -183,6 +225,15 @@ func (r ptRect) top() float64   { return r.y + r.h }
 func (s *pageState) rect(r display.Rect) (ptRect, bool) {
 	x0, x1 := s.x(r.X), s.x(r.X+r.W)
 	yTop, yBottom := s.y(r.Y), s.y(r.Y+r.H)
+	if s.xforms > 0 {
+		return ptRect{x: x0, y: yBottom, w: x1 - x0, h: yTop - yBottom}, true
+	}
+	return s.onPage(x0, x1, yTop, yBottom)
+}
+
+// onPage returns the rectangle with the given edges in points, ok false when it
+// is entirely off the page.
+func (s *pageState) onPage(x0, x1, yTop, yBottom float64) (ptRect, bool) {
 	if x1 < 0 || x0 > s.g.Width*PxToPt || yTop < 0 || yBottom > s.g.Height*PxToPt {
 		return ptRect{}, false
 	}
@@ -212,37 +263,81 @@ func (s *pageState) fillRect(it display.FillRect) {
 }
 
 func (s *pageState) pushClip(it display.PushClip) {
-	if len(s.clips) >= MaxClipDepth {
+	if len(s.stack) >= MaxClipDepth {
 		s.p.b.Warn(budget.WarnClamped, "clip nesting")
-		s.clips = append(s.clips, false)
+		s.stack = append(s.stack, group{})
 		return
 	}
 	r, ok := s.rect(it.Rect)
+	if !ok && it.Outside {
+		s.stack = append(s.stack, group{})
+		return
+	}
 	if !ok {
 		// Nothing inside can be seen: an empty clip says so.
 		r = ptRect{}
 	}
 	s.c.Save()
-	s.path(r, it.Radii)
-	s.c.Clip()
-	s.clips = append(s.clips, true)
+	if it.Outside && ok {
+		s.c.Rect(-MaxCoordPt, -MaxCoordPt, 2*MaxCoordPt, 2*MaxCoordPt)
+		s.path(r, it.Radii)
+		s.c.ClipEvenOdd()
+	} else {
+		s.path(r, it.Radii)
+		s.c.Clip()
+	}
+	s.stack = append(s.stack, group{drawn: true})
 }
 
 func (s *pageState) popClip() {
-	n := len(s.clips)
-	if n == 0 {
-		s.err = ErrUnbalancedClip
-		return
-	}
-	if s.clips[n-1] {
+	if g, ok := s.pop(false); ok && g.drawn {
 		s.c.Restore()
 	}
-	s.clips = s.clips[:n-1]
+}
+
+// pop removes the last group, which must be a transform when transform is set.
+func (s *pageState) pop(transform bool) (group, bool) {
+	n := len(s.stack)
+	if n == 0 || s.stack[n-1].transform != transform {
+		s.err = ErrUnbalancedClip
+		return group{}, false
+	}
+	g := s.stack[n-1]
+	s.stack = s.stack[:n-1]
+	return g, true
+}
+
+// anchor records the destination of an internal link, clamped to the page. Like
+// Chrome, which writes the offset of the box in the page area as if it were
+// measured from the top of the page, unscaled: y = page height - offset.
+func (s *pageState) anchor(it display.Anchor) {
+	if it.Name == "" || math.IsNaN(it.At.Y) {
+		return
+	}
+	if _, dup := s.p.anchored[it.Name]; dup {
+		return
+	}
+	if s.p.anchored == nil {
+		s.p.anchored = make(map[string]struct{})
+	}
+	s.p.anchored[it.Name] = struct{}{}
+	pageH := s.g.Height * PxToPt
+	s.p.anchors = append(s.p.anchors, Anchor{Name: it.Name, Y: math.Max(0, math.Min(pageH, pageH-it.At.Y*PxToPt))})
 }
 
 func (s *pageState) link(it display.Link) {
-	r, ok := s.rect(it.Rect)
-	if !ok || it.URI == "" {
+	if it.URI == "" && it.Dest == "" {
+		return
+	}
+	var r ptRect
+	var ok bool
+	if s.xforms > 0 {
+		x0, x1, y0, y1 := s.mappedBounds(it.Rect)
+		r, ok = s.onPage(s.x(x0), s.x(x1), s.y(y0), s.y(y1))
+	} else {
+		r, ok = s.rect(it.Rect)
+	}
+	if !ok {
 		return
 	}
 	pageW, pageH := s.g.Width*PxToPt, s.g.Height*PxToPt
@@ -251,7 +346,7 @@ func (s *pageState) link(it display.Link) {
 	if !(x1 > x0 && y1 > y0) {
 		return
 	}
-	s.links = append(s.links, pdf.Link{Rect: [4]float64{x0, y0, x1, y1}, URI: it.URI})
+	s.links = append(s.links, pdf.Link{Rect: [4]float64{x0, y0, x1, y1}, URI: it.URI, Dest: it.Dest})
 }
 
 func (s *pageState) border(it display.Border) {

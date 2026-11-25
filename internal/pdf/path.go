@@ -9,6 +9,33 @@ func (c *Content) LineTo(x, y float64) { c.line(x, y) }
 // ClosePath closes the current subpath (h).
 func (c *Content) ClosePath() { c.op("h") }
 
+// CurveTo appends a cubic Bézier segment to (x3, y3) with the control points
+// (x1, y1) and (x2, y2) (c).
+func (c *Content) CurveTo(x1, y1, x2, y2, x3, y3 float64) { c.curve(x1, y1, x2, y2, x3, y3) }
+
+// LineJoin sets the line join (j): 0 miter, 1 round, 2 bevel; other values are
+// an error.
+func (c *Content) LineJoin(j int) { c.intOp(j, 2, "j") }
+
+// LineCap sets the line cap (J): 0 butt, 1 round, 2 square; other values are
+// an error.
+func (c *Content) LineCap(j int) { c.intOp(j, 2, "J") }
+
+func (c *Content) intOp(v, maxV int, op string) {
+	if v < 0 || v > maxV {
+		c.fail(ErrNumber)
+		return
+	}
+	c.num(float64(v))
+	c.op(op)
+}
+
+// FillStroke fills then strokes the current path, non-zero rule (B).
+func (c *Content) FillStroke() { c.op("B") }
+
+// FillStrokeEvenOdd fills (even-odd rule) then strokes the current path (B*).
+func (c *Content) FillStrokeEvenOdd() { c.op("B*") }
+
 // FillEvenOdd fills the current path with the even-odd rule (f*): a rectangle
 // drawn inside another leaves a hole, which paints a uniform border in one
 // operation.

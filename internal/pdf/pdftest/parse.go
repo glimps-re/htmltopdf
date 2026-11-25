@@ -39,10 +39,18 @@ type Stream struct {
 	Raw  []byte
 }
 
-// Link is a URI link annotation.
+// Link is a link annotation: a URI action, or a named destination (Dest, "/D1"
+// without the slash).
 type Link struct {
 	Rect [4]float64
 	URI  string
+	Dest string
+}
+
+// Dest is a named destination: the 0-based page and the /XYZ position.
+type Dest struct {
+	Page int
+	X, Y float64
 }
 
 // Page is a parsed page with its decoded content stream.
@@ -66,6 +74,8 @@ type Doc struct {
 	ID string
 	// Objects is the number of in-use objects.
 	Objects int
+	// Dests are the named destinations of the catalog /Dests, by name.
+	Dests map[string]Dest
 }
 
 type parser struct {
@@ -466,6 +476,9 @@ func (r *reader) document() (*Doc, error) {
 		}
 		doc.Pages = append(doc.Pages, *pg)
 	}
+	if doc.Dests, err = r.dests(root["Dests"], kids); err != nil {
+		return nil, err
+	}
 	if info, err := r.dict(t["Info"]); err != nil {
 		return nil, err
 	} else if s, ok := info["Title"].(string); ok {
@@ -474,6 +487,39 @@ func (r *reader) document() (*Doc, error) {
 		}
 	}
 	return doc, nil
+}
+
+// dests reads the /Dests dictionary of the catalog: each value is
+// [page /XYZ x y null] and the page one of kids.
+func (r *reader) dests(v any, kids []any) (map[string]Dest, error) {
+	if v == nil {
+		return nil, nil
+	}
+	d, err := r.dict(v)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]Dest, len(d))
+	for name, val := range d {
+		arr, ok := val.([]any)
+		if !ok || len(arr) != 5 || arr[1] != Name("XYZ") || arr[4] != nil {
+			return nil, fmt.Errorf("destination %s is not [page /XYZ x y null]", name)
+		}
+		dest := Dest{Page: -1}
+		for i, k := range kids {
+			if k == arr[0] {
+				dest.Page = i
+			}
+		}
+		x, okx := arr[2].(float64)
+		y, oky := arr[3].(float64)
+		if dest.Page < 0 || !okx || !oky {
+			return nil, fmt.Errorf("destination %s: bad page or position", name)
+		}
+		dest.X, dest.Y = x, y
+		out[name] = dest
+	}
+	return out, nil
 }
 
 func (r *reader) page(k, parent any) (*Page, error) {
@@ -565,6 +611,13 @@ func (r *reader) link(a any) (*Link, error) {
 	if l.Rect, err = r.rect(d["Rect"]); err != nil {
 		return nil, err
 	}
+	if name, ok := d["Dest"].(Name); ok {
+		if _, has := d["A"]; has {
+			return nil, errors.New("link has both /Dest and /A")
+		}
+		l.Dest = string(name)
+		return l, nil
+	}
 	act, err := r.dict(d["A"])
 	if err != nil {
 		return nil, err
@@ -606,6 +659,11 @@ func checkContent(content []byte, res Dict, r *reader) error {
 		var err error
 		if gs, err = r.dict(v); err != nil {
 			return err
+		}
+		for name, ref := range gs {
+			if err := r.checkExtGState(ref); err != nil {
+				return fmt.Errorf("ExtGState %s: %w", name, err)
+			}
 		}
 	}
 	shs := Dict{}
@@ -701,6 +759,48 @@ func (r *reader) checkShading(sd Dict) error {
 			return fmt.Errorf("stitching bounds %v are not strictly increasing inside (0, 1)", bounds)
 		}
 		prev = v
+	}
+	return nil
+}
+
+// checkExtGState follows the soft mask of a graphics state: its form, the
+// resources of the form and the shadings in them.
+func (r *reader) checkExtGState(ref any) error {
+	d, err := r.dict(ref)
+	if err != nil {
+		return err
+	}
+	sm, ok := d["SMask"].(Dict)
+	if !ok {
+		return nil
+	}
+	if sm["Type"] != Name("Mask") || sm["S"] != Name("Luminosity") {
+		return errors.New("soft mask is not a luminosity mask")
+	}
+	o, err := r.resolve(sm["G"])
+	if err != nil {
+		return err
+	}
+	form, ok := o.(*Stream)
+	if !ok || form.Dict["Subtype"] != Name("Form") {
+		return errors.New("soft mask group is not a form")
+	}
+	res, err := r.dict(form.Dict["Resources"])
+	if err != nil {
+		return err
+	}
+	shs, err := r.dict(res["Shading"])
+	if err != nil {
+		return err
+	}
+	for name, sref := range shs {
+		sd, err := r.dict(sref)
+		if err != nil {
+			return fmt.Errorf("shading %s: %w", name, err)
+		}
+		if err := r.checkShading(sd); err != nil {
+			return fmt.Errorf("shading %s: %w", name, err)
+		}
 	}
 	return nil
 }
