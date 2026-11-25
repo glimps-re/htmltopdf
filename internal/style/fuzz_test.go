@@ -38,6 +38,12 @@ func checkComputed(t *testing.T, c *Computed) {
 		c.fade < 0 || c.fade > 1 || c.Color.A < 0 || c.Color.A > 1 {
 		t.Fatalf("bad M2 values %+v", c)
 	}
+	if c.ColumnCount < 0 || c.ColumnCount > MaxColumns || c.ColumnRule.Width < 0 || !finite(c.ColumnRule.Width) ||
+		!finite(c.TextDecorationThickness.Value) || c.TextDecorationThickness.Value < 0 ||
+		((c.ColumnRule.Style == BorderNone || c.ColumnRule.Style == BorderHidden) && c.ColumnRule.Width != 0) ||
+		c.Border[Top].Style > BorderDotted || c.Position > PositionFixed {
+		t.Fatalf("bad M4 values %+v", c)
+	}
 	if c.Rotate < 0 || c.Rotate >= 2*math.Pi || len(c.CounterReset) > MaxCounterOps || len(c.CounterIncrement) > MaxCounterOps ||
 		len(c.Content) > maxContentItems || len(c.Page) > MaxIdentBytes ||
 		(c.Position == PositionAbsolute && c.Display != DisplayBlock && c.Display != DisplayFlex && c.Display != DisplayGrid &&
@@ -75,6 +81,9 @@ func FuzzStyle(f *testing.F) {
 		"div{box-shadow:0 1px 2px 3px rgba(0,0,0,.2),inset 1px 1px red,1em 1rem;opacity:.5;color:blue}",
 		"div{box-shadow:" + strings.Repeat("1px 1px 1px red,", 200) + "1px 1px;--s:1px 2px;box-shadow:var(--s) green}",
 		"div{box-shadow:inherit;box-shadow:none}p{box-shadow:-1px 1e30px 0 -1e30px currentcolor}",
+		"p{position:fixed;display:inline;top:-1e30px;columns:1e30;column-count:1001;column-width:10px;column-gap:normal;gap:normal 1e9px}",
+		"div{columns:2 auto;column-rule:2px dashed red;column-rule-color:inherit;opacity:.3} p{column-rule:1e30px dotted;column-rule-style:none;column-rule-width:-1px}",
+		"p{text-decoration:underline;text-decoration-thickness:from-font;text-decoration-thickness:1e999em;text-decoration-thickness:-1px;border:1e30px dashed;border-style:dotted double}",
 		"p::before{content:counter(c,decimal-leading-zero) \"  \";position:absolute;top:-1e30px;z-index:99999999999;counter-increment:c 2147483647 d}",
 		"p::after{content:leader(\".\") target-counter(attr(href),page);content:\"\"} div{counter-reset:a 1e9 b -5 " + strings.Repeat("n ", 200) + "}",
 		"p{height:50%;min-width:1e30px;vertical-align:-1e30px;transform:rotate(1e30turn);page:cover;align-items:baseline;position:fixed}",

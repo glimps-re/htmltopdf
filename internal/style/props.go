@@ -91,6 +91,12 @@ const (
 	pElementContent
 	pCounterReset
 	pCounterIncrement
+	pColumnCount
+	pColumnWidth
+	pColumnRuleWidth
+	pColumnRuleStyle
+	pColumnRuleColor
+	pTextDecorationThickness
 	numProps
 )
 
@@ -171,6 +177,10 @@ var longhands = map[string][]prop{
 	"z-index": {pZIndex}, "height": {pHeight}, "min-width": {pMinWidth}, "transform": {pTransform},
 	"page": {pPage}, "content": {pElementContent}, "counter-reset": {pCounterReset},
 	"counter-increment": {pCounterIncrement},
+	"columns":           {pColumnCount}, "column-count": {pColumnCount}, "column-width": {pColumnWidth},
+	"column-rule": {pColumnRuleWidth, pColumnRuleStyle, pColumnRuleColor}, "column-rule-width": {pColumnRuleWidth},
+	"column-rule-style": {pColumnRuleStyle}, "column-rule-color": {pColumnRuleColor},
+	"text-decoration-thickness": {pTextDecorationThickness},
 }
 
 // declCtx tells where a declaration appears: properties differ between
@@ -325,6 +335,14 @@ func parseValue(name string, props []prop, toks []css.Token) ([]propSpec, bool) 
 		return flexShorthand(toks)
 	case "gap":
 		return gapShorthand(toks)
+	case "columns":
+		s, ok := parseColumnsShorthand(toks)
+		if !ok {
+			return nil, false
+		}
+		return one(pColumnCount, s), true
+	case "column-rule":
+		return columnRuleShorthand(props, toks)
 	}
 	p := props[0]
 	s, ok := parseLonghand(p, toks)
@@ -444,7 +462,7 @@ var (
 	verticalAlignKeywords = map[string]int32{
 		"baseline": int32(VAlignBaseline), "top": int32(VAlignTop), "middle": int32(VAlignMiddle), "bottom": int32(VAlignBottom),
 	}
-	borderStyleKeywords = map[string]int32{"none": int32(BorderNone), "hidden": int32(BorderHidden), "solid": int32(BorderSolid)}
+	borderStyleKeywords = map[string]int32{"none": int32(BorderNone), "hidden": int32(BorderHidden), "solid": int32(BorderSolid), "dashed": int32(BorderDashed), "dotted": int32(BorderDotted)}
 )
 
 var displayKeywords = map[string]int32{
@@ -790,38 +808,40 @@ func sideValues(props []prop, toks []css.Token, parse func([]css.Token) (spec, b
 
 // borderShorthand parses border and border-<side>: a width, a style and a
 // color in any order; omitted components take their initial value.
-func borderShorthand(props []prop, toks []css.Token) ([]propSpec, bool) {
-	var w, st, c *spec
+// parseWidthStyleColor parses the width, the style and the colour of a border or
+// of a column rule, in any order and each at most once. The omitted ones are
+// initial.
+func parseWidthStyleColor(toks []css.Token) (vals [3]spec, ok bool) {
+	var got [3]bool
 	for _, f := range fields(toks) {
-		if s, ok := parseBorderStyle(f); ok && st == nil {
-			st = &s
-		} else if s, ok := parseBorderWidth(f); ok && w == nil {
-			w = &s
-		} else if s, ok := parseColorSpec(f); ok && c == nil {
-			c = &s
+		if s, isStyle := parseBorderStyle(f); isStyle && !got[1] {
+			vals[1], got[1] = s, true
+		} else if s, isWidth := parseBorderWidth(f); isWidth && !got[0] {
+			vals[0], got[0] = s, true
+		} else if s, isColor := parseColorSpec(f); isColor && !got[2] {
+			vals[2], got[2] = s, true
 		} else {
-			return nil, false
+			return vals, false
 		}
 	}
-	width := spec{kind: specInitial}
-	style := spec{kind: specInitial}
-	color := spec{kind: specInitial}
-	if w != nil {
-		width = *w
-		width.kind = specValue
+	for i := range vals {
+		vals[i].kind = specInitial
+		if got[i] {
+			vals[i].kind = specValue
+		}
 	}
-	if st != nil {
-		style = *st
-		style.kind = specValue
-	}
-	if c != nil {
-		color = *c
-		color.kind = specValue
+	return vals, true
+}
+
+func borderShorthand(props []prop, toks []css.Token) ([]propSpec, bool) {
+	vals, ok := parseWidthStyleColor(toks)
+	if !ok {
+		return nil, false
 	}
 	n := len(props) / 3
 	out := make([]propSpec, 0, len(props))
 	for i := range n {
-		out = append(out, propSpec{props[i], width}, propSpec{props[n+i], style}, propSpec{props[2*n+i], color})
+		out = append(out, propSpec{props[i], vals[0]}, propSpec{props[n+i], vals[1]}, propSpec{props[2*n+i], vals[2]})
 	}
 	return out, true
 }

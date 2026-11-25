@@ -14,6 +14,7 @@ const listCut = 1
 
 var positionKeywords = map[string]int32{
 	"static": int32(PositionStatic), "relative": int32(PositionRelative), "absolute": int32(PositionAbsolute),
+	"fixed": int32(PositionFixed),
 }
 
 func parseM3Longhand(p prop, toks []css.Token) (spec, bool) {
@@ -38,6 +39,20 @@ func parseM3Longhand(p prop, toks []css.Token) (spec, bool) {
 		return parseCounters(toks, 0, false)
 	case pCounterIncrement:
 		return parseCounters(toks, 1, true)
+	case pColumnCount:
+		return parseColumnCount(toks)
+	case pColumnWidth:
+		// column-width is not supported (Q-M4-2): only auto, its initial value, parses.
+		kw, ok := ident(toks)
+		return spec{}, ok && kw == "auto"
+	case pColumnRuleWidth:
+		return parseBorderWidth(toks)
+	case pColumnRuleStyle:
+		return parseBorderStyle(toks)
+	case pColumnRuleColor:
+		return parseColorSpec(toks)
+	case pTextDecorationThickness:
+		return parseDecorationThickness(toks)
 	}
 	return spec{}, false
 }
@@ -287,5 +302,84 @@ func (x *computeCtx) applyM3(p prop, s *spec) {
 		c.CounterReset = s.counters
 	case pCounterIncrement:
 		c.CounterIncrement = s.counters
+	case pColumnCount:
+		c.ColumnCount = 0
+		if !s.auto {
+			c.ColumnCount = int(s.n)
+		}
+	case pColumnRuleWidth:
+		c.ColumnRule.Width = snapBorderWidth(x.px(s.len))
+	case pColumnRuleStyle:
+		c.ColumnRule.Style = BorderStyle(u8(s.n))
+	case pColumnRuleColor:
+		x.ruleSet, x.ruleCur = true, s.cur
+		c.ColumnRule.Color = s.color
+	case pTextDecorationThickness:
+		c.TextDecorationThickness = Dim{Kind: DimAuto}
+		if !s.auto {
+			c.TextDecorationThickness = x.dim(s.len, c.FontSize)
+		}
 	}
+}
+
+// parseColumnCount parses auto or a positive integer; one above MaxColumns is
+// clamped (spec.f is 1, WarnClamped "columns").
+func parseColumnCount(toks []css.Token) (spec, bool) {
+	toks = trim(toks)
+	if kw, ok := ident(toks); ok && kw == "auto" {
+		return spec{auto: true}, true
+	}
+	n, ok := integer(toks)
+	if !ok || n < 1 {
+		return spec{}, false
+	}
+	if n > MaxColumns {
+		return spec{n: MaxColumns, f: 1}, true
+	}
+	return spec{n: n}, true
+}
+
+// parseColumnsShorthand parses "columns": auto or an integer, alone or with
+// auto. A length (column-width) is invalid (Q-M4-2).
+func parseColumnsShorthand(toks []css.Token) (spec, bool) {
+	fs := fields(trim(toks))
+	if len(fs) < 1 || len(fs) > 2 {
+		return spec{}, false
+	}
+	out := spec{auto: true}
+	for _, f := range fs {
+		s, ok := parseColumnCount(f)
+		if !ok {
+			return spec{}, false
+		}
+		if !s.auto {
+			if !out.auto {
+				return spec{}, false
+			}
+			out = s
+		}
+	}
+	return out, true
+}
+
+// columnRuleShorthand parses column-rule like a border: width, style and colour.
+func columnRuleShorthand(props []prop, toks []css.Token) ([]propSpec, bool) {
+	vals, ok := parseWidthStyleColor(toks)
+	if !ok {
+		return nil, false
+	}
+	return []propSpec{{props[0], vals[0]}, {props[1], vals[1]}, {props[2], vals[2]}}, true
+}
+
+// parseDecorationThickness parses auto, from-font (the same) or a length.
+func parseDecorationThickness(toks []css.Token) (spec, bool) {
+	toks = trim(toks)
+	if kw, ok := ident(toks); ok {
+		return spec{auto: true}, kw == "auto" || kw == "from-font"
+	}
+	l, ok := css.ParseLength(toks)
+	if !ok || l.Value < 0 || l.Unit == css.UnitPercent {
+		return spec{}, false
+	}
+	return spec{len: l}, true
 }

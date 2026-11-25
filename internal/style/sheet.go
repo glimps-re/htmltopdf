@@ -208,6 +208,8 @@ func warnTruncated(b *budget.Budget, specs []propSpec) {
 			b.Warn(budget.WarnClamped, "font-family")
 		case specs[i].prop == pGridColumns && specs[i].spec.n == gridCut:
 			b.Warn(budget.WarnClamped, "grid tracks")
+		case specs[i].prop == pColumnCount && specs[i].spec.f == 1:
+			b.Warn(budget.WarnClamped, "columns")
 		case specs[i].prop == pElementContent && specs[i].spec.n == listCut:
 			b.Warn(budget.WarnClamped, "content")
 		case (specs[i].prop == pCounterReset || specs[i].prop == pCounterIncrement) && specs[i].spec.n == listCut:

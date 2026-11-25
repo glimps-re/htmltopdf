@@ -109,10 +109,10 @@ func TestKeywordsBeyondM1AreDroppedAndWarned(t *testing.T) {
 		decl, prop string
 		check      func(*Computed) bool
 	}{
-		{"border-style: dashed", "border-style", func(c *Computed) bool { return c.Border[Top].Style == BorderNone }},
-		{"border-style: dotted", "border-style", func(c *Computed) bool { return c.Border[Top].Style == BorderNone }},
-		{"border: 1px dashed red", "border", func(c *Computed) bool { return c.Border[Top].Width == 0 }},
-		{"border-top: 2px dotted", "border-top", func(c *Computed) bool { return c.Border[Top].Width == 0 }},
+		{"border-style: double", "border-style", func(c *Computed) bool { return c.Border[Top].Style == BorderNone }},
+		{"border-style: groove", "border-style", func(c *Computed) bool { return c.Border[Top].Style == BorderNone }},
+		{"border: 1px double red", "border", func(c *Computed) bool { return c.Border[Top].Width == 0 }},
+		{"border-top: 2px ridge", "border-top", func(c *Computed) bool { return c.Border[Top].Width == 0 }},
 		{"overflow-wrap: nowhere", "overflow-wrap", func(c *Computed) bool { return c.OverflowWrap == WrapNormal }},
 		{"word-break: break-word", "word-break", func(c *Computed) bool { return c.WordBreak == WordBreakNormal }},
 		{"word-break: keep-all", "word-break", func(c *Computed) bool { return c.WordBreak == WordBreakNormal }},

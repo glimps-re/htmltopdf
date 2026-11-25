@@ -44,7 +44,7 @@ func parseFlexBasis(toks []css.Token) (spec, bool) {
 
 func parseGap(toks []css.Token) (spec, bool) {
 	if kw, ok := ident(toks); ok {
-		return spec{}, kw == "normal"
+		return spec{auto: true}, kw == "normal"
 	}
 	return parseLengthPercentage(toks, false, false)
 }

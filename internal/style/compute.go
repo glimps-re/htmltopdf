@@ -26,6 +26,9 @@ type computeCtx struct {
 	colorSet      [4]bool
 	curBorder     [4]bool
 	curBackground bool
+	// ruleSet tells that column-rule-color was specified, ruleCur that it is
+	// currentcolor.
+	ruleSet, ruleCur bool
 }
 
 func clampPx(v float64) float64 {
@@ -91,8 +94,14 @@ func (x *computeCtx) finish() {
 	if x.parent != nil && (x.parent.Display == DisplayFlex || x.parent.Display == DisplayGrid) {
 		c.Display = blockified(c.Display)
 	}
-	if c.Position == PositionAbsolute {
+	if c.Position == PositionAbsolute || c.Position == PositionFixed {
 		c.Display = blockifiedAbsolute(c.Display)
+	}
+	if !x.ruleSet || x.ruleCur {
+		c.ColumnRule.Color = c.Color
+	}
+	if c.ColumnRule.Style == BorderNone || c.ColumnRule.Style == BorderHidden {
+		c.ColumnRule.Width = 0
 	}
 	for i := range c.Border {
 		if !x.colorSet[i] || x.curBorder[i] {
@@ -122,9 +131,10 @@ func (x *computeCtx) applyOpacity() {
 	if c.fade == 0 {
 		return
 	}
-	c.raw = &unfaded{color: c.Color, background: c.BackgroundColor, gradient: c.BackgroundImage}
+	c.raw = &unfaded{color: c.Color, background: c.BackgroundColor, gradient: c.BackgroundImage, rule: c.ColumnRule.Color}
 	c.Color.A *= product
 	c.BackgroundColor.A *= product
+	c.ColumnRule.Color.A *= product
 	for i := range c.Border {
 		c.raw.border[i] = c.Border[i].Color
 		c.Border[i].Color.A *= product
@@ -262,7 +272,22 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 	case pRowGap:
 		c.RowGap = src.RowGap
 	case pColumnGap:
-		c.ColumnGap = src.ColumnGap
+		c.ColumnGap, c.ColumnGapNormal = src.ColumnGap, src.ColumnGapNormal
+	case pColumnCount:
+		c.ColumnCount = src.ColumnCount
+	case pColumnWidth: // only auto parses: nothing to copy
+	case pColumnRuleWidth:
+		c.ColumnRule.Width = src.ColumnRule.Width
+	case pColumnRuleStyle:
+		c.ColumnRule.Style = src.ColumnRule.Style
+	case pColumnRuleColor:
+		if src == &initialStyle {
+			x.ruleSet = false
+			break
+		}
+		c.ColumnRule.Color, x.ruleSet, x.ruleCur = src.rawRule(), true, false
+	case pTextDecorationThickness:
+		c.TextDecorationThickness = src.TextDecorationThickness
 	case pGridColumns:
 		c.GridColumns = src.GridColumns
 	case pBoxShadow:
@@ -426,7 +451,7 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 	case pRowGap:
 		c.RowGap = x.dim(s.len, c.FontSize)
 	case pColumnGap:
-		c.ColumnGap = x.dim(s.len, c.FontSize)
+		c.ColumnGap, c.ColumnGapNormal = x.dim(s.len, c.FontSize), s.auto
 	case pGridColumns:
 		c.GridColumns = nil
 		if !s.none {

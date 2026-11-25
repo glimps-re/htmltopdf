@@ -70,6 +70,8 @@ const (
 	BorderNone BorderStyle = iota
 	BorderHidden
 	BorderSolid
+	BorderDashed
+	BorderDotted
 )
 
 // Border is one side of the border: the width is 0 when the style is none or
@@ -268,16 +270,16 @@ const (
 	VAlignLength
 )
 
-// Position is the computed position. Only the containing block of its
-// descendants and the layer of an absolute box are implemented: a relative box
-// has no offset (design §5.2.3).
+// Position is the computed position (design §5.2.3, §5.2.4). A fixed box is
+// blockified like an absolute one and laid out in flow until its layer exists.
 type Position uint8
 
-// Positions; fixed and sticky are invalid values.
+// Positions; sticky is an invalid value.
 const (
 	PositionStatic Position = iota
 	PositionRelative
 	PositionAbsolute
+	PositionFixed
 )
 
 // CounterFormat is the style of a counter() in a content value.
@@ -298,6 +300,9 @@ type CounterOp struct {
 
 // MaxCounterOps bounds the entries kept from a counter-reset or counter-increment.
 const MaxCounterOps = 32
+
+// MaxColumns bounds the column count of a multi-column container.
+const MaxColumns = 1000
 
 // MaxIdentBytes bounds a counter or page name.
 const MaxIdentBytes = 256
@@ -374,6 +379,17 @@ type Computed struct {
 	// again against the colour and opacity of the inheriting element.
 	shadowSrc []shadowSpec
 
+	// ColumnCount is columns: 0 for auto (no multi-column), else in [1, MaxColumns].
+	ColumnCount int
+	// ColumnGapNormal is column-gap: normal: 1 em in a multi-column container, 0 in
+	// a flex or grid one (ColumnGap is then 0).
+	ColumnGapNormal bool
+	// ColumnRule is the rule drawn between the columns: the width is 0 unless the
+	// style is solid, dashed or dotted.
+	ColumnRule Border
+	// TextDecorationThickness is auto (the font's underline thickness, also from-font) or px.
+	TextDecorationThickness Dim
+
 	// Position is not inherited. Inset is top, right, bottom and left.
 	Position Position
 	Inset    [4]Dim
@@ -411,7 +427,15 @@ type Computed struct {
 type unfaded struct {
 	color, background css.Color
 	border            [4]css.Color
+	rule              css.Color
 	gradient          *css.Gradient
+}
+
+func (c *Computed) rawRule() css.Color {
+	if c.raw != nil {
+		return c.raw.rule
+	}
+	return c.ColumnRule.Color
 }
 
 func (c *Computed) rawGradient() *css.Gradient {
@@ -449,25 +473,28 @@ const initialFontSize = 16
 
 func newInitial() Computed {
 	c := Computed{
-		Display:          DisplayInline,
-		Width:            Dim{Kind: DimAuto},
-		MaxWidth:         Dim{Kind: DimNone},
-		Margin:           [4]Dim{},
-		BorderSpacing:    [2]float64{},
-		TableLayoutFixed: false,
-		BackgroundColor:  css.Color{},
-		FontFamily:       []string{"serif"},
-		FontSize:         initialFontSize,
-		FontWeight:       400,
-		LineHeight:       LineHeight{Kind: LineHeightNormal},
-		Color:            css.Color{A: 1},
-		FlexShrink:       1,
-		FlexBasis:        Dim{Kind: DimAuto},
-		Height:           Dim{Kind: DimAuto},
-		MinWidth:         Dim{Kind: DimAuto},
-		Inset:            [4]Dim{{Kind: DimAuto}, {Kind: DimAuto}, {Kind: DimAuto}, {Kind: DimAuto}},
-		ZAuto:            true,
-		rootFont:         initialFontSize,
+		Display:                 DisplayInline,
+		Width:                   Dim{Kind: DimAuto},
+		MaxWidth:                Dim{Kind: DimNone},
+		Margin:                  [4]Dim{},
+		BorderSpacing:           [2]float64{},
+		TableLayoutFixed:        false,
+		BackgroundColor:         css.Color{},
+		FontFamily:              []string{"serif"},
+		FontSize:                initialFontSize,
+		FontWeight:              400,
+		LineHeight:              LineHeight{Kind: LineHeightNormal},
+		Color:                   css.Color{A: 1},
+		FlexShrink:              1,
+		FlexBasis:               Dim{Kind: DimAuto},
+		Height:                  Dim{Kind: DimAuto},
+		ColumnGapNormal:         true,
+		ColumnRule:              Border{Width: 3},
+		TextDecorationThickness: Dim{Kind: DimAuto},
+		MinWidth:                Dim{Kind: DimAuto},
+		Inset:                   [4]Dim{{Kind: DimAuto}, {Kind: DimAuto}, {Kind: DimAuto}, {Kind: DimAuto}},
+		ZAuto:                   true,
+		rootFont:                initialFontSize,
 	}
 	// medium; the width is dropped by finish while the style is none.
 	for i := range c.Border {

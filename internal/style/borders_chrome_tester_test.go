@@ -84,7 +84,7 @@ func unsupported(name string) bool {
 	if strings.Contains(name, "calc(") {
 		return true
 	}
-	for _, st := range []string{"dashed", "dotted", "double", "groove", "ridge", "inset", "outset"} {
+	for _, st := range []string{"double", "groove", "ridge", "inset", "outset"} {
 		if strings.HasPrefix(name, "style "+st+" ") {
 			return true
 		}

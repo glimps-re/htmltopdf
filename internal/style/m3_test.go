@@ -104,7 +104,6 @@ func TestRotateAtEOF(t *testing.T) {
 
 func TestM3InvalidValues(t *testing.T) {
 	for _, tt := range []struct{ decl, prop string }{
-		{"position: fixed", "position"},
 		{"position: sticky", "position"},
 		{"position: foo", "position"},
 		{"top: 1", "top"},
@@ -162,7 +161,7 @@ func TestM3InvalidValues(t *testing.T) {
 		})
 	}
 	// An invalid declaration leaves the earlier valid one in place.
-	c, _ := computed(t, "z-index: 4; z-index: 1.5; position: relative; position: fixed")
+	c, _ := computed(t, "z-index: 4; z-index: 1.5; position: relative; position: sticky")
 	if c.ZIndex != 4 || c.Position != PositionRelative {
 		t.Errorf("%+v", c)
 	}
