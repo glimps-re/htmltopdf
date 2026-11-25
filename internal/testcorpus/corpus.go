@@ -153,9 +153,10 @@ func ReportNames(templates fs.FS) ([]string, error) {
 	return names, nil
 }
 
-// Report executes the template name with the fake data of size. The print
-// stylesheet is injected into templates that have no @page rule.
-func Report(templates fs.FS, name string, size Size) ([]byte, error) {
+// ReportTemplate parses the template name, with the functions of the corpus,
+// and returns it with the fake data of size: executing one with the other gives
+// the bytes of Report.
+func ReportTemplate(templates fs.FS, name string, size Size) (*template.Template, any, error) {
 	var data map[string]any
 	switch size {
 	case Small:
@@ -163,13 +164,23 @@ func Report(templates fs.FS, name string, size Size) ([]byte, error) {
 	case Large:
 		data = reportData(250, 10)
 	default:
-		return nil, fmt.Errorf("testcorpus: unknown size %q", size)
+		return nil, nil, fmt.Errorf("testcorpus: unknown size %q", size)
 	}
 	raw, err := readCapped(templates, name+".html.tmpl", maxTemplateBytes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	t, err := template.New(name).Funcs(templateFuncs).Parse(string(raw))
+	if err != nil {
+		return nil, nil, err
+	}
+	return t, data, nil
+}
+
+// Report executes the template name with the fake data of size (ReportTemplate
+// then Execute).
+func Report(templates fs.FS, name string, size Size) ([]byte, error) {
+	t, data, err := ReportTemplate(templates, name, size)
 	if err != nil {
 		return nil, err
 	}

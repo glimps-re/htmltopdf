@@ -56,6 +56,9 @@ is the reference for what is supported, approximated or ignored.
   and boxes at the length clamp pile up inside their box.
 - `position: fixed` (drawn on every page), dashed and dotted borders,
   `text-decoration-thickness`.
+- `Converter.RenderTemplate`: renders an html/template with data under the same
+  limits as Render, with no second copy of the template output (Render holds it
+  once, as for any src).
 
 ### Documented deviations from Chrome
 - Orphans and widows of 2 are applied to paragraphs inside multi-column containers

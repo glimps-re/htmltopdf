@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"log"
 	"strings"
 
@@ -26,6 +27,27 @@ func ExampleConverter_Render() {
 	}
 	fmt.Println(res.Pages, "page,", bytes.HasPrefix(pdf.Bytes(), []byte("%PDF-")))
 	// Output: 1 page, true
+}
+
+func ExampleConverter_RenderTemplate() {
+	conv, err := htmltopdf.New(htmltopdf.Options{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	t := template.Must(template.New("report").Parse(
+		`<h1>{{.Title}}</h1><table>{{range .Files}}<tr><td>{{.}}</td></tr>{{end}}</table>`))
+	data := map[string]any{
+		"Title": "Scan report",
+		// Hostile file names are escaped by html/template and printed as text.
+		"Files": []string{"invoice.pdf.exe", `</td><script>alert(1)</script>`},
+	}
+	var pdf bytes.Buffer
+	res, err := conv.RenderTemplate(context.Background(), t, data, &pdf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(res.Pages, "page")
+	// Output: 1 page
 }
 
 func ExampleConverter_Render_warnings() {
