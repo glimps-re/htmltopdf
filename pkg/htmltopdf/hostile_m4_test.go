@@ -121,3 +121,12 @@ func TestM4HarnessSeesEveryMarkerOnce(t *testing.T) {
 	}
 	h4TextOnce(t, r, words)
 }
+
+// h4Warnings lists the warnings of a render as "code: detail".
+func h4Warnings(res *Result) []string {
+	var out []string
+	for _, w := range res.Warnings {
+		out = append(out, fmt.Sprintf("%s: %s", w.Code, w.Detail))
+	}
+	return out
+}
