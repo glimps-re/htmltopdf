@@ -15,11 +15,8 @@ import (
 )
 
 // M4 conformance of template 03 (landscape, two-column sections, counters)
-// against chrome09. The paper is the caller's, as for 01 and 02.
-
-// m4PaperCSS is the A4 landscape paper of the caller, emulated through ExtraCSS
-// until Options.PageSize (M4-05) exists.
-const m4PaperCSS = "@page { size: 1122.56px 794.56px }"
+// against chrome09. The paper is the caller's (Options.PageSize), as for 01 and 02;
+// the template's own @page size turns it landscape.
 
 // Gates: each flips to true when the task that closes it merges.
 const (
@@ -46,13 +43,6 @@ const (
 	m4FirstArchivePage       = 18
 )
 
-func m4Options(tb testing.TB) Options {
-	tb.Helper()
-	o := referenceOptions(tb)
-	o.ExtraCSS = m4PaperCSS
-	return o
-}
-
 // m4HTML is the fixture of the real template 03 (landscape, columns).
 func m4HTML(tb testing.TB, size testcorpus.Size) []byte {
 	tb.Helper()
@@ -78,7 +68,7 @@ func renderM4(tb testing.TB, size testcorpus.Size) (*Result, *pdftest.Doc) {
 	if r, ok := m4Renders[size]; ok {
 		return r.res, r.doc
 	}
-	res, data := renderBytes(tb, mustNew(tb, m4Options(tb)), string(m4HTML(tb, size)))
+	res, data := renderBytes(tb, mustNew(tb, m2Options(tb)), string(m4HTML(tb, size)))
 	r := m4Render{res, pdftest.Validate(tb, data)}
 	m4Renders[size] = r
 	return r.res, r.doc
@@ -351,7 +341,7 @@ func BenchmarkM4Render(b *testing.B) {
 		size testcorpus.Size
 	}{{"03S", testcorpus.Small}, {"03L", testcorpus.Large}} {
 		html := m4HTML(b, tc.size)
-		c := mustNew(b, m4Options(b))
+		c := mustNew(b, m2Options(b))
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			var maxPeak uint64
