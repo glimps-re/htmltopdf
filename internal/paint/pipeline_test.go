@@ -59,7 +59,7 @@ func render(tb testing.TB, html string) (*pdftest.Doc, []byte) {
 		}
 		sheets = append(sheets, sh)
 	}
-	extraSS, err := css.ParseStylesheet([]byte(testcorpus.HostConnectorPageCSS), css.OriginExtra, b)
+	extraSS, err := css.ParseStylesheet([]byte(testcorpus.HostConnectorPageCSS+testcorpus.PaperCSS), css.OriginExtra, b)
 	if err != nil {
 		tb.Fatal(err)
 	}

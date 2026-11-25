@@ -259,7 +259,7 @@ func TestPageSelectorsAreWarned(t *testing.T) {
 }
 
 func TestHostConnectorPageCSS(t *testing.T) {
-	ps, b := pageOf(t, "", testcorpus.HostConnectorPageCSS)
+	ps, b := pageOf(t, "", testcorpus.HostConnectorPageCSS+testcorpus.PaperCSS)
 	if w, _ := b.Warnings(); len(w) != 0 {
 		t.Fatalf("the reference ExtraCSS must compile strictly: %+v", w)
 	}
@@ -301,5 +301,53 @@ func TestPageIsComputedOnce(t *testing.T) {
 	r := NewResolver(ua(), nil, nil, printEnv, b)
 	if r.Page(PageContext{Number: 1}) != r.Page(PageContext{Number: 7}) {
 		t.Error("M1 pages share one style")
+	}
+}
+
+func pageWithPaper(t *testing.T, docCSS string, w, h float64, name string) *PageStyle {
+	t.Helper()
+	b := newBudget()
+	r := NewResolver(ua(), nil, []*Sheet{compileSheet(t, docCSS, css.OriginDocument, b)}, printEnv, b)
+	r.SetPaper(w, h)
+	return r.Page(PageContext{Name: name})
+}
+
+// Landscape is the orientation of the computed size of the rules of a page; with
+// a paper, only that orientation is kept and the sides are not clamped.
+func TestPageLandscapeAndPaper(t *testing.T) {
+	for _, tt := range []struct {
+		css       string
+		landscape bool
+	}{
+		{"", false},
+		{"@page { size: A4 }", false},
+		{"@page { size: landscape }", true},
+		{"@page { size: A4 landscape }", true},
+		{"@page { size: 2in 1in }", true},
+		{"@page { size: 1in 2in }", false},
+		{"@page { size: 3in 3in }", false},
+		{"@page { size: letter portrait }", false},
+		{"@page { size: auto }", false},
+	} {
+		ps, _ := pageOf(t, tt.css, "")
+		if ps.Landscape != tt.landscape {
+			t.Errorf("%q: Landscape %v", tt.css, ps.Landscape)
+		}
+		paper := pageWithPaper(t, tt.css, 400, 600, "")
+		w, h := 400.0, 600.0
+		if tt.landscape {
+			w, h = h, w
+		}
+		if paper.Width != w || paper.Height != h || paper.Landscape != tt.landscape {
+			t.Errorf("%q with a paper: %v x %v landscape %v", tt.css, paper.Width, paper.Height, paper.Landscape)
+		}
+	}
+	// A named page has its own orientation; the paper is not clamped, the margins are.
+	css := "@page { size: A4 } @page wide { size: landscape; margin: 1000px }"
+	if d, w := pageWithPaper(t, css, 120, 200, ""), pageWithPaper(t, css, 120, 200, "wide"); d.Landscape || !w.Landscape || w.Width != 200 || w.Height != 120 {
+		t.Errorf("default %+v, wide %+v", d, w)
+	}
+	if p := pageWithPaper(t, "@page { margin: 1000px }", 120, 200, ""); p.Margin[Left]+p.Margin[Right] > 120-MinPageAreaPx+1e-6 && p.Width-MinPageAreaPx > 0 {
+		t.Errorf("margins %v on a 120 px paper", p.Margin)
 	}
 }

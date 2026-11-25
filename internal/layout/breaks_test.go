@@ -262,7 +262,7 @@ func TestTemplate01Breaks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pages := newRun(t, string(html), opts{extra: testcorpus.ChromePaperCSS, scale: 0.9}).all(t)
+	pages := newRun(t, string(html), opts{extra: testcorpus.PaperCSS, scale: 0.9}).all(t)
 	rows := 0
 	for _, pg := range pages {
 		var last *frag
@@ -417,7 +417,7 @@ func TestTemplatesAvoidCost(t *testing.T) {
 			t.Fatal(err)
 		}
 		work := func(extra string) int64 {
-			r := newRun(t, string(html), opts{extra: testcorpus.ChromePaperCSS + extra, scale: 0.9})
+			r := newRun(t, string(html), opts{extra: testcorpus.PaperCSS + extra, scale: 0.9})
 			r.all(t)
 			return r.b.Used(budget.Work)
 		}

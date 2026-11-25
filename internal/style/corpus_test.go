@@ -63,7 +63,7 @@ func compileDocWarnings(t testing.TB, d *dom.Document) ([]*Sheet, *Sheet, *budge
 	for _, src := range documentCSS(d) {
 		sheets = append(sheets, compileSheet(t, src, css.OriginDocument, b))
 	}
-	return sheets, compileSheet(t, testcorpus.HostConnectorPageCSS, css.OriginExtra, b), b
+	return sheets, compileSheet(t, testcorpus.HostConnectorPageCSS+testcorpus.PaperCSS, css.OriginExtra, b), b
 }
 
 func cascade(t testing.TB, d *dom.Document, sheets []*Sheet, extra *Sheet, b *budget.Budget) []*Computed {

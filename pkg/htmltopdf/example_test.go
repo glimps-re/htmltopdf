@@ -71,3 +71,20 @@ func ExampleDefaultLimits() {
 	fmt.Println(l.MaxInputBytes, l.MaxPages, l.Timeout)
 	// Output: 2097152 500 1m0s
 }
+
+func ExamplePageSize() {
+	// Letter paper, whatever the document asks: only the orientation of its @page
+	// rules is kept, here landscape.
+	conv, err := htmltopdf.New(htmltopdf.Options{PageSize: htmltopdf.PageSize{Width: 816, Height: 1056}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	html := `<style>@page { size: A4 landscape }</style><p>wide</p>`
+	var pdf bytes.Buffer
+	if _, err := conv.Render(context.Background(), strings.NewReader(html), &pdf); err != nil {
+		log.Fatal(err)
+	}
+	// MediaBox in points: 1056 x 816 px.
+	fmt.Println(strings.Contains(pdf.String(), "/MediaBox [0 0 792 612]"))
+	// Output: true
+}

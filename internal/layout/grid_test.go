@@ -259,7 +259,7 @@ func TestGridMatchesChromeOn01(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := newRun(t, string(html), opts{extra: testcorpus.ChromePaperCSS, scale: 0.9})
+	r := newRun(t, string(html), opts{extra: testcorpus.PaperCSS, scale: 0.9})
 	pg := r.all(t)[0]
 	pt := func(x float64) float64 { return (pg.Area.X + x*pg.Scale) * 0.75 }
 	var grids []*frag

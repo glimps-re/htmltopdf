@@ -434,7 +434,7 @@ func TestTemplatesAvoidBoxesStayWhole(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pages := newRun(t, string(html), opts{extra: testcorpus.ChromePaperCSS, scale: 0.9}).all(t)
+			pages := newRun(t, string(html), opts{extra: testcorpus.PaperCSS, scale: 0.9}).all(t)
 			type total struct {
 				h     float64
 				split bool

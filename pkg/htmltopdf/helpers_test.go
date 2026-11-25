@@ -61,6 +61,7 @@ func referenceOptions(tb testing.TB) Options {
 		Fallback: []string{"DejaVu Sans"},
 		Scale:    0.9,
 		ExtraCSS: testcorpus.HostConnectorPageCSS,
+		PageSize: PageSize{Width: testcorpus.PaperWidth, Height: testcorpus.PaperHeight},
 	}
 }
 

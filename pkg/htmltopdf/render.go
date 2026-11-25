@@ -274,8 +274,11 @@ func (r *renderer) mediaAttrMatches(e *dom.Element) bool {
 func (r *renderer) resolver(sheets []*style.Sheet) *style.Resolver {
 	scratch := budget.New(r.ctx, r.c.limits, nil)
 	probe := style.NewResolver(r.c.ua, r.c.extra, sheets, defaultEnv(r.c.scale), scratch)
+	setPaper(probe, r.c.paper)
 	env := envOf(probe.Page(style.PageContext{Number: 1}), r.c.scale)
-	return style.NewResolver(r.c.ua, r.c.extra, sheets, env, r.b)
+	res := style.NewResolver(r.c.ua, r.c.extra, sheets, env, r.b)
+	setPaper(res, r.c.paper)
+	return res
 }
 
 // deferredPage is a page whose margin boxes wait for the page count. It keeps

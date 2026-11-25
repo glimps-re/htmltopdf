@@ -23,6 +23,8 @@ type Converter struct {
 	extra  *style.Sheet
 	limits budget.Limits
 	scale  float64
+	// paper is the validated PageSize, zero when none.
+	paper PageSize
 	// timeout is applied to every Render on top of its context.
 	timeout time.Duration
 	// hook receives the stage names of a render, for the heap measurements of
@@ -42,6 +44,9 @@ func New(opts Options) (*Converter, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validatePageSize(opts.PageSize); err != nil {
+		return nil, err
+	}
 	fonts, err := newFontSet(opts)
 	if err != nil {
 		return nil, err
@@ -50,11 +55,11 @@ func New(opts Options) (*Converter, error) {
 	if err != nil {
 		return nil, err
 	}
-	extra, err := compileExtra(ua, opts.ExtraCSS, scale, lim)
+	extra, err := compileExtra(ua, opts.ExtraCSS, scale, opts.PageSize, lim)
 	if err != nil {
 		return nil, err
 	}
-	return &Converter{fonts: fonts, ua: ua, extra: extra, limits: lim.limits, scale: scale, timeout: lim.timeout}, nil
+	return &Converter{fonts: fonts, ua: ua, extra: extra, limits: lim.limits, scale: scale, paper: opts.PageSize, timeout: lim.timeout}, nil
 }
 
 func newFontSet(opts Options) (*text.FontSet, error) {
@@ -104,7 +109,7 @@ func uaSheet() (*style.Sheet, error) { return uaOnce() }
 // compileExtra parses and compiles ExtraCSS strictly: any dropped rule,
 // declaration, selector or at-rule, and any clamped page size or margin, is an
 // invalid option, so that a typo cannot silently remove a footer.
-func compileExtra(ua *style.Sheet, src string, scale float64, lim resolved) (*style.Sheet, error) {
+func compileExtra(ua *style.Sheet, src string, scale float64, paper PageSize, lim resolved) (*style.Sheet, error) {
 	if strings.TrimSpace(src) == "" {
 		return nil, nil
 	}
@@ -120,6 +125,7 @@ func compileExtra(ua *style.Sheet, src string, scale float64, lim resolved) (*st
 	// The page rules are evaluated here too: size and margin clamps are
 	// reported by Page, not by Compile.
 	r := style.NewResolver(ua, sheet, nil, defaultEnv(scale), b)
+	setPaper(r, paper)
 	r.Page(style.PageContext{Number: 1})
 	if err := firstWarning(b); err != nil {
 		return nil, fmt.Errorf("%w: ExtraCSS: %w", ErrInvalidOptions, err)

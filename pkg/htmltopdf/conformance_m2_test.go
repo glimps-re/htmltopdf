@@ -20,37 +20,20 @@ import (
 
 const analyst = "03-analyst"
 
-// portrait1col is template 03 with the two features that belong to M4
-// (landscape paper, CSS columns) taken out, so that the rest of what M2 adds
-// still has a Chrome reference.
-func portrait1col(tb testing.TB, html []byte) []byte {
-	tb.Helper()
-	s := string(html)
-	for _, r := range [][2]string{{"size: A4 landscape;", "size: A4;"}, {"columns: 2;", "columns: auto;"}} {
-		if strings.Count(s, r[0]) != 1 {
-			tb.Fatalf("03 fixture: %q occurs %d times, want 1", r[0], strings.Count(s, r[0]))
-		}
-		s = strings.Replace(s, r[0], r[1], 1)
-	}
-	return []byte(s)
-}
-
 func m2Options(tb testing.TB) Options {
 	tb.Helper()
 	o := referenceOptions(tb)
-	o.ExtraCSS = testcorpus.ChromePaperCSS
+	o.ExtraCSS = ""
 	return o
 }
 
-// m2HTML is the fixture of a report: analyst is the portrait one-column variant.
+// m2HTML is the fixture of a report, as the template produces it (03 is landscape
+// from its own @page rule, on the paper of Options.PageSize).
 func m2HTML(tb testing.TB, template string, size testcorpus.Size) []byte {
 	tb.Helper()
 	html, err := testcorpus.Report(os.DirFS("../../testdata/templates"), template, size)
 	if err != nil {
 		tb.Fatal(err)
-	}
-	if template == analyst {
-		html = portrait1col(tb, html)
 	}
 	return html
 }
@@ -81,30 +64,6 @@ func renderM2(tb testing.TB, template string, size testcorpus.Size) (*Result, []
 	r := m2Render{res, data, pdftest.Validate(tb, data)}
 	m2Renders[k] = r
 	return r.res, r.data, r.doc
-}
-
-// M2_DUMP_DIR=<dir> writes the 03 variant fixtures, the input of the dev-only
-// Chrome reference tool (tmp/chromeref).
-func TestM2DumpVariant(t *testing.T) {
-	dir := os.Getenv("M2_DUMP_DIR")
-	if dir == "" {
-		t.Skip("M2_DUMP_DIR is not set")
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := root.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
-	for _, size := range []testcorpus.Size{testcorpus.Small, testcorpus.Large} {
-		name := testcorpus.FixtureName(analyst, size) + "_portrait1col.html"
-		if err := root.WriteFile(name, m2HTML(t, analyst, size), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
 }
 
 // m2Row is one template and size. chrome is the page count of the Chrome
@@ -149,8 +108,8 @@ var m2Rows = []m2Row{
 	{name: "01L", template: "01-modern", size: testcorpus.Large, chrome: 21, tol: 0.15, current: 21, gating: true},
 	{name: "02S", template: "02-executive", size: testcorpus.Small, chrome: 5, tol: 1, absolute: true, current: 5, gating: true},
 	{name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 37, gating: true},
-	{name: "03vS", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 2, textLoss: 1, gating: true},
-	{name: "03vL", template: analyst, size: testcorpus.Large, chrome: 20, tol: 0.15, current: 20, textLoss: 1, gating: true},
+	{name: "03S", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 2, textLoss: 1, gating: true},
+	{name: "03L", template: analyst, size: testcorpus.Large, chrome: 23, tol: 0.15, current: 24, textLoss: 1, gating: true},
 }
 
 func TestM2PageCounts(t *testing.T) {
@@ -607,10 +566,6 @@ func TestM2WriteCorpusPDFs(t *testing.T) {
 	}
 	for _, r := range m2Rows {
 		_, data, _ := renderM2(t, r.template, r.size)
-		name := testcorpus.FixtureName(r.template, r.size)
-		if r.template == analyst {
-			name += "_portrait1col"
-		}
-		write(name, data)
+		write(testcorpus.FixtureName(r.template, r.size), data)
 	}
 }

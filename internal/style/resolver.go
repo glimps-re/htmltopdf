@@ -54,6 +54,7 @@ type Resolver struct {
 	named     map[string][]pageEntry // rules by page name
 	pageStyle *PageStyle
 	pageNames map[string]*PageStyle
+	paper     [2]float64
 	pageOv    map[string]*pageOverlay
 	cache     map[cacheKey]*Computed
 	anon      map[anonKey]*Computed

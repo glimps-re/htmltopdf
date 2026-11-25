@@ -81,6 +81,10 @@ type PageContext struct {
 // margin boxes (nil when a box has no content).
 type PageStyle struct {
 	Width, Height float64
+	// Landscape is true when the computed size of the @page rules of this page is
+	// landscape: the keyword, or a width larger than the height. It is used when
+	// the paper is given (Resolver.SetPaper), whose sides are then swapped.
+	Landscape bool
 	// Margin is indexed by Top, Right, Bottom and Left.
 	Margin [4]float64
 	Boxes  [numMarginBoxes]*MarginBox
@@ -107,6 +111,12 @@ func (r *Resolver) addPages(s *Sheet, level uint8) {
 		r.named[p.name] = append(r.named[p.name], pageEntry{p: p, level: level})
 	}
 }
+
+// SetPaper makes the paper w x h px (portrait) the size of every page, whatever
+// the @page size rules say: only their orientation is kept, per page. The sides
+// are not clamped (the caller validates them); the margin clamp still applies. It
+// must be called before the first Page.
+func (r *Resolver) SetPaper(w, h float64) { r.paper = [2]float64{w, h} }
 
 // Page returns the style of the page described by pc: the @page rules without a
 // name, then those named pc.Name, which win over the first. The result is
@@ -225,7 +235,17 @@ func (r *Resolver) buildPage(name string) *PageStyle {
 	if s := &r.specs[pPageSize]; s.kind == specValue {
 		ps.Width, ps.Height = pageSize(s)
 	}
-	r.clampSize(ps)
+	ps.Landscape = ps.Width > ps.Height
+	if r.paper[0] > 0 {
+		// The paper replaces the size of the rules, only their orientation stays; it
+		// is validated by the caller, so the page-size clamp does not apply.
+		ps.Width, ps.Height = r.paper[0], r.paper[1]
+		if ps.Landscape {
+			ps.Width, ps.Height = ps.Height, ps.Width
+		}
+	} else {
+		r.clampSize(ps)
+	}
 	for i, side := range [4]prop{pMarginTop, pMarginRight, pMarginBottom, pMarginLeft} {
 		if s := &r.specs[side]; s.kind == specValue {
 			ps.Margin[i] = pageMargin(s, ps.Width)

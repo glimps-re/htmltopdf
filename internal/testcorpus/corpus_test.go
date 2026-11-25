@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -213,7 +214,10 @@ func TestHostConnectorReference(t *testing.T) {
 	if HostConnector().Fallback[0] != "DejaVu Sans" {
 		t.Error("HostConnector must return a fresh copy")
 	}
-	for _, want := range []string{"size: 794.56px 1122.56px", "margin: 96px 28px 124px 28px", "TLP:AMBER", "counter(page)", "counter(pages)"} {
+	if hc.PageSize != [2]float64{PaperWidth, PaperHeight} || regexp.MustCompile(`(^|[\s{;])size:`).MatchString(HostConnector().ExtraCSS) {
+		t.Errorf("the paper is PageSize, not CSS: %+v %q", hc.PageSize, HostConnector().ExtraCSS)
+	}
+	for _, want := range []string{"margin: 96px 28px 124px 28px", "TLP:AMBER", "counter(page)", "counter(pages)"} {
 		if !strings.Contains(HostConnector().ExtraCSS, want) {
 			t.Errorf("ExtraCSS lacks %q", want)
 		}
@@ -223,13 +227,8 @@ func TestHostConnectorReference(t *testing.T) {
 func TestChromePaper(t *testing.T) {
 	cp := ChromePaper()
 	hc := HostConnector()
-	if cp.ExtraCSS != ChromePaperCSS || !strings.Contains(cp.ExtraCSS, "size: 794.56px 1122.56px") {
-		t.Errorf("ExtraCSS = %q", cp.ExtraCSS)
-	}
-	for _, bad := range []string{"margin", "@bottom", "TLP:AMBER"} {
-		if strings.Contains(cp.ExtraCSS, bad) {
-			t.Errorf("paper-only CSS contains %q", bad)
-		}
+	if cp.ExtraCSS != "" || cp.PageSize != hc.PageSize {
+		t.Errorf("ChromePaper: ExtraCSS %q, PageSize %v", cp.ExtraCSS, cp.PageSize)
 	}
 	if cp.Scale != hc.Scale || cp.SansSerif != hc.SansSerif || cp.Monospace != hc.Monospace || len(cp.Fallback) != 1 || cp.Fallback[0] != hc.Fallback[0] {
 		t.Errorf("ChromePaper %+v differs from HostConnector %+v beyond ExtraCSS", cp, hc)
@@ -884,5 +883,12 @@ func TestTableRowCases(t *testing.T) {
 		if c.Name == "hostile_50k_rows" && (c.Want != Limit || c.Limit != "MaxInputBytes") {
 			t.Errorf("hostile_50k_rows: %v %s", c.Want, c.Limit)
 		}
+	}
+}
+
+// PaperCSS is the stylesheet form of the paper constants.
+func TestPaperCSSMatchesThePaper(t *testing.T) {
+	if want := fmt.Sprintf("@page { size: %gpx %gpx }", PaperWidth, PaperHeight); PaperCSS != want {
+		t.Errorf("PaperCSS %q, want %q", PaperCSS, want)
 	}
 }

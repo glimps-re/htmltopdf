@@ -37,7 +37,7 @@ func TestInlineBlockPillsOfTemplate01(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := allText(newRun(t, string(html), opts{extra: testcorpus.ChromePaperCSS, scale: 0.9}).all(t))
+	got := allText(newRun(t, string(html), opts{extra: testcorpus.PaperCSS, scale: 0.9}).all(t))
 	for _, w := range []string{"Trojan", "Emotet"} {
 		if !strings.Contains(got, w) {
 			t.Errorf("pill %q missing from %.300q", w, got)

@@ -118,7 +118,7 @@ func TestTemplate00DrawsItsShadows(t *testing.T) {
 		t.Fatal(err)
 	}
 	count := func(extra string) (pages, fillRects int) {
-		r := newRun(t, string(html), opts{extra: testcorpus.HostConnectorPageCSS + extra})
+		r := newRun(t, string(html), opts{extra: testcorpus.HostConnectorPageCSS + testcorpus.PaperCSS + extra})
 		for _, pg := range r.all(t) {
 			pages++
 			for _, it := range pg.Items {

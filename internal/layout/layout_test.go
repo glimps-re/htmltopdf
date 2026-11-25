@@ -481,7 +481,7 @@ func corpusRun(tb testing.TB, name string, size testcorpus.Size) *run {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	return newRun(tb, string(data), opts{extra: testcorpus.HostConnectorPageCSS, scale: 0.9})
+	return newRun(tb, string(data), opts{extra: testcorpus.HostConnectorPageCSS + testcorpus.PaperCSS, scale: 0.9})
 }
 
 func TestCorpusReportsPaginate(t *testing.T) {

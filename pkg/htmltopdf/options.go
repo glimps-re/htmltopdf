@@ -8,6 +8,7 @@ import (
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/layout"
+	"github.com/glimps-re/htmltopdf/internal/style"
 )
 
 // Options configures a Converter. The zero value is valid: A4 pages with 10 mm
@@ -37,9 +38,26 @@ type Options struct {
 	// boxes), like Chrome's print scale. 0 means 1. Valid range: [0.1, 2].
 	Scale float64
 
+	// PageSize, when set, is the paper of every page, whatever the @page size rules
+	// say; only their orientation is kept, per page: landscape (the keyword, or a
+	// width larger than the height) swaps the sides. Margins and the margin clamp
+	// still come from the cascade. The zero value leaves the sizes to @page.
+	PageSize PageSize
+
 	// Limits bounds the resources of one Render. Zero fields take the defaults.
 	Limits Limits
 }
+
+// PageSize is a paper size in CSS px (1/96 in). Each side must lie in
+// [MinPageSide, MaxPageSide] (1 in to 200 in), else New returns ErrInvalidOptions;
+// the zero value means no paper.
+type PageSize struct{ Width, Height float64 }
+
+// Bounds of a PageSize side, in CSS px: those of a @page size.
+const (
+	MinPageSide = style.MinPageSidePx
+	MaxPageSide = style.MaxPageSidePx
+)
 
 // Font is one TrueType font file with glyf outlines. Font collections (.ttc),
 // CFF-flavoured OpenType fonts and WOFF files are rejected by New.
@@ -176,6 +194,29 @@ func resolveScale(s float64) (float64, error) {
 		return 0, fmt.Errorf("%w: Scale %v is outside [%v, %v]", ErrInvalidOptions, s, layout.MinScale, layout.MaxScale)
 	}
 	return s, nil
+}
+
+// validatePageSize accepts the zero value, else both sides must lie in
+// [MinPageSide, MaxPageSide] (NaN and the infinities do not).
+func validatePageSize(p PageSize) error {
+	if p == (PageSize{}) {
+		return nil
+	}
+	for _, v := range [2]float64{p.Width, p.Height} {
+		if math.IsNaN(v) || v < MinPageSide || v > MaxPageSide {
+			return fmt.Errorf("%w: PageSize %v x %v: each side must lie in [%d, %d]", ErrInvalidOptions, p.Width, p.Height, MinPageSide, MaxPageSide)
+		}
+	}
+	return nil
+}
+
+// setPaper gives the resolver the paper p, when there is one. The sides take the
+// single precision of a CSS length, so that the page is the one a @page size of
+// the same px gives, to the byte.
+func setPaper(res *style.Resolver, p PageSize) {
+	if p != (PageSize{}) {
+		res.SetPaper(float64(float32(p.Width)), float64(float32(p.Height)))
+	}
 }
 
 // Result describes a Render.
