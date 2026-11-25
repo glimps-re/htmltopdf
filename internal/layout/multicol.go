@@ -245,7 +245,7 @@ func (l *layouter) fillColumns(b *box.Box, in []level, lv level, resuming bool, 
 		}
 		l.pend, l.truncate = margins{}, stat == partial
 		l.flush()
-		p.cols = append(p.cols, column{f: cf, bottom: contentBottom(cf, y0)})
+		p.cols = append(p.cols, column{f: cf, bottom: contentBottom(cf, y0, !unbounded)})
 		p.stat, p.tok = stat, tok
 		if stat == complete {
 			break
@@ -261,14 +261,25 @@ func (l *layouter) fillColumns(b *box.Box, in []level, lv level, resuming bool, 
 
 // contentBottom is the bottom edge of the content of the column fragment f, at
 // least y0: unlike the cursor, it does not include the margin that a box which
-// then moved to the next column had flushed.
-func contentBottom(f *frag, y0 float64) float64 {
+// then moved to the next column had flushed. On a page (bounded), it includes
+// the content that overflows a box, which the fit tests count: balanced to the
+// boxes alone, the columns would be too short for it and slice it again on
+// every page.
+func contentBottom(f *frag, y0 float64, bounded bool) float64 {
 	bottom := y0
 	for _, c := range f.children {
-		bottom = math.Max(bottom, c.rect.Y+c.rect.H)
+		if bounded {
+			bottom = math.Max(bottom, overflowBottom(c))
+		} else {
+			bottom = math.Max(bottom, c.rect.Y+c.rect.H)
+		}
 	}
 	for _, ln := range f.lines {
-		bottom = math.Max(bottom, ln.rect.Y+ln.rect.H)
+		if bounded {
+			bottom = math.Max(bottom, lineFitBottom(ln))
+		} else {
+			bottom = math.Max(bottom, ln.rect.Y+ln.rect.H)
+		}
 	}
 	return bottom
 }

@@ -136,17 +136,44 @@ func (a *atomBox) spansLine() bool {
 
 // clip returns an independent copy of a cut to the window [from, to): the
 // fragments of a cut are moved on their own, so they must not share an atom.
-func (a *atomBox) clip(from, to float64) *atomBox {
-	c := *a
-	c.f = cutFrag(a.f, from, to)
-	return &c
+func (a *atomBox) clip(c *cutter) *atomBox {
+	ca := *a
+	ca.f = c.frag(a.f)
+	return &ca
 }
 
-// cutLine returns the part of the line ln in the window [from, to), or nil.
+// lineBottom returns the lowest edge a cut must not skip for the line ln: its
+// box, its baseline (a line-height smaller than the font puts the glyphs below
+// the box) and the in-flow content of its atoms, which a fixed-height
+// inline-block can hold below the line.
+func lineBottom(ln *lineFrag) float64 {
+	bottom := math.Max(ln.rect.Y+ln.rect.H, ln.baseline)
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			bottom = math.Max(bottom, reachBottom(a.f))
+		}
+	}
+	return bottom
+}
+
+// lineFitBottom is the bottom of the line ln as the fit tests count it: its box
+// and the overflow of its atoms, not its baseline (block flow fits line boxes).
+func lineFitBottom(ln *lineFrag) float64 {
+	bottom := ln.rect.Y + ln.rect.H
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			bottom = math.Max(bottom, overflowBottom(a.f))
+		}
+	}
+	return bottom
+}
+
+// line returns the part of the line ln in the window [from, to), or nil.
 // A line without atom belongs to the window of its baseline. A line with
 // atoms can be taller than a page and is cut through: it is in every window it
 // overlaps, its text in the one of its baseline, its atoms clipped to each.
-func cutLine(ln *lineFrag, from, to float64) *lineFrag {
+func (c *cutter) line(ln *lineFrag) *lineFrag {
+	from, to := c.from, c.to
 	atoms := false
 	for i := range ln.items {
 		if ln.items[i].atom != nil {
@@ -154,7 +181,7 @@ func cutLine(ln *lineFrag, from, to float64) *lineFrag {
 			break
 		}
 	}
-	if !atoms && (ln.baseline < from || ln.baseline >= to) || atoms && (ln.rect.Y+ln.rect.H <= from || ln.rect.Y >= to) {
+	if !atoms && (ln.baseline < from || ln.baseline >= to) || atoms && (lineBottom(ln) <= from || ln.rect.Y >= to) {
 		return nil
 	}
 	nl := *ln
@@ -169,7 +196,7 @@ func cutLine(ln *lineFrag, from, to float64) *lineFrag {
 				nl.items = append(nl.items, it)
 			}
 		case it.atom != nil:
-			it.atom = it.atom.clip(from, to)
+			it.atom = it.atom.clip(c)
 			nl.items = append(nl.items, it)
 		default:
 			nl.items = append(nl.items, it)

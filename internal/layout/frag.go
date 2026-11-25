@@ -13,6 +13,16 @@ type frag struct {
 	// rect is the border box of this fragment.
 	rect display.Rect
 	yset bool
+	// ovfOK tells that ovf and reach are computed: the bottoms of the in-flow
+	// content, relative to rect.Y, which moving the fragment keeps. ovf is the
+	// extent the fit tests count (boxes and lines), reach what a cut must not
+	// skip (baselines too). A fragment is measured once complete, and a copy
+	// cut from it measures again.
+	ovfOK      bool
+	ovf, reach float64
+	// cut indexes the children and lines of a fragment cut on several pages;
+	// built on its first cut, relative to rect.Y like ovf.
+	cut *cutIndex
 	// border and padding are the used widths (top, right, bottom, left); the
 	// top ones belong to the first fragment only, the bottom ones to the last.
 	border, padding [4]float64

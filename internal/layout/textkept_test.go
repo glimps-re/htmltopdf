@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/glimps-re/htmltopdf/internal/box"
+	"github.com/glimps-re/htmltopdf/internal/display"
 
 	"github.com/glimps-re/htmltopdf/internal/testcorpus"
 
@@ -459,5 +460,167 @@ func TestApartLayoutsKeepEveryWord(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// overflowCase is a document whose words must all be drawn with their
+// baseline inside a page area, on at most maxPages pages (0: no bound).
+type overflowCase struct {
+	name     string
+	html     string
+	words    []string
+	maxPages int
+}
+
+func numberedLines(prefix string, n int) (string, []string) {
+	var words []string
+	for i := range n {
+		words = append(words, fmt.Sprintf("%s%d", prefix, i))
+	}
+	return strings.Join(words, "<br>"), words
+}
+
+func checkOverflowCases(t *testing.T, cases []overflowCase) {
+	t.Helper()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRun(t, c.html, opts{extra: "@page { size: 300px 200px; margin: 10px }", limits: func(l *budget.Limits) { l[budget.Pages] = 500 }})
+			pages := r.all(t)
+			if c.maxPages > 0 && len(pages) > c.maxPages {
+				t.Errorf("%d pages, want at most %d", len(pages), c.maxPages)
+			}
+			if lost := TextLost(r.root, pages); lost != "" {
+				t.Errorf("text lost: %s", lost)
+			}
+			inside := map[string]bool{}
+			for _, pg := range pages {
+				for _, it := range pg.Items {
+					if tx, ok := it.(*display.Text); ok && tx.Baseline >= 0 && tx.Baseline <= pg.Area.H/pg.Scale {
+						for _, w := range strings.Fields(tx.Text) {
+							inside[w] = true
+						}
+					}
+				}
+			}
+			for _, w := range c.words {
+				if !inside[w] {
+					t.Errorf("word %q has no baseline inside a page area", w)
+				}
+			}
+		})
+	}
+}
+
+// Text overflowing a fixed-height box inside a flex or grid item, a cell or an
+// inline-block is paginated with its band, row or line, as in block flow: every
+// word lands inside a page area.
+func TestOverflowOfFixedHeightItemsLandsOnAPage(t *testing.T) {
+	f, fw := numberedLines("f", 13)
+	g, gw := numberedLines("g", 13)
+	n, nw := numberedLines("n", 30)
+	d, dw := numberedLines("d", 13)
+	i, iw := numberedLines("i", 13)
+	checkOverflowCases(t, []overflowCase{
+		{"reduced from fuzz 1fe26645476306f3", `<style>p { margin: 3px }</style><v style='display:flex'><v>x<div>><div>x<div style='height:0;line-height:90px'>><div>LAST<v`, []string{"x", "LAST"}, 0},
+		{"flex height 10px", `<div style="display:flex"><div><div style="height:10px">` + f + `</div></div></div><p>AFTER</p>`, append(fw, "AFTER"), 0},
+		{"grid height 10px", `<div style="display:grid"><div style="height:10px">` + g + `</div></div>`, gw, 0},
+		{"nested flex height 0", `<div style="display:flex"><div style="display:flex"><div><div style="height:0">` + n + `</div></div></div></div>`, nw, 0},
+		{"td height 10px", `<table><tr><td><div style="height:10px">` + d + `</div></td></tr></table><p>AFTER</p>`, append(dw, "AFTER"), 0},
+		{"inline-block height 10px", `<span style="display:inline-block"><div style="height:10px">` + i + `</div></span><p>AFTER</p>`, append(iw, "AFTER"), 0},
+		{"fuzz c8f1412b86617286", `<A stYle='displAY:inline-BloCk'>0<B stYle='line-height:7'>0<div stYle=height:00>0<div></div>0</div>0`, []string{"0"}, 0},
+	})
+}
+
+// Columns are balanced to the overflow the fit tests count: balanced to the
+// boxes alone, they were too short for it and the band was sliced again on
+// every page, up to the page limit.
+func TestOverflowInColumnsDoesNotRunAway(t *testing.T) {
+	two, twoW := numberedLines("a", 2)
+	five, fiveW := numberedLines("b", 5)
+	three, threeW := numberedLines("c", 3)
+	zero, zeroW := numberedLines("z", 2)
+	grid, gridW := numberedLines("g", 5)
+	ib, ibW := numberedLines("i", 3)
+	after := func(w []string) []string { return append(w, "AFTER") }
+	checkOverflowCases(t, []overflowCase{
+		{"flex 2 lines", `<div style="columns:2"><div style="display:flex"><div style="height:10px">` + two + `</div></div></div><p>AFTER</p>`, after(twoW), 2},
+		{"flex 5 lines", `<div style="columns:2"><div style="display:flex"><div style="height:10px">` + five + `</div></div></div><p>AFTER</p>`, after(fiveW), 2},
+		{"td 3 lines", `<div style="columns:2"><table><tr><td><div style="height:10px">` + three + `</div></td></tr></table></div><p>AFTER</p>`, after(threeW), 2},
+		{"line-height 0", `<div style="columns:2"><div style="display:flex"><div style="line-height:0">` + zero + `</div></div></div><p>AFTER</p>`, after(zeroW), 2},
+		{"grid 5 lines", `<div style="columns:2"><div style="display:grid"><div style="height:10px">` + grid + `</div></div></div><p>AFTER</p>`, after(gridW), 2},
+		{"inline-block 3 lines", `<div style="columns:2"><span style="display:inline-block"><div style="height:10px">` + ib + `</div></span></div><p>AFTER</p>`, after(ibW), 2},
+	})
+}
+
+// flexWrapped is a document of groups × 25 lines, about 2.5 groups a page, in
+// block flow or wrapped in an item of the given display.
+func flexWrapped(display string, groups int) string {
+	body := strings.Repeat("<div>"+strings.Repeat("x<br>", 25)+"</div>", groups)
+	return `<div style="display:` + display + `"><div>` + body + `</div></div>`
+}
+
+func layOutWrapped(tb testing.TB, display string, groups int) (work int64, pages int) {
+	r := newRun(tb, flexWrapped(display, groups), opts{
+		extra:  "@page { size: 300px 200px; margin: 10px }",
+		limits: func(l *budget.Limits) { l[budget.Pages] = 2000; l[budget.Work] = 1 << 31 },
+	})
+	pages = len(r.all(tb))
+	return r.b.Used(budget.Work), pages
+}
+
+// A long document wrapped in a flex or grid item is cut from its band on every
+// page, and what the cuts look at is charged to Work: each cut skips what ended
+// above it and what starts below it, so the layout costs about what the same
+// document costs in block flow (the item is measured, then laid out: factor 2),
+// and doubling the document doubles the Work, not its size times its pages.
+// It guards the cut index through the Work the cutter charges.
+func TestFlexWrappedDocumentCostsLikeBlock(t *testing.T) {
+	block, blockPages := layOutWrapped(t, "block", 600)
+	for _, display := range []string{"flex", "grid"} {
+		half, _ := layOutWrapped(t, display, 300)
+		work, pages := layOutWrapped(t, display, 600)
+		t.Logf("%s: work %d for %d pages (%d for half), block %d for %d pages", display, work, pages, half, block, blockPages)
+		if pages < 1400 {
+			t.Fatalf("%s: %d pages, want about 1500", display, pages)
+		}
+		if work > 2*block {
+			t.Errorf("%s: work %d against %d in block flow", display, work, block)
+		}
+		if float64(work) > 2.2*float64(half) {
+			t.Errorf("%s: work %d for 1500 pages, %d for 750: not linear", display, work, half)
+		}
+	}
+}
+
+func BenchmarkFlexWrappedDocument(b *testing.B) {
+	for _, display := range []string{"block", "flex"} {
+		b.Run(display, func(b *testing.B) {
+			for b.Loop() {
+				layOutWrapped(b, display, 600)
+			}
+		})
+	}
+}
+
+// Glyphs below a line box (a font taller than the line-height) are not
+// overflow the fit tests count: they neither grow balanced columns nor make the
+// balancing search for a height no column reaches.
+func TestGlyphOverflowDoesNotGrowColumns(t *testing.T) {
+	lay := func(size string) (float64, int64) {
+		html := `<div style="columns:2;line-height:10px;font-size:` + size + `">` + strings.Repeat("w<br>", 10) + `</div><p>AFTER</p>`
+		r := newRun(t, html, opts{extra: "@page { size: 300px 200px; margin: 10px }"})
+		pages := r.all(t)
+		if lost := TextLost(r.root, pages); lost != "" {
+			t.Errorf("font-size %s: text lost: %s", size, lost)
+		}
+		return pages[0].root.children[0].children[0].rect.H, r.b.Used(budget.Work)
+	}
+	h, work := lay("30px")
+	twinH, twinWork := lay("16px")
+	if h != twinH {
+		t.Errorf("columns %vpx tall with 30px glyphs, %vpx with 16px", h, twinH)
+	}
+	if float64(work) > 1.5*float64(twinWork) {
+		t.Errorf("work %d with 30px glyphs, %d with 16px", work, twinWork)
 	}
 }

@@ -104,6 +104,9 @@ type rowState struct {
 	// top guards the one re-layout of a row that breaks (cells top-aligned):
 	// tl.cur carries the flag over the pages the row is cut on.
 	top bool
+	// ext is the extent of rf for the fit and cut tests: its height, or the
+	// bottom of the content that overflows it.
+	ext float64
 }
 
 func (tl *tableLayout) span(c *tableCell) float64 {
@@ -838,31 +841,91 @@ func countNodes(f *frag) int {
 	return n
 }
 
-// cutFrag walks the whole row, so a row cut over many pages costs its size on
-// each (bounded by MaxPages). It returns a copy of the part of f between from and to, in the
-// coordinates of f. A box that crosses a cut is split in two pieces; a line
-// belongs to the piece that holds its baseline. The lines are copied, so the
-// original can be cut again.
+// cutFrag walks the row in the window and the boxes that reach it, skipping in
+// O(1) a box that ends above it, overflow included. It returns a copy of the
+// part of f between from and to, in the coordinates of f. A box that crosses a
+// cut is split in two pieces; a line belongs to the piece that holds its
+// baseline. The lines are copied, so the original can be cut again.
 func cutFrag(f *frag, from, to float64) *frag {
+	piece, _ := cutCounted(f, from, to)
+	return piece
+}
+
+// cutCounted is cutFrag that also returns the number of fragments and lines it
+// looked at and dropped, for the Work of a cut repeated on every page.
+func cutCounted(f *frag, from, to float64) (*frag, int64) {
+	c := cutter{from: from, to: to}
+	return c.frag(f), c.visits
+}
+
+// inWindow reports whether the box from top to bottom has a part in the window
+// [from, to); a box of no height belongs to the window of its top.
+func inWindow(top, bottom, from, to float64) bool {
+	return top < to && (bottom > from || bottom == top && top >= from)
+}
+
+// cutter cuts fragments to the window [from, to) and counts what it looks at
+// and drops.
+type cutter struct {
+	from, to float64
+	visits   int64
+}
+
+func (c *cutter) frag(f *frag) *frag {
+	children, lines := c.content(f)
+	return cutBox(f, c.from, c.to, children, lines)
+}
+
+// content returns the pieces of the children and the lines of f in the
+// window. A child that ended above the window is kept only for the lines that
+// overflow it into the window (a fixed height smaller than its content).
+func (c *cutter) content(f *frag) ([]*frag, []*lineFrag) {
+	var ci, cj, li, lj int
+	if ix := f.index(); ix != nil {
+		ci, cj = window(ix.children, len(f.children), f.rect.Y, c.from, c.to)
+		li, lj = window(ix.lines, len(f.lines), f.rect.Y, c.from, c.to)
+	} else {
+		cj, lj = len(f.children), len(f.lines)
+	}
+	var children []*frag
+	for _, ch := range f.children[ci:cj] {
+		ct, cb := ch.rect.Y, ch.rect.Y+ch.rect.H
+		switch {
+		case inWindow(ct, cb, c.from, c.to):
+			children = append(children, c.frag(ch))
+		case ct < c.to && reachBottom(ch) > c.from-cutEps:
+			// cutEps: the memoized bottom comes back with rounding, and a line
+			// on from must not be skipped.
+			if cc, cl := c.content(ch); len(cc) > 0 || len(cl) > 0 {
+				children = append(children, cutBox(ch, c.from, c.to, cc, cl))
+			}
+		}
+	}
+	var lines []*lineFrag
+	for _, ln := range f.lines[li:lj] {
+		if nl := c.line(ln); nl != nil {
+			lines = append(lines, nl)
+		}
+	}
+	// The pieces are the output of the cut; what it looked at and dropped is
+	// the scan a cut repeated on every page pays.
+	c.visits += int64(cj - ci + lj - li - len(children) - len(lines))
+	return children, lines
+}
+
+// cutBox returns the piece of the box f in the window, holding the given
+// content.
+func cutBox(f *frag, from, to float64, children []*frag, lines []*lineFrag) *frag {
 	top, bottom := f.rect.Y, f.rect.Y+f.rect.H
 	nf := *f
+	nf.ovfOK, nf.cut = false, nil
 	nf.rect.Y = math.Max(top, from)
 	nf.rect.H = math.Max(0, math.Min(bottom, to)-nf.rect.Y)
 	nf.first = f.first && top >= from
-	nf.last = f.last && bottom <= to
-	nf.children, nf.lines, nf.abs = nil, nil, cutLayers(f.abs, from, to)
+	// A box carried only for its overflow must not draw its bottom edge again.
+	nf.last = f.last && bottom <= to && inWindow(top, bottom, from, to)
+	nf.children, nf.lines, nf.abs = children, lines, cutLayers(f.abs, from, to)
 	nf.rules = cutRules(f.rules, from, to)
-	for _, c := range f.children {
-		ct, cb := c.rect.Y, c.rect.Y+c.rect.H
-		if cb > from && ct < to || cb == ct && ct >= from && ct < to {
-			nf.children = append(nf.children, cutFrag(c, from, to))
-		}
-	}
-	for _, ln := range f.lines {
-		if nl := cutLine(ln, from, to); nl != nil {
-			nf.lines = append(nf.lines, nl)
-		}
-	}
 	return &nf
 }
 
@@ -914,11 +977,14 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 			if rf, consumed, err = l.layItem(tl, row, inner, decor, false); err != nil {
 				return complete, nil, err
 			}
-			cur = &rowState{idx: i, rf: rf, x: inner.x}
+			// The row fits by its overflow too: lines overflowing a fixed-height
+			// box in a cell would be drawn below the page.
+			cur = &rowState{idx: i, rf: rf, x: inner.x, ext: l.rowExtent(rf, consumed)}
 		}
 		tl.cur = nil
-		need := rowNeed(row, consumed-cur.from, sv, i == len(rows)-1)
-		work, wrf, wconsumed := cur, rf, consumed
+		ext := cur.ext
+		need := rowNeed(row, ext-cur.from, sv, i == len(rows)-1)
+		work, wrf, wconsumed, wext := cur, rf, consumed, ext
 		if !l.unbounded && l.y+need > l.bottom {
 			// A row that breaks has its cells flow from the top (as in Chrome):
 			// centered cells would have lines on no common cut position. The
@@ -928,7 +994,8 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if wrf, wconsumed, err = l.layItem(tl, row, inner, decor, true); err != nil {
 					return complete, nil, err
 				}
-				work = &rowState{idx: i, rf: wrf, top: true, from: cur.from, x: inner.x}
+				wext = l.rowExtent(wrf, wconsumed)
+				work = &rowState{idx: i, rf: wrf, top: true, from: cur.from, x: inner.x, ext: wext}
 			}
 			cut, at := l.chooseCut(row, work, placed, placedBody, emptyAtEntry, sv)
 			switch {
@@ -941,14 +1008,17 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 					tl.cur = work
 				}
 				return partial, []level{{child: i}}, nil
-			case at < wconsumed-cutEps:
+			case at < wext-cutEps:
 				if work.from == 0 {
 					l.y += sv
 				}
 				if err := l.chargeCut(work); err != nil {
 					return complete, nil, err
 				}
-				piece := cutFrag(wrf, work.from, at)
+				piece, err := l.chargedCut(wrf, work.from, at)
+				if err != nil {
+					return complete, nil, err
+				}
 				moveFrag(piece, inner.x-work.x, -work.from)
 				// Chrome's fragment of a cut row runs to the end of the page.
 				stretchPiece(piece, math.Max(piece.rect.H, l.bottom-l.y))
@@ -960,7 +1030,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				return partial, []level{{child: i}}, nil
 			}
 		}
-		if work != cur && !l.unbounded && l.y+sv+consumed-cur.from > l.bottom {
+		if work != cur && !l.unbounded && l.y+sv+ext-cur.from > l.bottom {
 			// Top-aligned, the row fits where it laid out first does not (baseline
 			// cells make a row taller): it is the one to place.
 			rf, consumed, cur = wrf, wconsumed, work
@@ -974,7 +1044,9 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if err := l.chargeCut(cur); err != nil {
 					return complete, nil, err
 				}
-				piece = cutFrag(rf, cur.from, math.Inf(1))
+				if piece, err = l.chargedCut(rf, cur.from, math.Inf(1)); err != nil {
+					return complete, nil, err
+				}
 				moveFrag(piece, inner.x-cur.x, -cur.from)
 			}
 			advance = piece.rect.H
@@ -989,6 +1061,16 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 	l.y += sv
 	delete(l.tables, b)
 	return complete, nil, nil
+}
+
+// rowExtent is the extent of a row laid out from y = 0 for the fit and cut
+// tests: the height it takes, or the bottom of its in-flow content that
+// overflows it. A scratch layout runs no fit test and skips the walk.
+func (l *layouter) rowExtent(rf *frag, consumed float64) float64 {
+	if l.unbounded {
+		return consumed
+	}
+	return math.Max(consumed, overflowBottom(rf))
 }
 
 // rowNeed is the height a row still takes: what is left of it plus the border
@@ -1046,7 +1128,7 @@ func (l *layouter) chooseCut(row *tableRow, cur *rowState, placed, placedBody in
 	switch {
 	case placed == 0 && emptyAtEntry:
 		l.b.Warn(budget.WarnClamped, "table row sliced")
-		return cutHere, math.Min(cur.rf.rect.H, cur.from+math.Max(avail, 1))
+		return cutHere, math.Min(cur.ext, cur.from+math.Max(avail, 1))
 	case placedBody == 0 && !emptyAtEntry:
 		return cutNothing, 0
 	}

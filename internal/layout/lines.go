@@ -41,9 +41,10 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			l.flush()
 			flushed = true
 		}
+		ext := l.lineExtent(&ln)
 		// A margin can push the first line of a page past its bottom: it goes on the
 		// next page, where the margin is truncated, not out of sight.
-		if !l.unbounded && (l.y > l.bottom || l.y+ln.height() > l.bottom && !l.pageEmpty) {
+		if !l.unbounded && (l.y > l.bottom || l.y+ext > l.bottom && !l.pageEmpty) {
 			if placed == 0 && !resuming && !emptyAtEntry {
 				l.restore(&saved)
 				return nothing, nil, nil
@@ -71,12 +72,17 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			p.releaseBefore(cur)
 			return partial, []level{{cur: cur, off: pulledOff}}, nil
 		}
-		if !l.unbounded && l.pageEmpty && ln.hasAtom() && ln.height() > l.bottom {
+		if l.needsSlice(&ln, ext, off) {
 			start := l.y
-			if l.sliceLine(f, &ln, inner, p.align, start-off) {
+			more, err := l.sliceLine(f, &ln, inner, p.align, start-off, ext)
+			if err != nil {
+				return complete, nil, err
+			}
+			if more {
 				l.pend, l.truncate = margins{}, true
 				p.releaseBefore(cur)
-				return partial, []level{{cur: cur, off: off + l.bottom - start}}, nil
+				// At least 1 px per page: a slice of no height would not progress.
+				return partial, []level{{cur: cur, off: off + math.Max(l.bottom-start, 1)}}, nil
 			}
 		} else {
 			l.place(f, &ln, inner, p.align)
@@ -106,19 +112,54 @@ func (l *layouter) place(f *frag, ln *lineOut, inner cbox, align style.TextAlign
 // sliceLine places on the page the part of the line ln that fits it, for a line
 // taller than a page area (an atomic inline taller than a page: design §3.2,
 // a monolithic box is sliced). The line starts at y0, above the page when it
-// resumes. It reports whether part of it is left for the next page.
-func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0 float64) bool {
-	end := y0 + ln.height()
+// resumes; ext is its extent, overflow of its atoms included. It reports
+// whether part of it is left for the next page.
+func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0, ext float64) (bool, error) {
+	end := y0 + ext
 	lf := l.build(ln, inner, align, y0)
-	piece := cutFrag(&frag{lines: []*lineFrag{lf}}, l.y, math.Min(end, l.bottom))
+	piece, err := l.chargedCut(&frag{lines: []*lineFrag{lf}}, l.y, math.Min(end, l.bottom))
+	if err != nil {
+		return false, err
+	}
 	f.lines = append(f.lines, piece.lines...)
 	l.pageEmpty = false
 	if end > l.bottom+cutEps {
 		l.y = l.bottom
-		return true
+		return true, nil
 	}
-	l.y = end
-	return false
+	// Past an overflow slice, the line box itself can end above the page.
+	l.y = math.Max(l.y, y0+ln.height())
+	return false, nil
+}
+
+// lineExtent is the extent of the line ln for the fit and slice tests: its
+// height, or the bottom, relative to its top, of the in-flow content of its
+// atoms that overflows it (lines of a fixed-height inline-block would be drawn
+// below the page). A scratch layout runs no fit test.
+func (l *layouter) lineExtent(ln *lineOut) float64 {
+	h := ln.height()
+	ext := h
+	if l.unbounded {
+		return ext
+	}
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			ext = math.Max(ext, a.top(0, h, ln.top)+overflowBottom(a.f)-a.f.rect.Y)
+		}
+	}
+	return ext
+}
+
+// needsSlice reports whether the line ln of extent ext, resumed at off, is
+// sliced on this empty page: an atomic inline taller than a page, a line that
+// resumes (it goes on being sliced), or one whose atom overflows past the page
+// bottom.
+func (l *layouter) needsSlice(ln *lineOut, ext, off float64) bool {
+	if l.unbounded || !l.pageEmpty || !ln.hasAtom() {
+		return false
+	}
+	overflows := ext > ln.height() && l.y-off+ext > l.bottom+cutEps
+	return ext > l.bottom || off > 0 || overflows
 }
 
 func (ln *lineOut) hasAtom() bool {

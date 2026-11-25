@@ -59,13 +59,70 @@ func (l *layouter) keepStripes(b *box.Box, st *stripeState, stat status, tok []l
 	return stat, tok, nil
 }
 
+// overflowBottom returns the lowest edge reached by f and the in-flow content
+// under it, as the fit tests count it: the boxes and line boxes that overflow
+// a box of fixed height, which the border box of f does not include. Content
+// under overflow: hidden is clipped to its box, and absolute boxes are placed
+// by the author: neither counts. f must be complete: its content is measured
+// once, then O(1), since pages cut and test the same band or row again.
+func overflowBottom(f *frag) float64 {
+	measure(f)
+	return f.rect.Y + math.Max(f.rect.H, f.ovf)
+}
+
+// reachBottom is overflowBottom with the baselines: a line whose box ends above
+// a cut but whose baseline is below it belongs to the piece below, so a cut
+// must not skip f before this.
+func reachBottom(f *frag) float64 {
+	measure(f)
+	return f.rect.Y + math.Max(f.rect.H, f.reach)
+}
+
+func measure(f *frag) {
+	if f.ovfOK {
+		return
+	}
+	fit, cut := f.rect.Y, f.rect.Y
+	if f.box == nil || f.box.Style == nil || !f.box.Style.OverflowHidden {
+		for _, ln := range f.lines {
+			fit, cut = math.Max(fit, lineFitBottom(ln)), math.Max(cut, lineBottom(ln))
+		}
+		for _, c := range f.children {
+			fit, cut = math.Max(fit, overflowBottom(c)), math.Max(cut, reachBottom(c))
+		}
+	}
+	f.ovf, f.reach, f.ovfOK = fit-f.rect.Y, cut-f.rect.Y, true
+}
+
+// chargedCut is cutFrag for a band or line cut again on every page it spans:
+// what the cut looks at is charged to Work.
+func (l *layouter) chargedCut(f *frag, from, to float64) (*frag, error) {
+	piece, visits := cutCounted(f, from, to)
+	return piece, l.b.Charge(budget.Work, visits)
+}
+
+// stripeExtent is the extent of band s for the fit and slice tests: its height,
+// or the bottom of the content of its items that overflows it. A scratch
+// layout runs no fit test.
+func (l *layouter) stripeExtent(s stripe) float64 {
+	ext := s.h
+	if !l.unbounded {
+		for _, fr := range s.frags {
+			ext = math.Max(ext, overflowBottom(fr))
+		}
+	}
+	return ext
+}
+
 // placeStripes places the bands lv.child..n-1 of the container fragment f at the
 // cursor, gap apart, with the contract of children(): a band that does not fit
 // moves to the next page; one taller than an empty page area is sliced with
-// cutFrag and resumes at lv.off. lay lays out band i; the band it returns is
-// kept by the caller while it is pushed or sliced, so its fragments must stay
-// relative to the top of the band: they are cut, never moved, until the band
-// is placed whole.
+// cutFrag and resumes at lv.off. A band fits by its overflow, not only by its
+// height: text overflowing a fixed-height item would otherwise be drawn below
+// the page (hostile text decides how much overflows). lay lays out band i; the
+// band it returns is kept by the caller while it is pushed or sliced, so its
+// fragments must stay relative to the top of the band: they are cut, never
+// moved, until the band is placed whole.
 func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(i int) (stripe, error), resuming, emptyAtEntry bool) (status, []level, error) {
 	l.flush()
 	off := lv.off
@@ -83,7 +140,8 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 			y = clampCoord(y + gap)
 		}
 		top := y - off
-		if !l.unbounded && y+s.h-off > l.bottom+cutEps {
+		ext := l.stripeExtent(s)
+		if !l.unbounded && y+ext-off > l.bottom+cutEps {
 			if !l.pageEmpty {
 				if placed == 0 && !resuming && !emptyAtEntry {
 					return nothing, nil, nil
@@ -95,23 +153,31 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 			l.b.Warn(budget.WarnClamped, "flex or grid line sliced")
 			room := l.bottom - y
 			for _, fr := range s.frags {
-				piece := cutFrag(fr, off, off+room)
+				piece, err := l.chargedCut(fr, off, off+room)
+				if err != nil {
+					return complete, nil, err
+				}
 				moveFrag(piece, 0, top)
 				f.children = append(f.children, piece)
 			}
-			consumed := room
+			// Progress on every page, whatever the cursor: a slice of no height
+			// would resume at the same offset for ever.
+			consumed := math.Max(room, 1)
 			l.y, l.pageEmpty = l.bottom, false
 			l.pend, l.truncate = margins{}, true
 			return partial, []level{{child: i, off: off + consumed}}, nil
 		}
 		for _, fr := range s.frags {
 			if off > 0 {
-				fr = cutFrag(fr, off, math.MaxFloat64)
+				if fr, err = l.chargedCut(fr, off, math.MaxFloat64); err != nil {
+					return complete, nil, err
+				}
 			}
 			moveFrag(fr, 0, top)
 			f.children = append(f.children, fr)
 		}
-		l.y = clampCoord(top + s.h)
+		// Past an overflow slice, off can exceed the band height.
+		l.y = clampCoord(math.Max(y, top+s.h))
 		l.pageEmpty = false
 		off = 0
 		placed++
