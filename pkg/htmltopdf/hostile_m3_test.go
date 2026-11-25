@@ -38,26 +38,11 @@ type m3Run struct {
 
 func m3Render(t *testing.T, html string) m3Run {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), m3Guard)
-	defer cancel()
-	c := mustNew(t, m2Options(t))
-	var r m3Run
-	var err error
-	start := time.Now()
-	r.peak = peakOf(func() {
-		var buf bytes.Buffer
-		r.res, err = c.Render(ctx, strings.NewReader(html), &buf)
-		r.data = buf.Bytes()
-	})
-	r.took = time.Since(start)
-	if err != nil {
-		t.Fatalf("render: %v", err)
+	r := h4Render(t, m2Options(t), html, true)
+	if r.err != nil {
+		t.Fatalf("render: %v", r.err)
 	}
-	r.doc = pdftest.Validate(t, r.data)
-	if r.peak > m3HeapCeil {
-		t.Errorf("peak heap %d MiB above %d MiB", r.peak>>20, m3HeapCeil>>20)
-	}
-	return r
+	return m3Run{res: r.res, data: r.data, doc: r.doc, peak: r.peak, took: r.took}
 }
 
 func (r m3Run) fills(page int) int {
