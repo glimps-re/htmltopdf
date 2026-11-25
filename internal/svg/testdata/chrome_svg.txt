@@ -1,0 +1,99 @@
+# Chrome geometry of SVG shapes (M3-T1 style probe for M3-05a): one JSON object per line: the case name, the svg markup and
+# Chrome's getBBox() [x,y,w,h] (fill bbox, user units) and getTotalLength() of the single shape element, as Chromium 156.0.8078.73 built on Debian GNU/Linux 13 (trixie) laid them out.
+# Source: tmp/m3probe/svg.html run by tmp/m3probe/run.sh (dev-only, never committed to Go code), 2026-11-24. "err" replaces them when Chrome throws.
+{"name":"corpus logo shield","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M12 2 3.5 5.5v6.2c0 5 3.6 9.1 8.5 10.3 4.9-1.2 8.5-5.3 8.5-10.3V5.5L12 2Z\"/></svg>","bbox":[3.5,2,17,20],"len":59.598}
+{"name":"corpus logo check","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"m8.2 12.2 2.6 2.6 5-5.2\"/></svg>","bbox":[8.2,9.6,7.6,5.2],"len":10.8908}
+{"name":"corpus archive path","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4\"/></svg>","bbox":[5,9,14,11],"len":39.142}
+{"name":"corpus archive rect","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"5\" rx=\"1\"/></svg>","bbox":[3,4,18,5],"len":43.6569}
+{"name":"M L implicit","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 20 20 30 10 40 40\"/></svg>","bbox":[10,10,30,30],"len":59.907}
+{"name":"m l relative implicit","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"m10 10 10 10 10 -10 10 30\"/></svg>","bbox":[10,10,30,30],"len":59.907}
+{"name":"H V","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 H50 V50 H20 V80\"/></svg>","bbox":[10,10,40,70],"len":140}
+{"name":"h v relative","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 h40 v40 h-30 v30\"/></svg>","bbox":[10,10,40,70],"len":140}
+{"name":"C","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 C 40 10, 65 10, 95 80\"/></svg>","bbox":[10,27.5,85,52.5],"len":141.0052}
+{"name":"c relative","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 c30 -70 55 -70 85 0\"/></svg>","bbox":[10,27.5,85,52.5],"len":141.0052}
+{"name":"S after C","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 C 40 10, 65 10, 95 80 S 150 150, 180 80\"/></svg>","bbox":[10,27.5,170,105],"len":282.0105}
+{"name":"S after nothing","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 S 50 10, 95 80\"/></svg>","bbox":[10,48.8889,85,31.1111],"len":109.7774}
+{"name":"s relative","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 C 40 10, 65 10, 95 80 s 55 70, 85 0\"/></svg>","bbox":[10,27.5,170,105],"len":282.0105}
+{"name":"Q","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 Q 52.5 10 95 80\"/></svg>","bbox":[10,45,85,35],"len":114.7568}
+{"name":"T after Q","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 Q 52.5 10 95 80 T 180 80\"/></svg>","bbox":[10,45,170,70],"len":229.5137}
+{"name":"T after nothing","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 T 95 80\"/></svg>","bbox":[10,80,85,0],"len":85}
+{"name":"T after C (no reflection)","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 C 40 10, 65 10, 95 80 T 180 80\"/></svg>","bbox":[10,27.5,170,52.5],"len":226.0052}
+{"name":"q t relative","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 80 q 42.5 -70 85 0 t 85 0\"/></svg>","bbox":[10,45,170,70],"len":229.5137}
+{"name":"Z then moveto","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 L50 10 L50 50 Z M60 60 L90 60\"/></svg>","bbox":[10,10,80,50],"len":166.5685}
+{"name":"Z then line (starts at subpath start)","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 L50 10 L50 50 Z L10 90\"/></svg>","bbox":[10,10,40,80],"len":216.5685}
+{"name":"Z then relative line","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 L50 10 L50 50 z l 0 40\"/></svg>","bbox":[10,10,40,40],"len":176.5685}
+{"name":"z then m relative to start","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 h40 v40 z m5 5 h20\"/></svg>","bbox":[10,10,40,40],"len":156.5685}
+{"name":"double Z","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 L50 10 L50 50 Z Z\"/></svg>","bbox":[10,10,40,40],"len":136.5685}
+{"name":"implicit after Z is an error","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 L50 10 Z 20 20\"/></svg>","bbox":[10,10,40,0],"len":80}
+{"name":"many M","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 M20 20 L30 30 M40 40\"/></svg>","bbox":[20,20,10,10],"len":14.1421}
+{"name":"comma and no-space numbers","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10,10L20.5.5L30-5.5-5\"/></svg>","bbox":[10,-5.5,20,15.5],"len":25.3959}
+{"name":"exponent","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M1e1 1e1 L2E1 +2e+1 L3e-1 .3\"/></svg>","bbox":[0.3,0.3,19.7,19.7],"len":42.0021}
+{"name":"leading dot, trailing dot","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M.5 .5 L5. 5.\"/></svg>","bbox":[0.5,0.5,0,0],"len":0}
+{"name":"minus chain","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10-10-20-30-5-5\"/></svg>","bbox":[-20,-30,30,25],"len":65.2103}
+{"name":"truncated number list","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M0 0 L10 10 L20\"/></svg>","bbox":[0,0,10,10],"len":14.1421}
+{"name":"unknown command","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M0 0 L10 10 X 5 5 L50 50\"/></svg>","bbox":[0,0,10,10],"len":14.1421}
+{"name":"no initial M","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"L10 10 L20 20\"/></svg>","bbox":[0,0,0,0],"len":0}
+{"name":"starts with number","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"10 10 L20 20\"/></svg>","bbox":[0,0,0,0],"len":0}
+{"name":"garbage after valid","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M0 0 L10 10 #\"/></svg>","bbox":[0,0,10,10],"len":14.1421}
+{"name":"empty d","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"\"/></svg>","bbox":[0,0,0,0],"len":0}
+{"name":"only M","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10\"/></svg>","bbox":[10,10,0,0],"len":0}
+{"name":"L before M after valid","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M0 0 L10 10 M\"/></svg>","bbox":[0,0,10,10],"len":14.1421}
+{"name":"bad arc flag 2","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 A5 5 0 2 1 20 20 L50 50\"/></svg>","bbox":[10,10,0,0],"len":0}
+{"name":"bad arc flag 10","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 10 A5 5 0 10 1 20 20 L50 50\"/></svg>","bbox":[-1.2285,8.2716,11.2285,11.7284],"len":21.1402}
+{"name":"comma after command","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M,10 10 L20 20\"/></svg>","bbox":[0,0,0,0],"len":0}
+{"name":"double comma","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10,,10 L20 20\"/></svg>","bbox":[0,0,0,0],"len":0}
+{"name":"arc sweep1 large0","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 0 1 50 50\"/></svg>","bbox":[10,30,40,20],"len":62.8407}
+{"name":"arc sweep0 large0","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 0 0 50 50\"/></svg>","bbox":[10,50,40,20],"len":62.8407}
+{"name":"arc sweep1 large1","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A25 25 0 1 1 50 50\"/></svg>","bbox":[5,10,50,40],"len":110.7256}
+{"name":"arc sweep0 large1","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A25 25 0 1 0 50 50\"/></svg>","bbox":[5,50,50,40],"len":110.7257}
+{"name":"arc ellipse rotated 30","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A30 10 30 1 1 60 20\"/></svg>","bbox":[-33.6173,-9.9208,93.6173,59.9208],"len":173.2808}
+{"name":"arc ellipse rotated -45","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A30 10 -45 0 1 60 20\"/></svg>","bbox":[10,8.6583,51.3482,41.3417],"len":78.763}
+{"name":"arc rotated 90","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A30 10 90 0 1 40 20\"/></svg>","bbox":[9.1886,-12.4342,30.8114,62.4342],"len":105.6756}
+{"name":"arc rotation 720","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A30 10 720 0 1 40 20\"/></svg>","bbox":[-22.4342,19.1886,62.4342,30.8114],"len":105.6756}
+{"name":"arc radii too small (scaled up)","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A1 1 0 0 1 90 50\"/></svg>","bbox":[10,10,80,40],"len":125.6814}
+{"name":"arc radii too small large flag","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A1 1 0 1 1 90 50\"/></svg>","bbox":[10,10,80,40],"len":125.6814}
+{"name":"arc radii too small rotated","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A2 1 40 0 1 90 20\"/></svg>","bbox":[-14.2249,-22.8482,104.2249,72.8482],"len":187.2834}
+{"name":"arc zero rx","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A0 20 0 0 1 50 50\"/></svg>","bbox":[10,50,40,0],"len":40}
+{"name":"arc zero ry","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 0 0 0 1 50 50\"/></svg>","bbox":[10,50,40,0],"len":40}
+{"name":"arc negative radii","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A-20 -20 0 0 1 50 50\"/></svg>","bbox":[10,30,40,20],"len":62.8407}
+{"name":"arc same endpoints","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 0 1 10 50 L30 30\"/></svg>","bbox":[10,30,20,20],"len":28.2843}
+{"name":"arc semicircle exact radius","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 0 1 50 50\"/></svg>","bbox":[10,30,40,20],"len":62.8407}
+{"name":"arc semicircle large flag","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 1 1 50 50\"/></svg>","bbox":[10,30,40,20],"len":62.8407}
+{"name":"arc tiny radii vs distance","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A0.001 0.001 0 0 1 10.002 50\"/></svg>","bbox":[10,49.999,0.002,0.001],"len":0.0032}
+{"name":"arc huge radius","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A100000 100000 0 0 1 90 50\"/></svg>","bbox":[10,49.9932,80,0.0068],"len":80.0023}
+{"name":"arc huge radius large","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A100000 100000 0 1 1 90 50\"/></svg>","bbox":[-99950,-199950.0156,199999.9844,200000.0156],"len":628326.6875}
+{"name":"arc flags compact 00","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 a20 20 0 00 40 0\"/></svg>","bbox":[10,50,40,20],"len":62.8407}
+{"name":"arc flags compact 11","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 a20 20 0 1140 0\"/></svg>","bbox":[10,30,40,20],"len":62.8407}
+{"name":"arc flags compact 0011","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 a20 20 0 0 0 40 0 a1 1 0 0011 1\"/></svg>","bbox":[10,50,51,20],"len":80.186}
+{"name":"arc implicit repeat","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 a10 10 0 0 1 20 0 10 10 0 0 1 20 0\"/></svg>","bbox":[10,40,40,10],"len":62.8408}
+{"name":"arc full circle by two arcs","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 1 1 50 50 A20 20 0 1 1 10 50\"/></svg>","bbox":[10,30,40,40],"len":125.6814}
+{"name":"arc relative","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 a20 20 0 0 1 40 0\"/></svg>","bbox":[10,30,40,20],"len":62.8407}
+{"name":"arc then S/T reflection reset","markup":"<svg viewBox=\"0 0 100 100\"><path d=\"M10 50 A20 20 0 0 1 50 50 S 70 10 90 50\"/></svg>","bbox":[10,30,80,20],"len":118.8923}
+{"name":"rect plain","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"20\" width=\"30\" height=\"40\"/></svg>","bbox":[10,20,30,40],"len":140}
+{"name":"rect no x y","markup":"<svg viewBox=\"0 0 100 100\"><rect width=\"30\" height=\"40\"/></svg>","bbox":[0,0,30,40],"len":140}
+{"name":"rect rx","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" rx=\"5\"/></svg>","bbox":[10,10,40,20],"len":110.6147}
+{"name":"rect ry","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" ry=\"5\"/></svg>","bbox":[10,10,40,20],"len":110.6147}
+{"name":"rect rx ry","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" rx=\"8\" ry=\"3\"/></svg>","bbox":[10,10,40,20],"len":112.0598}
+{"name":"rect rx > w/2","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" rx=\"100\"/></svg>","bbox":[10,10,40,20],"len":96.2747}
+{"name":"rect ry > h/2 rx small","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" rx=\"4\" ry=\"100\"/></svg>","bbox":[10,10,40,20],"len":109.6236}
+{"name":"rect negative rx","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" rx=\"-5\"/></svg>","bbox":[10,10,40,20],"len":120}
+{"name":"rect zero width","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"0\" height=\"20\"/></svg>","bbox":[10,10,0,20],"len":40}
+{"name":"rect negative height","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"-20\"/></svg>","bbox":[10,10,40,0],"len":80}
+{"name":"rect px units","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10px\" y=\"10px\" width=\"40px\" height=\"20px\"/></svg>","bbox":[10,10,40,20],"len":120}
+{"name":"rect auto rx","markup":"<svg viewBox=\"0 0 100 100\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"20\" rx=\"auto\"/></svg>","bbox":[10,10,40,20],"len":120}
+{"name":"circle","markup":"<svg viewBox=\"0 0 100 100\"><circle cx=\"50\" cy=\"50\" r=\"20\"/></svg>","bbox":[30,30,40,40],"len":124.8539}
+{"name":"circle r 0","markup":"<svg viewBox=\"0 0 100 100\"><circle cx=\"50\" cy=\"50\" r=\"0\"/></svg>","bbox":[50,50,0,0],"len":0}
+{"name":"circle negative r","markup":"<svg viewBox=\"0 0 100 100\"><circle cx=\"50\" cy=\"50\" r=\"-5\"/></svg>","bbox":[50,50,0,0],"len":0}
+{"name":"circle no cx","markup":"<svg viewBox=\"0 0 100 100\"><circle r=\"20\"/></svg>","bbox":[-20,-20,40,40],"len":124.8539}
+{"name":"ellipse","markup":"<svg viewBox=\"0 0 100 100\"><ellipse cx=\"50\" cy=\"50\" rx=\"30\" ry=\"10\"/></svg>","bbox":[20,40,60,20],"len":133.3761}
+{"name":"ellipse rx 0","markup":"<svg viewBox=\"0 0 100 100\"><ellipse cx=\"50\" cy=\"50\" rx=\"0\" ry=\"10\"/></svg>","bbox":[50,40,0,20],"len":40}
+{"name":"ellipse auto ry (SVG2: =rx)","markup":"<svg viewBox=\"0 0 100 100\"><ellipse cx=\"50\" cy=\"50\" rx=\"30\"/></svg>","bbox":[20,20,60,60],"len":188.1911}
+{"name":"line","markup":"<svg viewBox=\"0 0 100 100\"><line x1=\"10\" y1=\"10\" x2=\"90\" y2=\"40\"/></svg>","bbox":[10,10,80,30],"len":85.44}
+{"name":"line defaults","markup":"<svg viewBox=\"0 0 100 100\"><line x2=\"90\" y2=\"40\"/></svg>","bbox":[0,0,90,40],"len":98.4886}
+{"name":"polyline","markup":"<svg viewBox=\"0 0 100 100\"><polyline points=\"10,10 50,50 90,10\"/></svg>","bbox":[10,10,80,40],"len":113.1371}
+{"name":"polyline odd count","markup":"<svg viewBox=\"0 0 100 100\"><polyline points=\"10,10 50,50 90\"/></svg>","bbox":[10,10,40,40],"len":56.5685}
+{"name":"polyline one point","markup":"<svg viewBox=\"0 0 100 100\"><polyline points=\"10,10\"/></svg>","bbox":[10,10,0,0],"len":0}
+{"name":"polyline space sep","markup":"<svg viewBox=\"0 0 100 100\"><polyline points=\"10 10 50 50 90 10\"/></svg>","bbox":[10,10,80,40],"len":113.1371}
+{"name":"polyline garbage mid","markup":"<svg viewBox=\"0 0 100 100\"><polyline points=\"10,10 50,50 x 90,10\"/></svg>","bbox":[0,0,0,0],"len":0}
+{"name":"polygon","markup":"<svg viewBox=\"0 0 100 100\"><polygon points=\"10,10 50,50 90,10\"/></svg>","bbox":[10,10,80,40],"len":193.1371}
+{"name":"polygon 2 points","markup":"<svg viewBox=\"0 0 100 100\"><polygon points=\"10,10 90,90\"/></svg>","bbox":[10,10,80,80],"len":226.2742}
