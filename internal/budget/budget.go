@@ -221,6 +221,15 @@ func (b *Budget) chargeSlow(k Kind, n int64) error {
 	return nil
 }
 
+// RewindGlyphs lowers the Glyphs total to to, only for glyphs shaped by a
+// discarded trial. A value outside [0, Used) is ignored.
+func (b *Budget) RewindGlyphs(to int64) {
+	if to < 0 || to >= b.slots[Glyphs].used {
+		return
+	}
+	b.slots[Glyphs].used = to
+}
+
 // Used returns the total charged to k.
 func (b *Budget) Used(k Kind) int64 {
 	if k >= NumKinds {

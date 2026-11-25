@@ -23,7 +23,10 @@ type frag struct {
 	lines       []*lineFrag
 	// abs are the layers of the absolute boxes whose containing block is this
 	// fragment, dx and dy its relative offset and rot its rotation.
-	abs    []*layer
+	abs []*layer
+	// rules are the column rules of a multi-column container, in the page
+	// coordinates of its content.
+	rules  []display.Rect
 	dx, dy float64
 	rot    float64
 }

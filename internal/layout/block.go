@@ -52,6 +52,14 @@ type layouter struct {
 	cbs []*absCtx
 	// fixedReqs are the fixed boxes met in the flow of the page being laid out.
 	fixedReqs []absReq
+	// cols is the number of multi-column containers being laid out around the
+	// box: one inside another is a plain block. onColumns is a test hook called
+	// for each layout of the content of a segment in columns.
+	cols      int
+	onColumns func()
+	// sliced is set when a box with break-inside: avoid is split because it does
+	// not fit a page (or a column): a column height that does that is too short.
+	sliced bool
 
 	root      *box.Box
 	mono      monoBox
@@ -139,6 +147,13 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		g = l.mono.fit(g)
 		l.mono.box = nil
 	}
+	var (
+		mc    colGeom
+		multi bool
+	)
+	if !lv.childrenDone && b.Kind != box.KindSVG && st.Display != style.DisplayTable && st.Display != style.DisplayFlex && st.Display != style.DisplayGrid {
+		mc, multi = l.columnsOf(st, g.w)
+	}
 	f := &frag{box: b, first: !resuming, last: true}
 	f.border = [4]float64{g.bt, g.br, g.bb, g.bl}
 	f.padding = [4]float64{g.pt, g.pr, g.pb, g.pl}
@@ -147,7 +162,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 	}
 	// The root element and boxes that clip establish a block formatting context:
 	// the margins of their children do not collapse with their own.
-	bfc := st.OverflowHidden || b == l.root
+	bfc := st.OverflowHidden || b == l.root || multi
 	pre, post := g.pre(), g.post()
 	emptyAtEntry := l.pageEmpty
 	f.rect.X, f.rect.W = cb.x+g.ml, g.borderW
@@ -223,6 +238,15 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 	case b.Style.Display == style.DisplayGrid:
 		var err error
 		stat, tok, err = l.grid(b, f, lv, inner, childDecor, resuming, emptyAtEntry)
+		if err != nil {
+			return result{}, err
+		}
+		if stat == nothing {
+			return result{status: nothing}, nil
+		}
+	case multi:
+		var err error
+		stat, tok, err = l.multicol(b, f, in, lv, inner, mc, hh, hasH, childDecor, resuming, emptyAtEntry)
 		if err != nil {
 			return result{}, err
 		}

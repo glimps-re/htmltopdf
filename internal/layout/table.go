@@ -69,6 +69,8 @@ type headerState struct {
 	measured bool
 	height   float64
 	rows     []*frag
+	// x is the left edge of the content box the rows were laid out in.
+	x float64
 }
 
 // rowState is a row that continues on the next page: its fragment as laid out
@@ -80,6 +82,11 @@ type rowState struct {
 	from    float64
 	iv      []interval
 	hasCuts bool
+	// nodes is the number of fragments and lines of rf, for the cost of a cut.
+	nodes int
+	// x is the left edge of the content box the row was laid out in: it goes on
+	// in another column, which moves it.
+	x float64
 	// top guards the one re-layout of a row that breaks (cells top-aligned):
 	// tl.cur carries the flag over the pages the row is cut on.
 	top bool
@@ -533,7 +540,9 @@ func (l *layouter) layCell(tl *tableLayout, c *tableCell, x, w float64, decor st
 	for _, oc := range c.box.OutOfFlow {
 		l.registerAbs(oc, inner)
 	}
-	if hasInlineChildren(c.box) {
+	if mc, ok := l.columnsOf(st, cw); ok {
+		_, _, err = l.multicol(c.box, f, nil, level{}, inner, mc, 0, false, childDecor, false, true)
+	} else if hasInlineChildren(c.box) {
 		_, _, err = l.lines(c.box, f, level{}, inner, childDecor, false, true)
 	} else {
 		_, _, err = l.children(c.box, f, nil, level{}, inner, childDecor, false, true)
@@ -758,6 +767,24 @@ func widowCut(iv []interval, from, first, c float64) float64 {
 	return iv[k].top
 }
 
+// chargeCut charges the walk of a cut through the row of rs to Work: it visits
+// every fragment and line of the row, whatever the part it keeps, and a row can
+// be cut once for each column it spans.
+func (l *layouter) chargeCut(rs *rowState) error {
+	if rs.nodes == 0 {
+		rs.nodes = 1 + countNodes(rs.rf)
+	}
+	return l.b.Charge(budget.Work, int64(rs.nodes))
+}
+
+func countNodes(f *frag) int {
+	n := len(f.lines) + len(f.children)
+	for _, c := range f.children {
+		n += countNodes(c)
+	}
+	return n
+}
+
 // cutFrag walks the whole row, so a row cut over many pages costs its size on
 // each (bounded by MaxPages). It returns a copy of the part of f between from and to, in the
 // coordinates of f. A box that crosses a cut is split in two pieces; a line
@@ -771,6 +798,7 @@ func cutFrag(f *frag, from, to float64) *frag {
 	nf.first = f.first && top >= from
 	nf.last = f.last && bottom <= to
 	nf.children, nf.lines, nf.abs = nil, nil, cutLayers(f.abs, from, to)
+	nf.rules = cutRules(f.rules, from, to)
 	for _, c := range f.children {
 		ct, cb := c.rect.Y, c.rect.Y+c.rect.H
 		if cb > from && ct < to || cb == ct && ct >= from && ct < to {
@@ -833,7 +861,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 			if rf, consumed, err = l.layItem(tl, row, inner, decor, false); err != nil {
 				return complete, nil, err
 			}
-			cur = &rowState{idx: i, rf: rf}
+			cur = &rowState{idx: i, rf: rf, x: inner.x}
 		}
 		tl.cur = nil
 		need := rowNeed(row, consumed-cur.from, sv, i == len(rows)-1)
@@ -847,7 +875,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if wrf, wconsumed, err = l.layItem(tl, row, inner, decor, true); err != nil {
 					return complete, nil, err
 				}
-				work = &rowState{idx: i, rf: wrf, top: true, from: cur.from}
+				work = &rowState{idx: i, rf: wrf, top: true, from: cur.from, x: inner.x}
 			}
 			cut, at := l.chooseCut(row, work, placed, placedBody, emptyAtEntry, sv)
 			switch {
@@ -864,8 +892,11 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if work.from == 0 {
 					l.y += sv
 				}
+				if err := l.chargeCut(work); err != nil {
+					return complete, nil, err
+				}
 				piece := cutFrag(wrf, work.from, at)
-				shiftFrag(piece, -work.from)
+				moveFrag(piece, inner.x-work.x, -work.from)
 				// Chrome's fragment of a cut row runs to the end of the page.
 				stretchPiece(piece, math.Max(piece.rect.H, l.bottom-l.y))
 				l.placeRow(f, row, piece, piece.rect.H)
@@ -887,8 +918,11 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				l.y += sv
 			}
 			if cur.from > 0 {
+				if err := l.chargeCut(cur); err != nil {
+					return complete, nil, err
+				}
 				piece = cutFrag(rf, cur.from, math.Inf(1))
-				shiftFrag(piece, -cur.from)
+				moveFrag(piece, inner.x-cur.x, -cur.from)
 			}
 			advance = piece.rect.H
 		}
@@ -992,7 +1026,7 @@ func stretchPiece(piece *frag, h float64) {
 // headerRows lays the header rows out once, at y = 0: the continuation pages
 // place copies of them. A header too tall to repeat is measured but not kept.
 func (l *layouter) headerRows(tl *tableLayout, inner cbox, decor style.TextDecoration, sv float64) error {
-	tl.hdr.measured = true
+	tl.hdr.measured, tl.hdr.x = true, inner.x
 	frs := make([]*frag, 0, tl.hdrEnd-tl.hdrStart)
 	for i := tl.hdrStart; i < tl.hdrEnd; i++ {
 		rf, err := l.layRow(tl, &tl.rows[i], inner, decor, false)
@@ -1025,6 +1059,7 @@ func (l *layouter) repeatHeader(tl *tableLayout, f *frag, inner cbox, decor styl
 	for i, rf := range tl.hdr.rows {
 		l.y += sv
 		piece := cutFrag(rf, 0, math.Inf(1))
+		moveFrag(piece, inner.x-tl.hdr.x, 0)
 		l.placeRow(f, &tl.rows[tl.hdrStart+i], piece, piece.rect.H)
 	}
 	l.pageEmpty = false

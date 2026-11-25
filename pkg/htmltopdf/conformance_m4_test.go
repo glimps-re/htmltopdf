@@ -23,7 +23,7 @@ import (
 // numbers of the blocked-files table equal Chrome's, from M4-01.
 const (
 	// m4FlowGatesPages: 03L has Chrome's page count (M4-02).
-	m4FlowGatesPages = false
+	m4FlowGatesPages = true
 	// m4WarningsGate: only string-set and content: ... string() are warned (M4-04).
 	m4WarningsGate = false
 )
@@ -31,7 +31,7 @@ const (
 // m4Today is the recorded state (M3 tree, design 11.4 rev. M4): a figure may
 // not get worse, the gates above turn them into bars.
 const (
-	m4TodayPagesL  = 24
+	m4TodayPagesL  = 23
 	m4TodayPagesS  = 2
 	m4ChromePagesL = 23
 	m4ChromePagesS = 2

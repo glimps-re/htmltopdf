@@ -363,3 +363,17 @@ func TestMax(t *testing.T) {
 		t.Fatalf("Max(unknown) = %d", got)
 	}
 }
+
+func TestRewindGlyphs(t *testing.T) {
+	b := New(context.Background(), Defaults(), nil)
+	_ = b.Charge(Glyphs, 100)
+	_ = b.Charge(Work, 50)
+	_ = b.Charge(Pages, 3)
+	b.RewindGlyphs(30)
+	b.RewindGlyphs(-1)
+	b.RewindGlyphs(30)
+	b.RewindGlyphs(31)
+	if b.Used(Glyphs) != 30 || b.Used(Work) != 50 || b.Used(Pages) != 3 {
+		t.Errorf("glyphs %d work %d pages %d", b.Used(Glyphs), b.Used(Work), b.Used(Pages))
+	}
+}

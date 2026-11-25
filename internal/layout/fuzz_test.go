@@ -50,6 +50,13 @@ func FuzzLayout(f *testing.F) {
 		"<style>@page a{size:1e9px 5px;margin:1e9px} @page b{margin:0;@top-left{content:'x'}}</style><div style='page:a'>x</div><p style='page:b'>y</p><div style='page:a;break-before:avoid'><p style='page:b'>z</p></div><table style='page:a'><tr><td style='page:b'>q</td></tr></table>",
 		"<div style='display:flex;page:a'><div style='page:b'>k</div></div>" + strings.Repeat("<i style='display:block;page:x'>1</i><i style='display:block'>2</i>", 40),
 		"<p style='letter-spacing:1e9px'>abc</p>", "<span style='margin:0 1e9px;padding:1e9px'>x</span>",
+		"<div style='columns:1000;column-gap:0;column-rule:2px solid red'><p>aaa bbb ccc ddd</p></div><div style='columns:1e9;column-gap:1e9px;column-rule:1e9px dotted #00f'><p>x y z</p></div>",
+		"<div style='columns:3;column-gap:4px;column-rule:1px solid'><table><thead><tr><th>h</th></tr></thead>" + strings.Repeat("<tr><td>r<br>s<br>t</td></tr>", 60) + "</table></div>",
+		"<div style='columns:2'><div style='columns:3'><p>nested a b c d e f</p><div style='columns:2'><p>deeper</p></div></div><p style='break-before:page'>x</p><p style='break-after:page'>y</p></div>",
+		"<div style='columns:2;height:50px;overflow:hidden'><p>" + strings.Repeat("a b c ", 200) + "</p></div><div style='columns:2;height:1e9px'><p>q</p></div>",
+		"<div style='columns:3'><div style='break-inside:avoid;height:1e9px'>tall</div><div style='break-inside:avoid'>" + strings.Repeat("l<br>", 90) + "</div><h2 style='break-after:avoid'>h</h2><p>z</p></div>",
+		"<div style='columns:2;position:relative'><p>a</p><div style='position:absolute;top:1e9px;left:-1e9px;width:50%'>abs</div><span style='display:inline-block;width:1e9px'>w</span><p style='margin:-1e9px 1e9px'>m</p></div>",
+		"<div style='display:flex'><div style='columns:2;column-rule:2px solid red;width:100px'><p>" + strings.Repeat("flex ", 80) + "</p></div></div><table><tr><td style='columns:3;width:200px'>" + strings.Repeat("cell ", 80) + "</td></tr></table>",
 	} {
 		f.Add(s, "p { margin: 3px }")
 	}

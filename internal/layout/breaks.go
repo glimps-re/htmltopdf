@@ -83,7 +83,12 @@ type measureKey struct {
 // one that cannot is kept where it is and sliced, as Chrome does.
 func (l *layouter) blockBase(b *box.Box, in []level, cb cbox, decor style.TextDecoration) (result, error) {
 	if b.Style.BreakInside != style.BreakAvoid || len(in) > 0 || l.pageEmpty || l.measuring {
-		return l.layBlock(b, in, cb, decor)
+		atTop := l.pageEmpty
+		res, err := l.layBlock(b, in, cb, decor)
+		if err == nil && res.status == partial && atTop && len(in) == 0 && !l.measuring && b.Style.BreakInside == style.BreakAvoid {
+			l.sliced = true
+		}
+		return res, err
 	}
 	var snap breakSnap
 	l.saveBreak(&snap)
@@ -93,6 +98,7 @@ func (l *layouter) blockBase(b *box.Box, in []level, cb cbox, decor style.TextDe
 	}
 	fits, err := l.measure(b, cb, decor)
 	if err != nil || !fits {
+		l.sliced = l.sliced || err == nil
 		return res, err
 	}
 	l.restoreBreak(&snap)

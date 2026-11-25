@@ -52,16 +52,17 @@ func (l *layouter) grid(b *box.Box, f *frag, lv level, inner cbox, decor style.T
 		if err != nil {
 			return complete, nil, err
 		}
-		st = &stripeState{w: inner.w, decor: decor, plan: p}
+		st = &stripeState{w: inner.w, x: inner.x, decor: decor, plan: p}
 	}
 	p := st.plan.(*gridPlan)
 	n := len(p.cols.w)
 	stat, tok, err := l.placeStripes(f, lv, p.rows, p.rowGap, func(i int) (stripe, error) {
 		if st.have && st.i == i {
+			st.moveTo(inner.x)
 			return st.s, nil
 		}
 		s, err := l.layGridRow(b.Children[i*n:min((i+1)*n, len(b.Children))], p.cols, inner, decor, b.Style.AlignItems)
-		st.i, st.s, st.have = i, s, err == nil
+		st.i, st.s, st.have, st.x = i, s, err == nil, inner.x
 		return s, err
 	}, resuming, emptyAtEntry)
 	return l.keepStripes(b, st, stat, tok, err)

@@ -248,6 +248,10 @@ func moveContent(f *frag, dx, dy float64) {
 	for _, a := range f.abs {
 		moveFrag(a.f, dx, dy)
 	}
+	for i := range f.rules {
+		f.rules[i].X += dx
+		f.rules[i].Y += dy
+	}
 	for _, ln := range f.lines {
 		ln.rect.X += dx
 		ln.rect.Y += dy

@@ -33,6 +33,10 @@ func FuzzRender(f *testing.F) {
 		"<style>.w{position:fixed;top:30%;left:0;right:0;z-index:-1;transform:rotate(-18deg);text-align:center;font-size:40px}</style><div class=w>WM</div>" + string(bytes.Repeat([]byte("<p style='break-after:page'>p</p>"), 20)),
 		"<p>a</p><div style='position:fixed;left:0;bottom:-1e9px;width:1e9px'>f<div style='position:fixed;top:1e30px;right:-1e9px'>g</div></div><div style='position:fixed;left:1px'>s</div><p style='break-before:page'>b</p>" + string(bytes.Repeat([]byte("<i style='position:fixed;top:0'>x</i>"), 200)),
 		"<title>\x00)>></title><body>\u202e\ufffe", "<div><div><div>" + string(bytes.Repeat([]byte("<b>"), 2000)),
+		"<div style='columns:1000;column-gap:0;column-rule:2px solid red'><p>aaa bbb ccc ddd</p></div><div style='columns:1e9;column-gap:1e9px;column-rule:1e9px dotted #00f'><p>x y z</p></div>",
+		"<div style='columns:3;column-gap:4px;column-rule:1px solid'><table><thead><tr><th>h</th></tr></thead>" + string(bytes.Repeat([]byte("<tr><td>r<br>s<br>t</td></tr>"), 60)) + "</table></div>",
+		"<div style='columns:2'><div style='columns:3'><p>nested a b c d e f</p><div style='columns:2'><p>deeper</p></div></div><p style='break-before:page'>x</p><p style='break-after:page'>y</p></div>",
+		"<div style='columns:3;column-rule:1px solid red'>" + reportHTML + "</div>",
 	} {
 		f.Add([]byte(s))
 	}

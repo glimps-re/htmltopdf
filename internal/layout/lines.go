@@ -17,6 +17,12 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 	}
 	cur, off := lv.cur, lv.off
 	placed, flushed := 0, false
+	startLines, startEmpty, startCur := len(f.lines), l.pageEmpty, cur
+	var prev struct {
+		cur    cursor
+		off, h float64
+		ok     bool
+	}
 	// The margins adjoining the first line are applied before it is known to
 	// fit: if it does not, they belong to the break, and the state the flush
 	// changed is put back.
@@ -39,9 +45,28 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 				l.restore(&saved)
 				return nothing, nil, nil
 			}
+			pulledOff := 0.0
+			if l.cols > 0 {
+				switch {
+				case next.unit >= len(p.units) && prev.ok && placed-1 >= keptLines(startCur):
+					// Widows: the last line would be alone on the next column.
+					f.lines = f.lines[:len(f.lines)-1]
+					l.y -= prev.h
+					cur, pulledOff = prev.cur, prev.off
+				case placed > 0 && (placed < minOrphans || next.unit >= len(p.units)) && startCur == (cursor{}) && !startEmpty:
+					// Orphans, or a last line that cannot be pulled over: the paragraph
+					// moves whole to the next column.
+					f.lines = f.lines[:startLines]
+					l.restore(&saved)
+					l.pageEmpty = startEmpty
+					return nothing, nil, nil
+				default:
+					l.sliced = l.sliced || next.unit >= len(p.units) && placed > 0 || placed > 0 && placed < minOrphans && startCur == (cursor{})
+				}
+			}
 			l.pend, l.truncate = margins{}, true
 			p.releaseBefore(cur)
-			return partial, []level{{cur: cur}}, nil
+			return partial, []level{{cur: cur, off: pulledOff}}, nil
 		}
 		if l.pageEmpty && ln.hasAtom() && ln.height() > l.bottom {
 			start := l.y
@@ -53,6 +78,7 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 		} else {
 			l.place(f, &ln, inner, p.align)
 		}
+		prev.cur, prev.off, prev.h, prev.ok = cur, off, ln.height(), true
 		off = 0
 		placed++
 		cur = next
@@ -165,4 +191,13 @@ func (l *layouter) restore(s *flushState) {
 	for i, f := range s.waiting {
 		f.rect.Y, f.yset = s.tops[i], s.set[i]
 	}
+}
+
+// keptLines is the number of lines of a paragraph that stay on a column when
+// its last one moves on: the orphans when the paragraph starts there, else one.
+func keptLines(start cursor) int {
+	if start == (cursor{}) {
+		return minOrphans
+	}
+	return 1
 }

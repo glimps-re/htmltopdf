@@ -63,6 +63,9 @@ func (e *emitter) emitBox(f *frag, out display.List) display.List {
 		out = recolorBorder(out, f.borderColor)
 	}
 	out = emitSVGBox(f, out)
+	for _, r := range f.rules {
+		out = append(out, display.FillRect{Rect: r, Color: st.ColumnRule.Color})
+	}
 	clip := st.OverflowHidden && r.W > 0 && r.H > 0
 	if clip {
 		out = append(out, display.PushClip{Rect: paddingBox(f), Radii: innerRadii(rad, f)})

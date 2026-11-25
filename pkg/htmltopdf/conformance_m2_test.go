@@ -109,7 +109,7 @@ var m2Rows = []m2Row{
 	{name: "02S", template: "02-executive", size: testcorpus.Small, chrome: 5, tol: 1, absolute: true, current: 5, gating: true},
 	{name: "02L", template: "02-executive", size: testcorpus.Large, chrome: 37, tol: 0.15, current: 37, gating: true},
 	{name: "03S", template: analyst, size: testcorpus.Small, chrome: 2, tol: 1, absolute: true, current: 2, textLoss: 1, gating: true},
-	{name: "03L", template: analyst, size: testcorpus.Large, chrome: 23, tol: 0.15, current: 24, textLoss: 1, gating: true},
+	{name: "03L", template: analyst, size: testcorpus.Large, chrome: 23, tol: 0.15, current: 23, textLoss: 1, gating: true},
 }
 
 func TestM2PageCounts(t *testing.T) {

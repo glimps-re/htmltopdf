@@ -65,15 +65,16 @@ func (l *layouter) flex(b *box.Box, f *frag, lv level, inner cbox, decor style.T
 		if err != nil {
 			return complete, nil, err
 		}
-		st = &stripeState{w: inner.w, decor: decor, plan: p}
+		st = &stripeState{w: inner.w, x: inner.x, decor: decor, plan: p}
 	}
 	p := st.plan.(*flexPlan)
 	stat, tok, err := l.placeStripes(f, lv, len(p.lines), p.rowGap, func(i int) (stripe, error) {
 		if st.have && st.i == i {
+			st.moveTo(inner.x)
 			return st.s, nil
 		}
 		s, err := l.layLine(p.lines[i], inner, p.colGap, b.Style, decor, len(p.lines) == 1)
-		st.i, st.s, st.have = i, s, err == nil
+		st.i, st.s, st.have, st.x = i, s, err == nil, inner.x
 		return s, err
 	}, resuming, emptyAtEntry)
 	return l.keepStripes(b, st, stat, tok, err)

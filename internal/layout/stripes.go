@@ -21,7 +21,9 @@ type stripe struct {
 // the width and decoration it was made for; it is dropped when the container
 // completes, and by restoreBreak and measure.
 type stripeState struct {
-	w     float64
+	w float64
+	// x is the left edge of the content box the kept band s is laid out in.
+	x     float64
 	decor style.TextDecoration
 	// plan is the container's own plan: *flexPlan or *gridPlan.
 	plan any
@@ -30,6 +32,17 @@ type stripeState struct {
 	i    int
 	s    stripe
 	have bool
+}
+
+// moveTo moves the kept band to a content box starting at x: a container that
+// continues in another column has its plan kept but not its position.
+func (st *stripeState) moveTo(x float64) {
+	if dx := x - st.x; dx != 0 {
+		for _, fr := range st.s.frags {
+			moveFrag(fr, dx, 0)
+		}
+		st.x = x
+	}
 }
 
 // keepStripes records st for b when the container continues on the next page,
