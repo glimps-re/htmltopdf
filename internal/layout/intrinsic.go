@@ -38,7 +38,17 @@ func (l *layouter) sizeEntry(b *box.Box) (sizeEntry, error) {
 	var c sizes
 	var err error
 	switch {
-	case b.Style.Display == style.DisplayTable: // zero contribution until M3-06
+	case b.Kind == box.KindSVG:
+		w := svgAutoWidth(b, 0)
+		c = sizes{w, w}
+		if b.SVG.Width.Set && b.SVG.Width.Percent {
+			c = sizes{0, math.MaxFloat32}
+		}
+		if svgFills(b) {
+			c = sizes{0, math.MaxFloat32}
+		}
+	case b.Style.Display == style.DisplayTable:
+		c, err = l.tableSizes(b)
 	case hasInlineChildren(b):
 		c, err = l.inlineSizes(b)
 	default:
@@ -57,6 +67,10 @@ func (l *layouter) sizeEntry(b *box.Box) (sizeEntry, error) {
 	if st.MaxWidth.Kind == style.DimPx {
 		w := contentWidth(st, st.MaxWidth.Value, extra)
 		c = sizes{math.Min(c.min, w), math.Min(c.max, w)}
+	}
+	if st.MinWidth.Kind == style.DimPx && st.MinWidth.Value > 0 {
+		w := contentWidth(st, st.MinWidth.Value, extra)
+		c = sizes{math.Max(c.min, w), math.Max(c.max, w)}
 	}
 	edge := extra + autoMargin(st.Margin[style.Left], 0) + autoMargin(st.Margin[style.Right], 0)
 	s := sizes{clampCoord(c.min + edge), clampCoord(c.max + edge)}
@@ -171,7 +185,7 @@ func (l *layouter) walkInline(w *widths, boxes []*box.Box, collapse bool) error 
 			}
 		case box.KindLineBreak:
 			w.endLine()
-		case box.KindInlineBlock:
+		case box.KindInlineBlock, box.KindSVG:
 			s, err := l.intrinsic(c)
 			if err != nil {
 				return err

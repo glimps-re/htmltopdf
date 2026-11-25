@@ -173,8 +173,10 @@ type renderer struct {
 	c   *Converter
 	b   *budget.Budget
 	ctx context.Context
-	// page is the style of the pages and media the environment of @media.
-	page *style.PageStyle
+	// page is the style of the pages and media the environment of @media; pages
+	// gives the style of a named page.
+	page  *style.PageStyle
+	pages func(name string) *style.PageStyle
 }
 
 // defaultEnv is the media environment before the page size is known: the
@@ -211,6 +213,7 @@ func (r *renderer) build(src io.Reader) (*box.Box, string, error) {
 	}
 	r.b.Checkpoint("box")
 	r.page = resolver.Page(style.PageContext{Number: 1})
+	r.pages = func(name string) *style.PageStyle { return resolver.Page(style.PageContext{Name: name}) }
 	return root, doc.Title, nil
 }
 
@@ -303,9 +306,8 @@ func (r *renderer) paginate(root *box.Box, title string, dst io.Writer, res *Res
 	w := pdf.NewWriter(dst, r.b)
 	defer func() { *written = w.Written() }()
 	shaper := text.NewShaper(r.c.fonts, r.b)
-	pag := layout.NewPaginator(root, layout.Config{Page: r.page, Scale: r.c.scale, Fonts: r.c.fonts, Shaper: shaper, Budget: r.b})
+	pag := layout.NewPaginator(root, layout.Config{Page: r.page, Pages: r.pages, Scale: r.c.scale, Fonts: r.c.fonts, Shaper: shaper, Budget: r.b})
 	painter := paint.NewPainter(w, shaper, r.b)
-	hasMargins := r.page.HasBoxes()
 	var deferred []deferredPage
 	for {
 		pg, err := pag.Next()
@@ -321,12 +323,17 @@ func (r *renderer) paginate(root *box.Box, title string, dst io.Writer, res *Res
 		if err != nil {
 			return err
 		}
-		ref, err := w.AddPage(pg.Width*paint.PxToPt, pg.Height*paint.PxToPt, content, hasMargins, links)
+		ref, err := w.AddPage(pg.Width*paint.PxToPt, pg.Height*paint.PxToPt, content, pg.HasBoxes, links)
 		if err != nil {
 			return err
 		}
-		if hasMargins {
-			deferred = append(deferred, deferredPage{ref: ref, page: layout.Page{Number: pg.Number, Width: pg.Width, Height: pg.Height, Area: pg.Area, Scale: pg.Scale}})
+		for _, an := range painter.Anchors() {
+			if err := w.SetDest(an.Name, ref, 0, an.Y); err != nil {
+				return err
+			}
+		}
+		if pg.HasBoxes {
+			deferred = append(deferred, deferredPage{ref: ref, page: layout.Page{Number: pg.Number, Name: pg.Name, Width: pg.Width, Height: pg.Height, Area: pg.Area, Scale: pg.Scale}})
 		}
 		res.Pages++
 		r.b.Checkpoint("page")

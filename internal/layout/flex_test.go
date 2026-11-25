@@ -30,7 +30,7 @@ func flexStripesOf(tb testing.TB, l *layouter, c *box.Box, inner cbox) ([]stripe
 	}
 	var out []stripe
 	for _, line := range p.lines {
-		s, err := l.layLine(line, inner, p.colGap, c.Style, 0)
+		s, err := l.layLine(line, inner, p.colGap, c.Style, 0, len(p.lines) == 1)
 		if err != nil {
 			tb.Fatal(err)
 		}

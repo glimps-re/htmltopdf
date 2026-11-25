@@ -17,6 +17,7 @@ import (
 	"golang.org/x/net/html/atom"
 
 	"github.com/glimps-re/htmltopdf/internal/style"
+	"github.com/glimps-re/htmltopdf/internal/svg"
 )
 
 // Kind is the kind of a Box.
@@ -37,6 +38,9 @@ const (
 	// for its parent, a block container for its children, which are either
 	// block-level only or inline-level only.
 	KindInlineBlock
+	// KindSVG is a replaced box, inline-level or block-level by its display,
+	// without children: the drawing is in Box.SVG.
+	KindSVG
 )
 
 // String returns the name of the kind, as the dump shows it.
@@ -52,6 +56,8 @@ func (k Kind) String() string {
 		return "br"
 	case KindInlineBlock:
 		return "inline-block"
+	case KindSVG:
+		return "svg"
 	}
 	return "kind(" + strconv.Itoa(int(k)) + ")"
 }
@@ -72,16 +78,25 @@ type Box struct {
 	Style *style.Computed
 	// ID is the id of the element, set on its first box only.
 	ID string
+	// Anchor is true on the first box with an id that an internal link points to.
+	Anchor bool
+	// SVG is the drawing of a KindSVG box.
+	SVG *svg.Image
 	// Href is the sanitized target of the link the box is in (design §8.2): the
 	// box of an a element, and every box inside it, blocks included. The string
-	// is shared, not copied. Empty when the box is not in a link or the link was
-	// blocked.
+	// is shared, not copied. An internal link is "#" and the id of a box that
+	// exists (the first one has Anchor set). Empty when the box is not in a link,
+	// the link was blocked or it points to nothing.
 	Href string
 	// Text is the text of a text box: no newline, white space processed.
 	Text string
 	// ColSpan is the colspan of a table cell, in [1, MaxColSpan]; 0 on every
 	// other box.
 	ColSpan int
+	// OutOfFlow are the absolute boxes that stand in the inline content of this
+	// block container: they do not split it into lines. Layout registers them at
+	// the top of the container.
+	OutOfFlow []*Box
 	// Children are the boxes inside. A block has either block children only or
 	// inline-level children only.
 	Children []*Box
@@ -109,6 +124,12 @@ func dump(w io.Writer, b *Box, depth int) error {
 	if b.ID != "" {
 		sb.WriteString(" #" + b.ID)
 	}
+	if b.Anchor {
+		sb.WriteString(" anchor")
+	}
+	if b.SVG != nil {
+		sb.WriteString(" shapes=" + strconv.Itoa(len(b.SVG.Shapes)))
+	}
 	if b.Href != "" {
 		sb.WriteString(" href=" + strconv.Quote(b.Href))
 	}
@@ -128,6 +149,16 @@ func dump(w io.Writer, b *Box, depth int) error {
 	for _, c := range b.Children {
 		if err := dump(w, c, depth+1); err != nil {
 			return err
+		}
+	}
+	if len(b.OutOfFlow) > 0 {
+		if _, err := io.WriteString(w, strings.Repeat("  ", depth+1)+"out-of-flow\n"); err != nil {
+			return fmt.Errorf("box: dump: %w", err)
+		}
+		for _, c := range b.OutOfFlow {
+			if err := dump(w, c, depth+2); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

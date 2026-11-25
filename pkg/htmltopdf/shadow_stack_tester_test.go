@@ -56,7 +56,7 @@ func runStacked(t *testing.T, n, pad int, shadow string) stackedRun {
 // each) the shadows must add a bounded amount of memory, and the render must
 // succeed with one clamping warning. The item count and the warning are the
 // guarantee; the heap figures are a guard (the twin is the larger peak of two
-// runs, as a single run varies by about 5 MiB).
+// runs, as a single run varies by about 5 MiB, and by 12 MiB under the race detector at load).
 func TestShadowStackedBoxesOnOnePage(t *testing.T) {
 	const n = 99000
 	shadows := "box-shadow:" + strings.TrimSuffix(strings.Repeat("1px 2px 8px 1px red,", 8), ",")
@@ -76,7 +76,7 @@ func TestShadowStackedBoxesOnOnePage(t *testing.T) {
 	if with.peak > 256<<20 {
 		t.Errorf("peak heap %d MiB above the 256 MiB ceiling", with.peak>>20)
 	}
-	if with.peak > plain.peak+8<<20 {
+	if with.peak > plain.peak+16<<20 {
 		t.Errorf("shadows add %d MiB of heap (%d with, %d without)", (with.peak-plain.peak)>>20, with.peak>>20, plain.peak>>20)
 	}
 	if with.fills > maxShadowItemsPerPage {

@@ -19,8 +19,8 @@ func forcedBetween(prev, next *box.Box) bool {
 
 // avoidBetween reports whether the break between the siblings prev and next
 // should be avoided. A forced break wins over an avoid.
-func avoidBetween(prev, next *box.Box) bool {
-	if forcedBetween(prev, next) {
+func (l *layouter) avoidBetween(prev, next *box.Box) bool {
+	if l.pageBreakBetween(prev, next) {
 		return false
 	}
 	return prev.Style.BreakAfter == style.BreakAvoid || next.Style.BreakBefore == style.BreakAvoid
@@ -81,7 +81,7 @@ type measureKey struct {
 // starts on a page which already has content and does not complete there is
 // undone and moved whole to the next page, provided it fits a page (measure);
 // one that cannot is kept where it is and sliced, as Chrome does.
-func (l *layouter) block(b *box.Box, in []level, cb cbox, decor style.TextDecoration) (result, error) {
+func (l *layouter) blockBase(b *box.Box, in []level, cb cbox, decor style.TextDecoration) (result, error) {
 	if b.Style.BreakInside != style.BreakAvoid || len(in) > 0 || l.pageEmpty || l.measuring {
 		return l.layBlock(b, in, cb, decor)
 	}

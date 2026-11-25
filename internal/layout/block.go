@@ -39,6 +39,8 @@ type layouter struct {
 	// alone to see whether it fits a page, measures counts them on this page,
 	// measured memoizes the results, onMeasure is a test hook.
 	measuring bool
+	// pageName is the used page name of the block being laid out.
+	pageName string
 	// unbounded is true while content is laid out on an unbounded scratch page
 	// (a cell, an atomic inline): nothing breaks there, so a forced break is
 	// ignored and the content stays whole.
@@ -46,6 +48,8 @@ type layouter struct {
 	measures  int
 	measured  map[measureKey]bool
 	onMeasure func(*box.Box)
+	// cbs are the containing blocks of the absolute boxes being laid out.
+	cbs []*absCtx
 
 	root      *box.Box
 	mono      monoBox
@@ -85,7 +89,7 @@ func (l *layouter) flush() {
 // gives a block block-level children only or inline-level ones only, so the
 // first child tells.
 func hasInlineChildren(b *box.Box) bool {
-	return len(b.Children) > 0 && b.Children[0].Kind != box.KindBlock
+	return len(b.Children) > 0 && !blockLevel(b.Children[0])
 }
 
 // newProbe returns the shaper layout uses to resolve fonts: same font set,
@@ -109,12 +113,26 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		return result{}, err
 	}
 	st := b.Style
+	if st.Page != "" {
+		outer := l.pageName
+		l.pageName = st.Page
+		defer func() { l.pageName = outer }()
+	}
 	resuming := len(in) > 0
 	var lv level
 	if resuming {
 		lv = in[0]
 	}
 	g := geometry(st, cb)
+	if b.Kind == box.KindSVG {
+		g = svgGeom(b, g, cb)
+	}
+	if st.Display == style.DisplayTable && !st.TableLayoutFixed {
+		var err error
+		if g, err = l.fitTable(b, g, cb); err != nil {
+			return result{}, err
+		}
+	}
 	if b == l.mono.box {
 		g = l.mono.fit(g)
 		l.mono.box = nil
@@ -158,14 +176,23 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 			l.pageEmpty = false
 			f.last = false
 			f.rect.H = math.Max(0, l.y-f.rect.Y)
-			return result{f: f, status: partial, tok: []level{{child: lv.child, pre: lv.pre + consume, cur: lv.cur}}}, nil
+			return result{f: f, status: partial, tok: []level{{child: lv.child, pre: lv.pre + consume, cur: lv.cur, used: lv.used}}}, nil
 		}
 		l.y += rem
 		l.pageEmpty = false
 	}
 
 	cx := f.rect.X + g.bl + g.pl
-	inner := cbox{x: cx, w: g.w}
+	hh, hasH := usedHeight(st, g, cb)
+	if b.Kind == box.KindSVG && !hasH {
+		hh, hasH = svgAutoHeight(b, g.w, cb.h, cb.hdef), true
+	}
+	inner := cbox{x: cx, w: g.w, h: hh, hdef: hasH}
+	if !resuming {
+		for _, c := range b.OutOfFlow {
+			l.registerAbs(c, inner)
+		}
+	}
 	childDecor := decor | st.TextDecoration
 	var (
 		tok  []level
@@ -219,20 +246,80 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 			return result{status: nothing}, nil
 		}
 	}
+	if stat == partial && !f.yset {
+		f.rect.Y, f.yset = l.y, true
+	}
+	here := 0.0
+	if stat == partial && hasH {
+		here = contentHere(f, l.y, pre, lv.pre)
+	}
+	if stat == partial && hasH && st.OverflowHidden && lv.used+here >= hh {
+		// What is left would be clipped: the box ends at its height, and the
+		// content that did not fit the page is dropped with the token.
+		l.dropParagraph()
+		l.pend, l.truncate = margins{}, false
+		l.y = f.rect.Y + math.Max(0, pre-lv.pre) + math.Max(0, hh-lv.used)
+		stat, tok = complete, nil
+	}
 	if stat == partial {
 		tok[0].pre = pre
 		f.last = false
-		if !f.yset {
-			f.rect.Y, f.yset = l.y, true
-		}
 		f.rect.H = math.Max(0, l.y-f.rect.Y)
+		if hasH {
+			// The fragments of the box together stay within its height: the
+			// content past it overflows and goes on on the next pages.
+			f.rect.H = math.Min(f.rect.H, math.Max(0, pre-lv.pre)+math.Max(0, hh-lv.used))
+		}
+		tok[0].used = lv.used + here
 		return result{f: f, status: partial, tok: tok}, nil
 	}
 
-	// Bottom decoration; a box that clips, or has padding or border, contains
-	// the margins of its last child.
-	if post > 0 || bfc {
+	// Bottom decoration; a box that clips, or has padding, border or a height,
+	// contains the margins of its last child.
+	if post > 0 || bfc || hasH {
 		l.flush()
+	}
+	used := lv.used
+	crossed := hasH && resuming && lv.used >= hh
+	if hasH {
+		if !f.yset {
+			f.rect.Y, f.yset = l.y, true
+			l.unwait(f)
+		}
+		used += contentHere(f, l.y, pre, lv.pre)
+		if fill := hh - used; fill > 0 {
+			room := l.bottom - l.y
+			if b.Kind == box.KindSVG && fill > room && !l.pageEmpty {
+				// A replaced box is not sliced: it moves whole to the next page; one
+				// taller than a page stays and the page clips it.
+				l.unwait(f)
+				return result{status: nothing}, nil
+			}
+			if fill > room && b.Kind != box.KindSVG {
+				consume := math.Max(room, 0)
+				if l.pageEmpty {
+					consume = math.Max(room, 1)
+				}
+				l.y += consume
+				if consume > 0 {
+					l.pageEmpty = false
+				}
+				f.last = false
+				f.rect.H = math.Max(0, l.y-f.rect.Y)
+				return result{f: f, status: partial, tok: []level{{childrenDone: true, pre: pre, post: lv.post, used: used + consume}}}, nil
+			}
+			l.y += fill
+			used = hh
+			l.pageEmpty = false
+		} else if fill < 0 {
+			// The content is taller than the height: it overflows, the box ends at the
+			// height. Past a page break the overflow ended further down: the next
+			// sibling follows it.
+			if !crossed {
+				l.y -= contentHere(f, l.y, pre, lv.pre) - (hh - lv.used)
+			}
+			used = math.Max(hh, lv.used)
+		}
 	}
 	if rem := post - lv.post; rem > 0 {
 		if room := l.bottom - l.y; rem > room {
@@ -246,7 +333,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 			l.y += consume
 			f.last = false
 			f.rect.H = math.Max(0, l.y-f.rect.Y)
-			return result{f: f, status: partial, tok: []level{{childrenDone: true, pre: pre, post: lv.post + consume}}}, nil
+			return result{f: f, status: partial, tok: []level{{childrenDone: true, pre: pre, post: lv.post + consume, used: used}}}, nil
 		}
 		l.y += rem
 		l.pageEmpty = false
@@ -256,6 +343,9 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		l.unwait(f)
 	}
 	f.rect.H = math.Max(0, l.y-f.rect.Y)
+	if hasH && crossed {
+		f.rect.H = math.Min(f.rect.H, math.Max(0, pre-lv.pre)+math.Max(0, post-lv.post))
+	}
 	l.pend.add(g.mb)
 	return result{f: f, status: complete}, nil
 }
@@ -302,12 +392,16 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 		return partial, []level{{child: i}}, nil
 	}
 	for i := lv.child; i < len(b.Children); i++ {
+		if b.Children[i].Style.Position == style.PositionAbsolute {
+			l.registerAbs(b.Children[i], inner)
+			continue
+		}
 		c := b.Children[i]
-		if i > lv.child && !l.pageEmpty && !l.unbounded && forcedBetween(b.Children[i-1], c) {
+		if i > lv.child && !l.pageEmpty && !l.unbounded && l.pageBreakBetween(b.Children[i-1], c) {
 			l.pend, l.forced = margins{}, true
 			return partial, []level{{child: i}}, nil
 		}
-		link := i+1 < len(b.Children) && avoidBetween(c, b.Children[i+1])
+		link := i+1 < len(b.Children) && l.avoidBetween(c, b.Children[i+1])
 		if !prevLink {
 			chain = -1
 		}
@@ -343,4 +437,31 @@ func (l *layouter) children(b *box.Box, f *frag, in []level, lv level, inner cbo
 		}
 	}
 	return complete, nil, nil
+}
+
+// usedHeight is the content height of a block with a specified height: a
+// length, or a percentage of a containing block whose height is definite. ok is
+// false for an auto height, and for a percentage of an auto one.
+func usedHeight(st *style.Computed, g geom, cb cbox) (h float64, ok bool) {
+	switch st.Height.Kind {
+	case style.DimPx:
+		h = st.Height.Value
+	case style.DimPercent:
+		if !cb.hdef {
+			return 0, false
+		}
+		h = st.Height.Value / 100 * cb.h
+	default:
+		return 0, false
+	}
+	if st.BoxSizing == style.BorderBox {
+		h -= g.pt + g.pb + g.bt + g.bb
+	}
+	return clampCoord(math.Max(0, h)), true
+}
+
+// contentHere is the height of the content of f on its page, from the end of the
+// decoration at its top (pre of which lvPre is already behind) to y.
+func contentHere(f *frag, y, pre, lvPre float64) float64 {
+	return math.Max(0, y-f.rect.Y-math.Max(0, pre-lvPre))
 }

@@ -277,12 +277,10 @@ func TestDOMIsReleasedAfterBuild(t *testing.T) {
 
 func TestForeignContentIsSkippedWithAWarning(t *testing.T) {
 	for name, html := range map[string]string{
-		"svg":                  `<p>a<svg width=10><circle r=1></circle><text>t</text></svg>b</p>`,
-		"math":                 `<p>a<math><mi>x</mi><mo>+</mo></math>b</p>`,
-		"svg in a link":        `<a href="https://e.example/">a<svg><text>t</text></svg>b</a>`,
-		"nested foreignObject": `<svg><foreignObject><div>deep<p>x</p></div></foreignObject></svg>`,
-		"svg between blocks":   `<div>a</div><svg><g><g><text>t</text></g></g></svg><div>b</div>`,
-		"many svgs":            strings.Repeat("<svg></svg>", 2000),
+		"math":                `<p>a<math><mi>x</mi><mo>+</mo></math>b</p>`,
+		"math in a link":      `<a href="https://e.example/">a<math><mi>t</mi></math>b</a>`,
+		"math between blocks": `<div>a</div><math><mrow><mrow><mi>t</mi></mrow></mrow></math><div>b</div>`,
+		"many maths":          strings.Repeat("<math></math>", 2000),
 	} {
 		t.Run(name, func(t *testing.T) {
 			root, b, err := buildDoc(t, html, nil)
@@ -291,7 +289,7 @@ func TestForeignContentIsSkippedWithAWarning(t *testing.T) {
 			}
 			walkBoxes(root, func(x *Box) {
 				switch x.Tag.String() {
-				case "svg", "math", "circle", "mi", "mo", "g", "foreignobject":
+				case "math", "mi", "mo", "mrow":
 					t.Errorf("box for foreign element %s", x.Tag)
 				}
 				if strings.Contains(x.Text, "t") && x.Kind == KindText && strings.TrimSpace(x.Text) == "t" {

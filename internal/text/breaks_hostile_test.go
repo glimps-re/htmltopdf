@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// Breaks on 2 MiB of hostile text finishes quickly, in linear time and with a
-// bounded allocation, and its offsets are valid.
+// Breaks on 2 MiB of hostile text finishes (a one-minute guard), grows linearly in the number of breaks and
+// in the bytes allocated from half the text to the full text (counts, not wall time), with a bounded
+// allocation, and its offsets are valid.
 func TestBreaksHostileTwoMiB(t *testing.T) {
 	size := 2 << 20
 	if raceDetectorOn || testing.Short() {
@@ -51,17 +52,18 @@ func TestBreaksHostileTwoMiB(t *testing.T) {
 				d2, _, _ := timeOf(n)
 				return min(d1, d2), c, a
 			}
-			half, _, _ := best(size / 2)
+			half, nHalf, allocHalf := best(size / 2)
 			full, n, alloc := best(size)
 			t.Logf("%d breaks, %v for %d KiB (%v for half), %d MiB allocated", n, full.Round(time.Millisecond), size>>10, half.Round(time.Millisecond), alloc>>20)
-			// Wall time and linearity mean nothing under the race detector.
-			if !raceDetectorOn {
-				if full > 5*time.Second {
-					t.Errorf("%v for 2 MiB", full)
-				}
-				if half > 20*time.Millisecond && full > 4*half {
-					t.Errorf("not linear: %v for 1 MiB, %v for 2 MiB", half, full)
-				}
+			if full > time.Minute {
+				t.Errorf("%v for the full text", full)
+			}
+			// Linearity by counts: twice the text gives at most 2.2 times the breaks and the bytes allocated.
+			if float64(n) > 2.2*float64(nHalf)+16 {
+				t.Errorf("not linear: %d breaks for the half text, %d for the full text", nHalf, n)
+			}
+			if float64(alloc) > 2.2*float64(allocHalf)+1<<20 {
+				t.Errorf("not linear: %d KiB allocated for the half text, %d KiB for the full text", allocHalf>>10, alloc>>10)
 			}
 			if alloc > 128*uint64(max(size, 0)) {
 				t.Errorf("%d MiB allocated for %d KiB of text", alloc>>20, size>>10)

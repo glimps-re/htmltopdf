@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<table>\f\f\f\f\n</6q\xff\xcd\x1etd\x80\x00ܺT\x19\f\f\fB\x80\x00e\xc5a\x12\x9d")

@@ -21,6 +21,11 @@ type frag struct {
 	borderColor *[4]css.Color
 	children    []*frag
 	lines       []*lineFrag
+	// abs are the layers of the absolute boxes whose containing block is this
+	// fragment, dx and dy its relative offset and rot its rotation.
+	abs    []*layer
+	dx, dy float64
+	rot    float64
 }
 
 // lineFrag is a line box.
@@ -55,6 +60,9 @@ type lineItem struct {
 	href string
 	// ascent and descent are the content area of the run or inline box.
 	ascent, descent float64
+	// rise is the vertical-align offset of the run, up: its baseline is rise
+	// above that of the line (ascent and descent include it).
+	rise float64
 	// margin is the horizontal margin of an inline box edge, which the
 	// background and borders do not cover.
 	margin float64

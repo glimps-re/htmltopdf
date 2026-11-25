@@ -43,8 +43,8 @@ page 1 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
         block h2 40,951.04 740.62x48.4
           line 40,951.04 740.62x38.4 base 978.74 "Fichiers bloqués"
 page 2 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
-  block html 0,0 820.62x994.2 cont more
-    block body 0,0 820.62x994.2 cont more
+  block html 0,0 820.62x1002.84 cont more
+    block body 0,0 820.62x1002.84 cont more
       block section 16,0 788.62x571.56 cont
         block div 40,0 740.62x489.96
           block table 40,0 740.62x489.96
@@ -192,10 +192,10 @@ page 2 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
                   line 665.19,436.08 107.44x14.96 base 448.06 "Lien analyse"
         block p 40,505.96 740.62x25.6
           line 40,505.96 740.62x25.6 base 524.26 "… et 12 autres"
-      block section 16,587.56 788.62x406.64 more
+      block section 16,587.56 788.62x415.28 more
         block h2 40,611.56 740.62x48.4
           line 40,611.56 740.62x38.4 base 639.26 "Archives bloquées"
-        block section 40,679.88 740.62x314.32 more
+        block section 40,679.88 740.62x322.96 more
           block div 64,703.88 692.62x190.48
             block h3 64,703.88 692.62x43.28
               line 64,703.88 692.62x33.28 base 728.02 "Archive dump_0.zip"
@@ -208,8 +208,8 @@ page 2 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
                 line 64,835.16 692.62x25.6 base 853.46 "Taille : 12 MiB"
               block li 64,868.76 692.62x25.6
                 line 64,868.76 692.62x25.6 base 887.06 "Quarantaine : /var/quarantine/000000000000"
-          block div 64,910.36 692.62x83.84 more
-            block table 64,910.36 692.62x83.84 more
+          block div 64,910.36 692.62x92.48 more
+            block table 64,910.36 692.62x92.48 more
               block thead 64,910.36 692.62x45.92
                 block tr 64,910.36 692.62x45.92
                   block th 64,910.36 115.44x45.92
@@ -225,23 +225,23 @@ page 2 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9
                   block th 641.19,910.36 115.44x45.92
                     line 649.19,918.36 99.44x14.96 base 930.34 "URL de"
                     line 649.19,933.32 99.44x14.96 base 945.3 "l'analyse"
-              block tbody 64,956.28 692.62x37.92
-                block tr 64,956.28 692.62x37.92 more
-                  block td 64,956.28 115.44x37.92 more
+              block tbody 64,956.28 692.62x46.56
+                block tr 64,956.28 692.62x46.56 more
+                  block td 64,956.28 115.44x46.56 more
                     line 64,964.28 107.44x14.96 base 976.26 "C:\\Users\\victim\\D"
                     line 64,979.24 107.44x14.96 base 991.22 "ownloads\\invoice"
-                  block td 179.44,956.28 115.44x37.92 more
+                  block td 179.44,956.28 115.44x46.56 more
                     line 187.44,964.28 99.44x14.96 base 976.26 "0000000000000"
                     line 187.44,979.24 99.44x14.96 base 991.22 "0000000000000"
-                  block td 294.87,956.28 115.44x37.92 more
+                  block td 294.87,956.28 115.44x46.56 more
                     line 302.87,964.28 99.44x14.96 base 976.26 "0.0 MiB"
-                  block td 410.31,956.28 115.44x37.92 more
+                  block td 410.31,956.28 115.44x46.56 more
                     line 418.31,964.28 99.44x14.96 base 976.26 "*"
                     line 418.31,979.24 99.44x14.96 base 991.22 "Trojan.GenericK"
-                  block td 525.75,956.28 115.44x37.92 more
+                  block td 525.75,956.28 115.44x46.56 more
                     line 533.75,964.28 99.44x14.96 base 976.26 "malware"
                     line 533.75,979.24 99.44x14.96 base 991.22 "détecté"
-                  block td 641.19,956.28 115.44x37.92 more
+                  block td 641.19,956.28 115.44x46.56 more
                     line 649.19,964.28 99.44x14.96 base 976.26 "Pas d'analyse"
                     line 649.19,979.24 99.44x14.96 base 991.22 "GLIMPS"
 page 3 size 794.56x1122.56 area 28,96 738.56x902.56 scale 0.9

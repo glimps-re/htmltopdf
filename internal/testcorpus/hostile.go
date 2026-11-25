@@ -364,7 +364,7 @@ func layoutCases(l budget.Limits) []Case {
 	// limit because the boxes per element (3 to 5) depend on the box tree.
 	pseudo := func(n int64) func() []byte {
 		return func() []byte {
-			return doc(style(`i::before,i::after{content:"x";display:block}`), repeat("<i></i>", int(n)))
+			return doc(style(`i::before,i::after{content:"";display:block}`), repeat("<i></i>", int(n)))
 		}
 	}
 	cs = append(cs, pair("boxes_pseudo", "MaxBoxes", LimitOrDegraded,

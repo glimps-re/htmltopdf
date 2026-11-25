@@ -21,6 +21,9 @@ const maxShadowItems = 4096
 type emitter struct {
 	shadows int
 	clamped bool
+	// ax and ay are the offset of the relative boxes that contain the fragment
+	// being emitted: every item is moved by it once, when it is created.
+	ax, ay float64
 }
 
 // emit returns the display list of f and its descendants, margin boxes
@@ -36,10 +39,52 @@ func emit(f *frag, out display.List) display.List {
 // outside the spread box to b/2 inside it (an approximation: no smooth
 // falloff, and not clipped to the outside of the box, which an opaque
 // background hides). Past maxShadowItems on the page nothing more is added.
-func (e *emitter) appendShadows(out display.List, st *style.Computed, r display.Rect, rad display.Radii) display.List {
-	if r.W <= 0 || r.H <= 0 {
+//
+// A fragment that continues on the next page (!last) or from the previous one
+// (!first) has no shadow along that cut edge (box-decoration-break: slice): its
+// shadow items are clipped to a band open to ±css.MaxLengthPx on the uncut
+// sides and ending at the fragment edge on the cut ones.
+func (e *emitter) appendShadows(out display.List, st *style.Computed, r display.Rect, rad display.Radii, first, last bool) display.List {
+	if r.W <= 0 || r.H <= 0 || len(st.BoxShadow) == 0 {
 		return out
 	}
+	if first && last {
+		return e.appendOutsideShadows(out, st, r, rad)
+	}
+	top, bottom := -css.MaxLengthPx, css.MaxLengthPx
+	if !first {
+		top = r.Y
+	}
+	if !last {
+		bottom = r.Bottom()
+	}
+	clip := display.Rect{X: -css.MaxLengthPx, Y: top, W: 2 * css.MaxLengthPx, H: bottom - top}
+	out = append(out, display.PushClip{Rect: clip})
+	pushed := len(out)
+	if out = e.appendOutsideShadows(out, st, r, rad); len(out) == pushed {
+		return out[:pushed-1]
+	}
+	return append(out, display.PopClip{})
+}
+
+// appendOutsideShadows adds the shadow rectangles of st clipped to the outside
+// of the border box (CSS Backgrounds 3 §7.1: an outer shadow is never painted
+// inside it, even when the background is transparent). An opaque background
+// hides the inside anyway, so it needs no clip.
+func (e *emitter) appendOutsideShadows(out display.List, st *style.Computed, r display.Rect, rad display.Radii) display.List {
+	if st.BackgroundColor.A >= 1 {
+		return e.appendShadowRects(out, st, r, rad)
+	}
+	pushed := len(out) + 1
+	out = append(out, display.PushClip{Rect: r, Radii: rad, Outside: true})
+	if out = e.appendShadowRects(out, st, r, rad); len(out) == pushed {
+		return out[:pushed-1]
+	}
+	return append(out, display.PopClip{})
+}
+
+// appendShadowRects adds the shadow rectangles of st, unclipped.
+func (e *emitter) appendShadowRects(out display.List, st *style.Computed, r display.Rect, rad display.Radii) display.List {
 	for i := len(st.BoxShadow) - 1; i >= 0; i-- {
 		s := &st.BoxShadow[i]
 		if s.Color.A <= 0 {

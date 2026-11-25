@@ -25,6 +25,8 @@ func FuzzRender(f *testing.F) {
 		"<div style='width:40px;white-space:nowrap'><span style='display:inline-block'><span style='display:inline-block;width:1e9px;overflow:hidden'>x<br>y</span></span> z</div><table><tr><td><span style='display:inline-block'>t</span></table>",
 		"<div style='display:flex;flex-wrap:wrap;gap:3px 1e9px;justify-content:space-between'><div style='flex:1 1 40px'>a b c</div><div style='flex:none;width:1e9px'>d</div><div style='flex:2 0 0;align-self:center'>e<br>f<br>g</div></div><div style='display:flex'><div style='flex:1'><div style='display:flex'><div>x</div></div></div></div>",
 		"<div style='display:grid;grid-template-columns:repeat(3,1fr) max-content;gap:2px 1e9px;align-items:end'><div>a b</div><div style='width:1e9px'>c</div><p>d</p>e<div style='break-inside:avoid'>f<br>g</div></div><div style='display:grid;grid-template-columns:repeat(100000,1fr)'><div>x</div></div>",
+		"<style>@page a{size:3in 2in;margin:0;@top-left{content:'x'}} @page{@bottom-right{content:counter(page)}}</style><div style='page:a'>x</div><p>y</p><div style='page:a'>z</div><div style='page:b'>w</div>",
+		"<a href='#a'>x</a><a href='#b'>y</a><h2 id=a style='page:p'>A</h2><span id=b style='display:inline-block;height:1e9px'>B</span><a href='#'>z</a><a href='#nothing'>q</a><div style='display:none'><i id=c>c</i></div><a href='#c'>to hidden</a>" + string(bytes.Repeat([]byte("<a href='#a'>r</a>"), 300)),
 		"<title>\x00)>></title><body>\u202e\ufffe", "<div><div><div>" + string(bytes.Repeat([]byte("<b>"), 2000)),
 	} {
 		f.Add([]byte(s))

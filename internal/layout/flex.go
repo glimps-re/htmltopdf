@@ -13,6 +13,9 @@ import (
 type flexItem struct {
 	box            *box.Box
 	ml, mr, mt, mb float64
+	// auto margins: they absorb the free space of the line (main axis) or of the
+	// line cross size (cross axis); the fields above are 0 for them.
+	autoL, autoR, autoT, autoB bool
 	// min and max bound the main size: the automatic minimum (Flexbox §4.5) and
 	// max-width.
 	min, max float64
@@ -69,7 +72,7 @@ func (l *layouter) flex(b *box.Box, f *frag, lv level, inner cbox, decor style.T
 		if st.have && st.i == i {
 			return st.s, nil
 		}
-		s, err := l.layLine(p.lines[i], inner, p.colGap, b.Style, decor)
+		s, err := l.layLine(p.lines[i], inner, p.colGap, b.Style, decor, len(p.lines) == 1)
 		st.i, st.s, st.have = i, s, err == nil
 		return s, err
 	}, resuming, emptyAtEntry)
@@ -85,6 +88,8 @@ func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w float64) error {
 	it.box = c
 	it.ml, it.mr = autoMargin(st.Margin[style.Left], w), autoMargin(st.Margin[style.Right], w)
 	it.mt, it.mb = autoMargin(st.Margin[style.Top], w), autoMargin(st.Margin[style.Bottom], w)
+	it.autoL, it.autoR = st.Margin[style.Left].Kind == style.DimAuto, st.Margin[style.Right].Kind == style.DimAuto
+	it.autoT, it.autoB = st.Margin[style.Top].Kind == style.DimAuto, st.Margin[style.Bottom].Kind == style.DimAuto
 	it.grow, it.shrink = st.FlexGrow, st.FlexShrink
 	e, err := l.sizeEntry(c)
 	if err != nil {
@@ -107,6 +112,10 @@ func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w float64) error {
 	it.min = minContent
 	if specified >= 0 {
 		it.min = math.Min(minContent, specified)
+	}
+	if st.MinWidth.Kind != style.DimAuto {
+		// An explicit min-width replaces the automatic minimum (Flexbox §4.5).
+		it.min = borderBoxWidth(st, st.MinWidth, w, extra)
 	}
 	it.max = math.Inf(1)
 	if st.MaxWidth.Kind != style.DimNone {
@@ -231,30 +240,110 @@ func (l *layouter) resolveFlexible(line []*flexItem, avail float64) error {
 }
 
 // layLine lays the items of a resolved line out and positions them: the main
-// axis by justify-content, the cross axis by align-items.
-func (l *layouter) layLine(line []*flexItem, inner cbox, gap float64, st *style.Computed, decor style.TextDecoration) (stripe, error) {
-	cross := 0.0
+// axis by auto margins, else justify-content, the cross axis by align-items and
+// auto margins. The only line of a container whose height is definite has that
+// height as cross size (Flexbox §9.4), which the percentage heights of its items
+// refer to.
+func (l *layouter) layLine(line []*flexItem, inner cbox, gap float64, st *style.Computed, decor style.TextDecoration, single bool) (stripe, error) {
+	baseline := st.AlignItems == style.ItemBaseline
 	outerSum := gap * float64(len(line)-1)
-	for _, it := range line {
-		f, err := l.layMonoIn(it.box, it.size, inner.w, decor)
+	var above, below, cross float64
+	var bases []float64
+	if baseline {
+		bases = make([]float64, len(line))
+	}
+	for i, it := range line {
+		f, err := l.layMonoCB(it.box, it.size, cbox{w: inner.w, h: inner.h, hdef: inner.hdef}, decor)
 		if err != nil {
 			return stripe{}, err
 		}
 		it.f = f
 		cross = math.Max(cross, it.mt+f.rect.H+it.mb)
 		outerSum += it.outer(f.rect.W)
+		if baseline {
+			// The first baseline, else synthesized from the border box (Flexbox §8.5).
+			bases[i] = f.rect.H
+			if b, ok := findBaseline(f); ok {
+				bases[i] = b
+			}
+			up := it.mt + bases[i]
+			above, below = math.Max(above, up), math.Max(below, it.mt+f.rect.H+it.mb-up)
+		}
 	}
-	x, between := justifyOffsets(st.JustifyContent, inner.w-outerSum, len(line))
+	if baseline {
+		cross = above + below
+	}
+	if single && inner.hdef {
+		cross = inner.h
+	}
+	free := inner.w - outerSum
+	x, between := justifyOffsets(st.JustifyContent, free, len(line))
+	// The margins of the line stay in the plan as measured: the auto ones are
+	// resolved here, for this layout only.
+	ml, mr := make([]float64, len(line)), make([]float64, len(line))
+	for i, it := range line {
+		ml[i], mr[i] = it.ml, it.mr
+	}
+	if autos := autoMainMargins(line); autos > 0 && free > 0 {
+		x, between = 0, 0
+		share := clampCoord(free / float64(autos))
+		for i, it := range line {
+			if it.autoL {
+				ml[i] += share
+			}
+			if it.autoR {
+				mr[i] += share
+			}
+		}
+	}
 	out := stripe{frags: make([]*frag, 0, len(line)), h: cross}
-	for _, it := range line {
+	for i, it := range line {
 		f := it.f
-		y, h := alignItem(st.AlignItems, it.mt, it.mb, f.rect.H, cross)
+		var y, h float64
+		switch {
+		case it.autoT || it.autoB:
+			room := cross - it.mt - it.mb - f.rect.H
+			mt := it.mt
+			switch {
+			case room <= 0:
+			case it.autoT && it.autoB:
+				mt += room / 2
+			case it.autoT:
+				mt += room
+			}
+			y, h = mt, f.rect.H
+		case baseline:
+			y, h = above-bases[i], f.rect.H
+		case st.AlignItems == style.ItemStretch:
+			// Only an item whose height is auto stretches, to the line cross
+			// size (Flexbox §8.3), even when its content is taller.
+			y, h = it.mt, f.rect.H
+			if it.box.Style.Height.Kind == style.DimAuto {
+				h = math.Max(0, cross-it.mt-it.mb)
+			}
+		default:
+			y, h = alignItem(st.AlignItems, it.mt, it.mb, f.rect.H, cross)
+		}
 		f.rect.H = h
-		moveFrag(f, inner.x+x+it.ml, y)
+		moveFrag(f, inner.x+x+ml[i], y)
 		out.frags = append(out.frags, f)
-		x += it.outer(f.rect.W) + gap + between
+		x += ml[i] + f.rect.W + mr[i] + gap + between
 	}
 	return out, nil
+}
+
+// autoMainMargins counts the auto margins of the items on the main axis.
+func autoMainMargins(line []*flexItem) int {
+	n := 0
+	for _, it := range line {
+		if it.autoL {
+			n++
+		}
+		if it.autoR {
+			n++
+		}
+	}
+	return n
 }
 
 // justifyOffsets returns the offset of the first item and the extra space

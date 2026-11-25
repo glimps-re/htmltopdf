@@ -140,7 +140,7 @@ func newRun(tb testing.TB, html string, o opts) *run {
 		tb.Fatal(err)
 	}
 	sh := text.NewShaper(testFonts(tb), b)
-	p := NewPaginator(root, Config{Page: r.Page(style.PageContext{Number: 1}), Scale: o.scale, Fonts: testFonts(tb), Shaper: sh, Budget: b, KeepTree: true})
+	p := NewPaginator(root, Config{Page: r.Page(style.PageContext{Number: 1}), Pages: func(name string) *style.PageStyle { return r.Page(style.PageContext{Name: name}) }, Scale: o.scale, Fonts: testFonts(tb), Shaper: sh, Budget: b, KeepTree: true})
 	return &run{b: b, root: root, pag: p, style: r}
 }
 

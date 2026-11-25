@@ -31,6 +31,8 @@ type tableRow struct {
 	group   *box.Box
 	caption bool
 	cells   []tableCell
+	// minH is the height the row is stretched to when the table has a height.
+	minH float64
 }
 
 // tableLayout is the grid of a table box, computed once for a content width.
@@ -54,8 +56,13 @@ type tableLayout struct {
 	// colTotal is the number of columns they define.
 	colRuns  []colRun
 	colTotal int
-	// hdr is the header as laid out once.
-	hdr headerState
+	// hdr is the header as laid out once; heightDone is true once the rows were
+	// stretched to the height of the table.
+	hdr        headerState
+	heightDone bool
+	// auto holds the cell contributions of a table laid out with automatic
+	// column widths, nil for table-layout: fixed.
+	auto *autoLayout
 }
 
 type headerState struct {
@@ -130,6 +137,9 @@ func rowCells(r *box.Box) (cells []tableCell, dropped bool) {
 func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 	st := b.Style
 	tl := &tableLayout{width: w, collapse: st.BorderCollapse}
+	if !st.TableLayoutFixed {
+		tl.auto = &autoLayout{l: l}
+	}
 	if !tl.collapse {
 		tl.spacing = [2]float64{clampCoord(math.Max(0, st.BorderSpacing[0])), clampCoord(math.Max(0, st.BorderSpacing[1]))}
 	}
@@ -196,9 +206,9 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 	if err := l.b.Charge(budget.Work, int64(len(tl.colRuns))); err != nil {
 		return nil, err
 	}
-	if tl.columns(max(ncols, tl.colTotal)) {
-		l.b.Warn(budget.WarnClamped, "table width")
-	}
+	// The borders a cell uses are known before the columns: they are part of what
+	// a cell asks of its column.
+	tl.ncols = max(ncols, tl.colTotal)
 	if tl.collapse {
 		tl.resolveBorders(st)
 	} else {
@@ -210,6 +220,12 @@ func (l *layouter) buildTable(b *box.Box, w float64) (*tableLayout, error) {
 				}
 			}
 		}
+	}
+	if tl.columns(tl.ncols) {
+		l.b.Warn(budget.WarnClamped, "table width")
+	}
+	if tl.auto != nil && tl.auto.err != nil {
+		return nil, tl.auto.err
 	}
 	return tl, nil
 }
@@ -268,8 +284,34 @@ func (tl *tableLayout) columns(n int) (clamped bool) {
 	}
 	gap := tl.gap()
 	avail := math.Max(0, tl.width-gap*float64(n+1))
+	var spec []float64
+	if tl.auto != nil {
+		spec = tl.auto.widths(tl, bounds, tracks, weight, avail)
+	} else {
+		var cut bool
+		spec, cut = tl.fixedWidths(bounds, tracks, weight, avail)
+		clamped = clamped || cut
+	}
+	tl.colX = make([]float64, tracks+1)
+	x := gap
+	for t, w := range spec {
+		tl.colX[t] = x
+		next := x + w*weight(t) + (weight(t)-1)*gap + gap
+		if x = clampCoord(next); x != next {
+			clamped = true
+		}
+	}
+	tl.colX[tracks] = x
+	tl.total = x
+	return clamped
+}
+
+// fixedWidths is the width of one column of each track of a table laid out with
+// fixed widths: those of the first row and of the col elements. clamped reports
+// that the px columns were scaled down to css.MaxLengthPx.
+func (tl *tableLayout) fixedWidths(bounds []int, tracks int, weight func(int) float64, avail float64) (spec []float64, clamped bool) {
 	// A px width of 0 is specified.
-	spec := make([]float64, tracks)
+	spec = make([]float64, tracks)
 	kind := make([]colKind, tracks)
 	if tl.firstRow < len(tl.rows) {
 		for i := range tl.rows[tl.firstRow].cells {
@@ -282,7 +324,7 @@ func (tl *tableLayout) columns(n int) (clamped bool) {
 			cw := math.Max(0, px(st.Width, avail))
 			if st.BoxSizing != style.BorderBox {
 				cw += padPx(st.Padding[style.Left], tl.width) + padPx(st.Padding[style.Right], tl.width)
-				cw += st.Border[style.Left].Width + st.Border[style.Right].Width
+				cw += c.border[style.Left] + c.border[style.Right]
 			}
 			per := cw / float64(c.span)
 			for t := c.t0; t < c.t1; t++ {
@@ -349,18 +391,7 @@ func (tl *tableLayout) columns(n int) (clamped bool) {
 			scaleKind(colPct, math.Max(0, avail-fixed)/pct)
 		}
 	}
-	tl.colX = make([]float64, tracks+1)
-	x := gap
-	for t, w := range spec {
-		tl.colX[t] = x
-		next := x + w*weight(t) + (weight(t)-1)*gap + gap
-		if x = clampCoord(next); x != next {
-			clamped = true
-		}
-	}
-	tl.colX[tracks] = x
-	tl.total = x
-	return clamped
+	return spec, clamped
 }
 
 type colKind uint8
@@ -498,6 +529,10 @@ func (l *layouter) layCell(tl *tableLayout, c *tableCell, x, w float64, decor st
 	l.y = f.border[style.Top] + f.padding[style.Top]
 	childDecor := decor | st.TextDecoration
 	var err error
+	ctx := l.pushCB()
+	for _, oc := range c.box.OutOfFlow {
+		l.registerAbs(oc, inner)
+	}
 	if hasInlineChildren(c.box) {
 		_, _, err = l.lines(c.box, f, level{}, inner, childDecor, false, true)
 	} else {
@@ -508,7 +543,15 @@ func (l *layouter) layCell(tl *tableLayout, c *tableCell, x, w float64, decor st
 	}
 	l.flush()
 	f.rect.H = clampCoord(l.y + f.border[style.Bottom] + f.padding[style.Bottom])
-	return f, nil
+	if st.Height.Kind == style.DimPx {
+		// The height of a cell is a minimum.
+		want := st.Height.Value
+		if st.BoxSizing != style.BorderBox {
+			want += f.border[style.Top] + f.border[style.Bottom] + f.padding[style.Top] + f.padding[style.Bottom]
+		}
+		f.rect.H = math.Max(f.rect.H, clampCoord(want))
+	}
+	return f, l.popCB(ctx, f)
 }
 
 func shiftContent(f *frag, dy float64) { moveContent(f, 0, dy) }
@@ -571,7 +614,10 @@ func (l *layouter) layRow(tl *tableLayout, row *tableRow, inner cbox, decor styl
 			h = math.Max(h, f.rect.H)
 		}
 	}
-	h = clampCoord(h)
+	h = clampCoord(math.Max(h, row.minH))
+	if row.box.Style.Height.Kind == style.DimPx {
+		h = math.Max(h, clampCoord(row.box.Style.Height.Value))
+	}
 	for i, f := range cells {
 		var off float64
 		switch aligns[i] {
@@ -688,7 +734,28 @@ func cutRow(iv []interval, from, avail float64) (float64, bool) {
 	if c < first-cutEps || c <= from+cutEps {
 		return 0, false
 	}
-	return c, true
+	return widowCut(iv, from, first, c), true
+}
+
+// minWidows and minOrphans are the default widows and orphans of a row cut (CSS
+// Fragmentation §3.3, as Chrome applies them to the lines of a cell): a cut that
+// would leave one line on the next page goes one line earlier.
+const minWidows, minOrphans = 2, 2
+
+func widowCut(iv []interval, from, first, c float64) float64 {
+	after := len(iv) - sort.Search(len(iv), func(i int) bool { return iv[i].top >= c-cutEps })
+	if after == 0 || after >= minWidows {
+		return c
+	}
+	k := len(iv) - minWidows
+	if k < 0 || iv[k].top <= from+cutEps || iv[k].top < first-cutEps {
+		return c
+	}
+	// The lines that end after from and before the cut: iv is sorted.
+	if k-sort.Search(k, func(i int) bool { return iv[i].bottom > from+cutEps }) < minOrphans {
+		return c
+	}
+	return iv[k].top
 }
 
 // cutFrag walks the whole row, so a row cut over many pages costs its size on
@@ -703,7 +770,7 @@ func cutFrag(f *frag, from, to float64) *frag {
 	nf.rect.H = math.Max(0, math.Min(bottom, to)-nf.rect.Y)
 	nf.first = f.first && top >= from
 	nf.last = f.last && bottom <= to
-	nf.children, nf.lines = nil, nil
+	nf.children, nf.lines, nf.abs = nil, nil, cutLayers(f.abs, from, to)
 	for _, c := range f.children {
 		ct, cb := c.rect.Y, c.rect.Y+c.rect.H
 		if cb > from && ct < to || cb == ct && ct >= from && ct < to {
@@ -728,6 +795,11 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 		return complete, nil, err
 	}
 	f.rect.W += math.Max(0, tl.total-inner.w)
+	if inner.hdef && !tl.heightDone {
+		if err := l.stretchRows(tl, inner, decor); err != nil {
+			return complete, nil, err
+		}
+	}
 	rows := tl.rows
 	next := lv.child
 	if next >= len(rows) {
@@ -789,9 +861,13 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				}
 				return partial, []level{{child: i}}, nil
 			case at < wconsumed-cutEps:
-				l.y += sv
+				if work.from == 0 {
+					l.y += sv
+				}
 				piece := cutFrag(wrf, work.from, at)
 				shiftFrag(piece, -work.from)
+				// Chrome's fragment of a cut row runs to the end of the page.
+				stretchPiece(piece, math.Max(piece.rect.H, l.bottom-l.y))
 				l.placeRow(f, row, piece, piece.rect.H)
 				l.pageEmpty = false
 				work.from = at
@@ -807,7 +883,9 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 		}
 		piece, advance := rf, consumed
 		if !row.caption {
-			l.y += sv
+			if cur.from == 0 {
+				l.y += sv
+			}
 			if cur.from > 0 {
 				piece = cutFrag(rf, cur.from, math.Inf(1))
 				shiftFrag(piece, -cur.from)
@@ -859,7 +937,7 @@ func (l *layouter) chooseCut(row *tableRow, cur *rowState, placed, placedBody in
 		}
 		return cutBreak, 0
 	}
-	if row.box.Style.BreakInside == style.BreakAvoid && cur.from == 0 && cur.rf.rect.H+2*sv <= l.bottom {
+	if rowAvoidsBreak(row) && cur.from == 0 {
 		switch {
 		case placedBody > 0:
 			return cutBreak, 0
@@ -870,7 +948,11 @@ func (l *layouter) chooseCut(row *tableRow, cur *rowState, placed, placedBody in
 	if !cur.hasCuts {
 		cur.iv, cur.hasCuts = lineIntervals(cur.rf), true
 	}
-	avail := l.bottom - l.y - sv
+	// The spacing above a row is not repeated where it continues.
+	avail := l.bottom - l.y
+	if cur.from == 0 {
+		avail -= sv
+	}
 	if c, ok := cutRow(cur.iv, cur.from, avail); ok {
 		return cutHere, c
 	}
@@ -882,6 +964,29 @@ func (l *layouter) chooseCut(row *tableRow, cur *rowState, placed, placedBody in
 		return cutNothing, 0
 	}
 	return cutBreak, 0
+}
+
+// rowAvoidsBreak reports whether the row, or one of its cells, says
+// break-inside: avoid. A row taller than a page that does not start one moves to
+// the next page first, then is cut there (Chrome).
+func rowAvoidsBreak(row *tableRow) bool {
+	if row.box.Style.BreakInside == style.BreakAvoid {
+		return true
+	}
+	for i := range row.cells {
+		if row.cells[i].box.Style.BreakInside == style.BreakAvoid {
+			return true
+		}
+	}
+	return false
+}
+
+// stretchPiece makes the fragment of a row and its cells h tall.
+func stretchPiece(piece *frag, h float64) {
+	piece.rect.H = h
+	for _, c := range piece.children {
+		c.rect.H = h
+	}
 }
 
 // headerRows lays the header rows out once, at y = 0: the continuation pages
@@ -979,4 +1084,44 @@ func columnRuns(b *box.Box) (runs []colRun, total int) {
 		}
 	}
 	return runs, total
+}
+
+// stretchRows distributes the height of a table that has one over its rows, in
+// proportion to their own heights (CSS 2.1 §17.5.3: Blink, as measured): what the
+// rows lack of inner.h, less the spacing, is added to them.
+func (l *layouter) stretchRows(tl *tableLayout, inner cbox, decor style.TextDecoration) error {
+	tl.heightDone = true
+	natural := make([]float64, 0, len(tl.rows))
+	total, n := 0.0, 0
+	for i := tl.firstRow; i < len(tl.rows); i++ {
+		if tl.rows[i].caption {
+			continue
+		}
+		rf, err := l.layRow(tl, &tl.rows[i], inner, decor, false)
+		if err != nil {
+			return err
+		}
+		natural = append(natural, rf.rect.H)
+		total += rf.rect.H
+		n++
+	}
+	if n == 0 {
+		return nil
+	}
+	gap := 0.0
+	if !tl.collapse {
+		gap = tl.spacing[1]
+	}
+	extra := inner.h - total - gap*float64(n+1)
+	if extra <= 0 {
+		return nil
+	}
+	for k := range natural {
+		share := extra / float64(n)
+		if total > 0 {
+			share = extra * natural[k] / total
+		}
+		tl.rows[tl.firstRow+k].minH = natural[k] + share
+	}
+	return nil
 }

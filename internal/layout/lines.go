@@ -121,7 +121,7 @@ func (l *layouter) build(ln *lineOut, inner cbox, align style.TextAlign, y float
 		it := &lf.items[i]
 		it.x += inner.x + off
 		if it.text != nil {
-			it.text.X, it.text.Baseline = it.x, lf.baseline
+			it.text.X, it.text.Baseline = it.x, lf.baseline-it.rise
 		}
 		if a := it.atom; a != nil {
 			a.moveTo(it.x+a.ml, a.top(y, h, ln.top))

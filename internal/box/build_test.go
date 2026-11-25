@@ -223,19 +223,19 @@ func TestIDsAreCopied(t *testing.T) {
 
 func TestForeignSubtreesAreSkipped(t *testing.T) {
 	got, b := buildHTML(t, `<p>a<svg width=10><text>in svg</text></svg>b<math><mi>x</mi></math>c</p>`)
-	want := lines("block p", `  text "a"`, `  text "b"`, `  text "c"`)
+	want := lines("block p", `  text "a"`, "  svg svg shapes=0", `  text "b"`, `  text "c"`)
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
 	w := strings.Join(warnings(b), "|")
-	if !strings.Contains(w, "unsupported-element:svg") || !strings.Contains(w, "unsupported-element:math") {
+	if !strings.Contains(w, "unsupported-element:svg text") || !strings.Contains(w, "unsupported-element:math") {
 		t.Fatalf("warnings %q", w)
 	}
 }
 
 func TestForeignObjectContentIsSkippedToo(t *testing.T) {
 	got, _ := buildHTML(t, `<svg><foreignObject><p>html in svg</p></foreignObject></svg><p>after</p>`)
-	if got != lines("block p", `  text "after"`) {
+	if got != lines("anon-block", "  svg svg shapes=0", "block p", `  text "after"`) {
 		t.Fatalf("got:\n%s", got)
 	}
 }
@@ -255,7 +255,7 @@ func TestLinksInTheTree(t *testing.T) {
 		{"data", "data:text/html,x", "", "blocked-link:scheme data"},
 		{"file", "file:///etc/passwd", "", "blocked-link:scheme file"},
 		{"relative", "/path/page.html", "", "blocked-link:no scheme"},
-		{"fragment", "#top", "", ""},
+		{"fragment without a target", "#top", "", "blocked-link:internal link without a target"},
 		{"empty", "", "", ""},
 		{"spaces", "https://example.com/a b", "https://example.com/a%20b", ""},
 		{"non ASCII", "https://example.com/é", "https://example.com/%C3%A9", ""},

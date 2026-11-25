@@ -9,10 +9,46 @@ import (
 
 // emit appends the display items of f and its descendants.
 func (e *emitter) emit(f *frag, out display.List) display.List {
+	if f.rot == 0 && f.dx == 0 && f.dy == 0 {
+		return e.emitBox(f, out)
+	}
+	ox, oy := e.ax, e.ay
+	e.ax, e.ay = ox+f.dx, oy+f.dy
+	start := len(out)
+	if f.rot != 0 {
+		out = append(out, rotation(f.rot, f.rect.Translate(e.ax, e.ay)))
+	}
+	n := len(out)
+	out = e.emitBox(f, out)
+	switch {
+	case len(out) == n:
+		out = out[:start]
+	case f.rot != 0:
+		out = append(out, display.PopTransform{})
+	}
+	e.ax, e.ay = ox, oy
+	return out
+}
+
+// shift moves the items from index from by the offset of the relative boxes.
+func (e *emitter) shift(out display.List, from int) {
+	if e.ax == 0 && e.ay == 0 {
+		return
+	}
+	for i := from; i < len(out); i++ {
+		out[i] = out[i].Translate(e.ax, e.ay)
+	}
+}
+
+func (e *emitter) emitBox(f *frag, out display.List) display.List {
 	st := f.box.Style
 	r := f.rect
+	start := len(out)
+	if f.box.Anchor && f.first {
+		out = append(out, display.Anchor{Name: f.box.ID, At: display.Point{Y: r.Y}})
+	}
 	rad := radiiOf(st, r, f.first, f.last)
-	out = e.appendShadows(out, st, r, rad)
+	out = e.appendShadows(out, st, r, rad, f.first, f.last)
 	out = appendBackground(out, st, r, rad)
 	widths := f.border
 	if !f.first {
@@ -26,10 +62,12 @@ func (e *emitter) emit(f *frag, out display.List) display.List {
 	if f.borderColor != nil && len(out) > n {
 		out = recolorBorder(out, f.borderColor)
 	}
+	out = emitSVGBox(f, out)
 	clip := st.OverflowHidden && r.W > 0 && r.H > 0
 	if clip {
 		out = append(out, display.PushClip{Rect: paddingBox(f), Radii: innerRadii(rad, f)})
 	}
+	e.shift(out, start)
 	for _, c := range f.children {
 		out = e.emit(c, out)
 	}
@@ -128,12 +166,17 @@ func innerRadii(rad display.Radii, f *frag) display.Radii {
 
 // emitLine appends the inline box backgrounds, the text and the links of a line.
 func (e *emitter) emitLine(ln *lineFrag, out display.List) display.List {
+	start := len(out)
 	out = emitInlineBoxes(ln, out)
 	for i := range ln.items {
+		if it := &ln.items[i]; it.kind == itemOpen && it.box.Anchor && !it.box.Continuation {
+			out = append(out, display.Anchor{Name: it.box.ID, At: display.Point{Y: ln.rect.Y}})
+		}
 		if t := ln.items[i].text; t != nil {
 			out = append(out, t)
 		}
 	}
+	e.shift(out, start)
 	// Atomic inlines are painted after the text of their line: they are
 	// inline-blocks, painted atomically above the inline content (CSS 2.1 App. E).
 	for i := range ln.items {
@@ -141,7 +184,10 @@ func (e *emitter) emitLine(ln *lineFrag, out display.List) display.List {
 			out = e.emit(a.f, out)
 		}
 	}
-	return emitLinks(ln, out)
+	start = len(out)
+	out = emitLinks(ln, out)
+	e.shift(out, start)
+	return out
 }
 
 // emitInlineBoxes paints the background and borders of the inline boxes whose
@@ -202,7 +248,11 @@ func emitLinks(ln *lineFrag, out display.List) display.List {
 	)
 	flush := func() {
 		if href != "" && x1 > x0 {
-			out = append(out, display.Link{Rect: display.Rect{X: x0, Y: ln.baseline - asc, W: x1 - x0, H: asc + desc}, URI: href})
+			l := display.Link{Rect: display.Rect{X: x0, Y: ln.baseline - asc, W: x1 - x0, H: asc + desc}, URI: href}
+			if href[0] == '#' {
+				l.URI, l.Dest = "", href[1:]
+			}
+			out = append(out, l)
 		}
 		href = ""
 	}

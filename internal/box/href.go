@@ -2,7 +2,10 @@ package box
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
+
+	"github.com/glimps-re/htmltopdf/internal/budget"
 )
 
 // Bounds of a link target.
@@ -84,4 +87,76 @@ func validScheme(s string) bool {
 		}
 	}
 	return true
+}
+
+// fragmentID returns the id an href "#id" points to, percent-decoded as
+// browsers do: ok is false for any other href, and for an empty, over-long or
+// control-character id (such a link is dropped).
+func fragmentID(raw string) (id string, ok bool) {
+	s := strings.TrimFunc(raw, func(r rune) bool { return r <= 0x20 })
+	if len(s) < 2 || s[0] != '#' || len(s) > maxHrefBytes {
+		return "", false
+	}
+	id = s[1:]
+	if strings.IndexByte(id, '%') >= 0 {
+		if dec, err := url.PathUnescape(id); err == nil {
+			id = dec
+		}
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] < 0x20 || id[i] == 0x7f {
+			return "", false
+		}
+	}
+	return id, id != ""
+}
+
+// resolveLinks sets Anchor on the first box with each targeted id, in document
+// order, and drops the internal links that point to no box. It visits each box
+// at most twice, only when the document has internal links.
+func (bd *builder) resolveLinks(root *Box) error {
+	if len(bd.targets) == 0 {
+		return nil
+	}
+	found := make(map[string]struct{}, len(bd.targets))
+	var mark func(*Box) error
+	mark = func(b *Box) error {
+		if err := bd.b.Charge(budget.Work, 1); err != nil {
+			return err
+		}
+		if _, want := bd.targets[b.ID]; want && b.ID != "" {
+			if _, dup := found[b.ID]; !dup {
+				found[b.ID] = struct{}{}
+				b.Anchor = true
+			}
+		}
+		for _, c := range b.Children {
+			if err := mark(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := mark(root); err != nil {
+		return err
+	}
+	var drop func(*Box) error
+	drop = func(b *Box) error {
+		if err := bd.b.Charge(budget.Work, 1); err != nil {
+			return err
+		}
+		if b.Href != "" && b.Href[0] == '#' {
+			if _, ok := found[b.Href[1:]]; !ok {
+				b.Href = ""
+				bd.b.Warn(budget.WarnBlockedLink, "internal link without a target")
+			}
+		}
+		for _, c := range b.Children {
+			if err := drop(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return drop(root)
 }

@@ -29,8 +29,10 @@ const (
 
 // Config is the input of a Paginator.
 type Config struct {
-	// Page gives the page size and margins.
-	Page *style.PageStyle
+	// Page gives the page size and margins; Pages, when set, gives those of the
+	// pages with a name (@page name), the default page for the empty name.
+	Page  *style.PageStyle
+	Pages func(name string) *style.PageStyle
 	// Scale multiplies the content of the page area; 0 means 1, other values are
 	// clamped to [MinScale, MaxScale]. The page area is laid out at 1/Scale of
 	// its size, so more fits on the page.
@@ -50,6 +52,10 @@ type Config struct {
 type Page struct {
 	// Number is the 1-based page number.
 	Number int
+	// Name is the used page name of the page ("" for none).
+	Name string
+	// HasBoxes is true when the page has a margin box to draw.
+	HasBoxes bool
 	// Width and Height are the page size in CSS px.
 	Width, Height float64
 	// Area is the page area, inside the margins, in page px.
@@ -74,6 +80,8 @@ type Paginator struct {
 	wraps   map[wrapKey]*wrapped
 	area    display.Rect
 	tok     []level
+	// styles are the page styles by name.
+	styles map[string]*style.PageStyle
 	// resumed is true once a page has been laid out: the next one starts at a
 	// break and truncates the margins that adjoin it.
 	resumed bool
@@ -89,17 +97,34 @@ func NewPaginator(root *box.Box, cfg Config) *Paginator {
 		scale = 1
 	}
 	cfg.Scale = math.Max(MinScale, math.Min(MaxScale, scale))
-	area := pageArea(cfg)
-	return &Paginator{
-		cfg:  cfg,
-		root: root,
-		area: area,
-		l:    newLayouter(root, cfg, area.W/cfg.Scale, area.H/cfg.Scale),
-	}
+	p := &Paginator{cfg: cfg, root: root, styles: make(map[string]*style.PageStyle)}
+	ps := p.pageStyle(pageNameAt(root, nil))
+	area := pageArea(ps)
+	p.area = area
+	p.l = newLayouter(root, cfg, area.W/cfg.Scale, area.H/cfg.Scale)
+	return p
 }
 
-func pageArea(cfg Config) display.Rect {
-	ps := cfg.Page
+// pageStyle returns the style of the page called name, as asked once per name.
+func (p *Paginator) pageStyle(name string) *style.PageStyle {
+	if ps, ok := p.styles[name]; ok {
+		return ps
+	}
+	ps := p.cfg.Page
+	if p.cfg.Pages != nil {
+		ps = p.cfg.Pages(name)
+	}
+	if len(p.styles) < maxPageStyles {
+		p.styles[name] = ps
+	}
+	return ps
+}
+
+// maxPageStyles bounds the page styles a Paginator remembers: names come from
+// the document.
+const maxPageStyles = 1024
+
+func pageArea(ps *style.PageStyle) display.Rect {
 	return display.Rect{
 		X: ps.Margin[style.Left],
 		Y: ps.Margin[style.Top],
@@ -122,6 +147,10 @@ func (p *Paginator) Next() (*Page, error) {
 	}
 	p.number++
 	l := p.l
+	name := pageNameAt(p.root, p.tok)
+	ps := p.pageStyle(name)
+	p.area = pageArea(ps)
+	l.setPageArea(p.area.W/p.cfg.Scale, p.area.H/p.cfg.Scale)
 	l.startPage(p.resumed && !l.forced)
 	l.forced = false
 	res, err := l.block(p.root, p.tok, cbox{x: 0, w: l.width}, 0)
@@ -129,11 +158,13 @@ func (p *Paginator) Next() (*Page, error) {
 		return nil, err
 	}
 	pg := &Page{
-		Number: p.number,
-		Width:  p.cfg.Page.Width,
-		Height: p.cfg.Page.Height,
-		Area:   p.area,
-		Scale:  p.cfg.Scale,
+		Number:   p.number,
+		Name:     name,
+		HasBoxes: ps.HasBoxes(),
+		Width:    ps.Width,
+		Height:   ps.Height,
+		Area:     p.area,
+		Scale:    p.cfg.Scale,
 	}
 	if p.cfg.KeepTree {
 		pg.root = res.f
@@ -150,7 +181,7 @@ func (p *Paginator) Next() (*Page, error) {
 	}
 	if res.f != nil {
 		e := &emitter{}
-		pg.Items = e.emit(res.f, make(display.List, 0, 64))
+		pg.Items = e.emitStack(res.f, make(display.List, 0, 64))
 		if err := p.cfg.Budget.Charge(budget.Work, int64(e.shadows)); err != nil {
 			return nil, err
 		}
@@ -161,8 +192,14 @@ func (p *Paginator) Next() (*Page, error) {
 	return pg, nil
 }
 
-// cbox is the containing block of a box: the x and width of its content box.
-type cbox struct{ x, w float64 }
+// cbox is the containing block of a box: the x and width of its content box,
+// and its height when that is definite (a specified height): the percentage
+// heights of its children refer to it.
+type cbox struct {
+	x, w float64
+	h    float64
+	hdef bool
+}
 
 type status uint8
 
@@ -175,8 +212,11 @@ const (
 // level is where the layout of one block resumes: the next child, the amount
 // of its decorations already drawn, and the paragraph cursor.
 type level struct {
-	child        int
-	pre, post    float64
+	child     int
+	pre, post float64
+	// used is the content height of a block with a specified height already
+	// laid out on the previous pages.
+	used         float64
 	childrenDone bool
 	cur          cursor
 	// off is the height of the line, taller than a page, already placed on the

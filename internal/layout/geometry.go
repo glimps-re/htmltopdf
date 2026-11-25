@@ -44,7 +44,11 @@ func padPx(d style.Dim, base float64) float64 {
 
 // geometry resolves the margins, padding, borders and width of a block in the
 // containing block cb (CSS 2.1 §10.3.3: auto margins, over-constrained width).
-func geometry(st *style.Computed, cb cbox) geom {
+func geometry(st *style.Computed, cb cbox) geom { return geometryW(st, cb, -1) }
+
+// geometryW is geometry with the content width forced to w when w >= 0: the
+// width of a table is that of its columns.
+func geometryW(st *style.Computed, cb cbox, w float64) geom {
 	var g geom
 	g.mt = clampCoord(px(st.Margin[style.Top], cb.w))
 	g.mb = clampCoord(px(st.Margin[style.Bottom], cb.w))
@@ -57,12 +61,17 @@ func geometry(st *style.Computed, cb cbox) geom {
 	autoL, autoR := ml.Kind == style.DimAuto, mr.Kind == style.DimAuto
 	g.ml, g.mr = clampCoord(px(ml, cb.w)), clampCoord(px(mr, cb.w))
 	extra := g.pl + g.pr + g.bl + g.br // padding and border: content-box sizing adds them
-	if st.Width.Kind == style.DimAuto {
+	switch {
+	case w >= 0:
+		g.w = w
+	case st.Width.Kind == style.DimAuto:
 		g.w = math.Max(0, cb.w-g.ml-g.mr-extra)
-	} else {
+	default:
 		g.w = contentWidth(st, px(st.Width, cb.w), extra)
 	}
-	g.w = capWidth(st, g.w, cb.w, extra)
+	if w < 0 {
+		g.w = capWidth(st, g.w, cb.w, extra)
+	}
 	g.borderW = g.w + extra
 	free := cb.w - g.borderW - g.ml - g.mr
 	switch {
@@ -80,13 +89,13 @@ func geometry(st *style.Computed, cb cbox) geom {
 	return g
 }
 
-// capWidth applies max-width to the content width w of a box whose padding and
-// border take extra px.
+// capWidth applies max-width, then min-width (which wins, CSS 2.1 §10.4), to the
+// content width w of a box whose padding and border take extra px.
 func capWidth(st *style.Computed, w, base, extra float64) float64 {
-	if st.MaxWidth.Kind == style.DimNone {
-		return w
+	if st.MaxWidth.Kind != style.DimNone {
+		w = math.Min(w, contentWidth(st, px(st.MaxWidth, base), extra))
 	}
-	return math.Min(w, contentWidth(st, px(st.MaxWidth, base), extra))
+	return math.Max(w, contentWidth(st, px(st.MinWidth, base), extra))
 }
 
 // autoMargin resolves a margin of a box that has no free space to share (an

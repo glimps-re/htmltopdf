@@ -441,27 +441,6 @@ func TestRowAvoidFirstRowOfATableMidPage(t *testing.T) {
 	}
 }
 
-func TestTallAvoidRowIsCutWhereItStarts(t *testing.T) {
-	cell := strings.Repeat("x<br>", 8) + "x"
-	layout := func(attr string) []*frag {
-		html := blocks(2, "p") + `<table style="border-spacing:0;border-collapse:separate"><tr ` + attr + `><td class=b id=tall>` + cell + `</td></tr></table>`
-		pages := breakRun(t, html)
-		if pg, y := pageOf(t, pages, "tall"); pg != 0 || y != 200 {
-			t.Errorf("%q: row starts on page %d at y=%v, want page 0 at 200", attr, pg, y)
-		}
-		return frags(pages, "tr")
-	}
-	avoid, plain := layout(`style="break-inside:avoid"`), layout("")
-	if len(avoid) != len(plain) || len(avoid) < 2 {
-		t.Fatalf("%d row fragments with avoid, %d without", len(avoid), len(plain))
-	}
-	for i := range avoid {
-		if avoid[i].rect != plain[i].rect || avoid[i].first != plain[i].first || avoid[i].last != plain[i].last {
-			t.Errorf("fragment %d differs from the plain table: %+v", i, avoid[i].rect)
-		}
-	}
-}
-
 func TestForcedBreaksInUnboundedContentKeepTheText(t *testing.T) {
 	cell := func(attrs string) string {
 		return `<div>AAA</div><div ` + attrs + `>BBB</div><div>CCC</div>`

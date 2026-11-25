@@ -158,6 +158,9 @@ type info struct {
 	asc, desc, top, bottom float64
 	// ml and mr are the horizontal margins of an inline box: outside its background.
 	ml, mr float64
+	// rise is the vertical-align: <length> offset, up, of the enclosing inline
+	// boxes.
+	rise float64
 }
 
 // unit is an element of a paragraph: a text box, an inline box edge, or a
@@ -238,7 +241,7 @@ func (l *layouter) paragraphOf(b *box.Box, decor style.TextDecoration, cbw float
 		mid:         st.FontSize / 4,
 	}
 	_, p.strutTop, p.strutBottom = l.boxMetrics(st)
-	if err := l.flatten(p, b.Children, decor, cbw); err != nil {
+	if err := l.flatten(p, b.Children, decor, cbw, 0); err != nil {
 		return nil, err
 	}
 	l.para = p
@@ -265,17 +268,17 @@ func (l *layouter) primaryFace(st *style.Computed) (*text.Face, float32) {
 	return p.face, p.size
 }
 
-func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecoration, cbw float64) error {
+func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecoration, cbw, rise float64) error {
 	for _, c := range boxes {
 		switch c.Kind {
 		case box.KindText:
-			if err := l.textUnit(p, c, decor); err != nil {
+			if err := l.textUnit(p, c, decor, rise); err != nil {
 				return err
 			}
 		case box.KindLineBreak:
 			p.units = append(p.units, unit{kind: uBreak})
-		case box.KindInlineBlock:
-			un, err := l.atomUnit(p, c, decor, cbw)
+		case box.KindInlineBlock, box.KindSVG:
+			un, err := l.atomUnit(p, c, decor, cbw, rise)
 			if err != nil {
 				return err
 			}
@@ -284,7 +287,11 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			cst := c.Style
 			d := decor | cst.TextDecoration
 			openW, closeW := inlineEdges(cst, cbw, !c.Continuation)
-			in := &info{box: c, href: c.Href, decor: d, color: cst.Color}
+			inRise := rise
+			if cst.VerticalAlign == style.VAlignLength {
+				inRise = clampCoord(rise + cst.VAlignOffset.Value)
+			}
+			in := &info{box: c, href: c.Href, decor: d, color: cst.Color, rise: inRise}
 			if !c.Continuation {
 				in.ml = clampCoord(px(cst.Margin[style.Left], cbw))
 			}
@@ -293,7 +300,7 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			e, in.top, in.bottom = l.boxMetrics(cst)
 			in.asc, in.desc = e.asc, e.desc
 			p.units = append(p.units, unit{kind: uOpen, info: in, w: openW})
-			if err := l.flatten(p, c.Children, d, cbw); err != nil {
+			if err := l.flatten(p, c.Children, d, cbw, inRise); err != nil {
 				return err
 			}
 			p.units = append(p.units, unit{kind: uClose, info: in, w: closeW})
@@ -328,11 +335,14 @@ func inlineEdges(st *style.Computed, cbw float64, first bool) (open, closeW floa
 }
 
 // textUnit adds the shaped text box c to the paragraph.
-func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration) error {
+func (l *layouter) textUnit(p *paragraph, c *box.Box, decor style.TextDecoration, rise float64) error {
 	sh, err := l.shapeBox(c, decor)
 	if err != nil || sh == nil {
 		return err
 	}
+	sh.info.rise = rise
+	sh.info.top += rise
+	sh.info.bottom -= rise
 	p.units = append(p.units, unit{kind: uText, st: sh, info: sh.info})
 	return nil
 }
@@ -667,7 +677,7 @@ func edgeItem(un *unit, x, w float64) lineItem {
 	if un.kind == uClose {
 		kind, margin = itemClose, un.info.mr
 	}
-	return lineItem{kind: kind, x: x, w: w, box: un.info.box, href: un.info.href, ascent: un.info.asc, descent: un.info.desc, margin: margin}
+	return lineItem{kind: kind, x: x, w: w, box: un.info.box, href: un.info.href, ascent: un.info.asc + un.info.rise, descent: un.info.desc - un.info.rise, rise: un.info.rise, margin: margin}
 }
 
 // appendTextItems appends the display text of [a, b) of a shaped text, one item
@@ -695,7 +705,7 @@ func (l *layouter) appendTextItems(items []lineItem, st *shapedText, a, b int, x
 		}
 		run := st.runs[r]
 		items = append(items, lineItem{
-			kind: itemText, x: x, w: wsum, box: in.box, href: in.href, ascent: in.asc, descent: in.desc,
+			kind: itemText, x: x, w: wsum, box: in.box, href: in.href, ascent: in.asc + in.rise, descent: in.desc - in.rise, rise: in.rise,
 			text: &display.Text{
 				Face: run.Face, Size: float64(run.Size), Color: in.color, Glyphs: glyphs, Text: st.text[lo:hi],
 				Underline:   in.decor&style.DecorationUnderline != 0,

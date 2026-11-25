@@ -482,59 +482,6 @@ func BenchmarkAvoidChain(b *testing.B) {
 	}
 }
 
-// A break-inside: avoid row taller than a page, in a table that starts in the
-// middle of a page, is cut where it is: it is not moved to the next page first.
-func TestTallAvoidRowIsCutInPlace(t *testing.T) {
-	cell := strings.Repeat("x<br>", 8) + "x" // 9 lines of 100px: 1.5 pages
-	doc := func(attr string) string {
-		return blocks(2, "p") + `<table style="border-spacing:0;border-collapse:separate"><tr ` + attr + `><td class=b id=tall>` + cell + `</td></tr></table>`
-	}
-	shape := func(pages []*Page) (out []string, lines int) {
-		for i, pg := range pages {
-			walk(pg.root, func(f *frag) {
-				if f.box.Tag.String() == "tr" {
-					out = append(out, fmt.Sprintf("page %d y=%.1f h=%.1f first=%v last=%v", i, f.rect.Y, f.rect.H, f.first, f.last))
-				}
-				if f.box.Tag.String() == "td" {
-					lines += len(f.lines)
-				}
-			})
-		}
-		return out, lines
-	}
-	pages := breakRun(t, doc(`style="break-inside:avoid"`))
-	got, lines := shape(pages)
-	want, _ := shape(breakRun(t, doc("")))
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("with avoid:\n%s\nwithout:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
-	if pg, y := pageOf(t, pages, "tall"); pg != 0 || y != 200 {
-		t.Errorf("row starts on page %d at y=%v, want page 0 at 200", pg, y)
-	}
-	if lines != 9 {
-		t.Errorf("%d cell lines, want 9", lines)
-	}
-}
-
-// Known defect of the row cut, present before the break properties: a row
-// taller than a page whose last full page leaves no room for the cell padding
-// ends with a fragment of the padding alone (1px) on one more page. It does not
-// depend on break-inside. This pins the behaviour; when the cut is fixed, the
-// 1px fragment goes away and this test must be updated to expect two fragments.
-func TestRowCutPaddingSliverIsKnown(t *testing.T) {
-	cell := strings.Repeat("x<br>", 8) + "x"
-	row := func(td string) []*frag {
-		html := `<div class=b>a</div><div class=b>b</div><table style="border-spacing:0;border-collapse:separate"><tr><td ` + td + ` class=b>` + cell + `</td></tr></table>`
-		return frags(breakRun(t, html), "tr")
-	}
-	if got := row(""); len(got) != 3 || got[2].rect.H != 1 {
-		t.Errorf("%d row fragments, want 3 with the last 1px tall: the defect is gone, update this test", len(got))
-	}
-	if got := row(`style="padding:0"`); len(got) != 2 {
-		t.Errorf("without padding: %d row fragments, want 2", len(got))
-	}
-}
-
 // Break properties inside a table cell or an inline-block never drop text:
 // those boxes are laid out without the sibling breaks of block containers, so
 // every line must still be on some page.

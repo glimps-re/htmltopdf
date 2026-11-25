@@ -40,6 +40,11 @@ func (m monoBox) fit(g geom) geom {
 // it. cbw is the width of its containing block, which the percentages of its
 // padding refer to.
 func (l *layouter) layMonoIn(b *box.Box, w, cbw float64, decor style.TextDecoration) (*frag, error) {
+	return l.layMonoCB(b, w, cbox{w: cbw}, decor)
+}
+
+// layMonoCB is layMonoIn in the containing block cb, whose height may be definite.
+func (l *layouter) layMonoCB(b *box.Box, w float64, cb cbox, decor style.TextDecoration) (*frag, error) {
 	s := l.enterScratch()
 	root, mono := l.root, l.mono
 	// Making b the root gives it a block formatting context, which an atomic
@@ -49,7 +54,7 @@ func (l *layouter) layMonoIn(b *box.Box, w, cbw float64, decor style.TextDecorat
 		l.leaveScratch(s)
 		l.root, l.mono = root, mono
 	}()
-	res, err := l.block(b, nil, cbox{w: cbw}, decor)
+	res, err := l.block(b, nil, cb, decor)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +87,9 @@ type atomBox struct {
 	x, y           float64
 	ml, mr, mt, mb float64
 	// base is the distance from the top of the border box to the baseline.
-	base   float64
+	base float64
+	// rise is the vertical-align: <length> offset of the atom, up.
+	rise   float64
 	valign style.VerticalAlign
 	// mid is the height of the middle of the lowercase letters above the
 	// baseline of the line, for vertical-align: middle.
@@ -100,7 +107,7 @@ func (a *atomBox) extents() (above, below float64) {
 	case style.VAlignTop, style.VAlignBottom:
 		return a.mt + h + a.mb, 0
 	}
-	return a.base + a.mt, h - a.base + a.mb
+	return a.base + a.mt + a.rise, h - a.base + a.mb - a.rise
 }
 
 // top returns the y of the border box for a line box of top y0, height h and
@@ -115,7 +122,7 @@ func (a *atomBox) top(y0, h, up float64) float64 {
 	case style.VAlignMiddle:
 		return y0 + up - a.mid - fh/2
 	}
-	return y0 + up - a.base
+	return y0 + up - a.base - a.rise
 }
 
 func (a *atomBox) moveTo(x, y float64) { a.shift(x-a.x, y-a.y) }
@@ -178,12 +185,15 @@ func (a *atomBox) shift(dx, dy float64) {
 }
 
 // atomUnit lays out the atomic inline c in a containing block of width cbw.
-func (l *layouter) atomUnit(p *paragraph, c *box.Box, decor style.TextDecoration, cbw float64) (unit, error) {
+func (l *layouter) atomUnit(p *paragraph, c *box.Box, decor style.TextDecoration, cbw, rise float64) (unit, error) {
 	st := c.Style
 	a := &atomBox{
 		ml: autoMargin(st.Margin[style.Left], cbw), mr: autoMargin(st.Margin[style.Right], cbw),
 		mt: autoMargin(st.Margin[style.Top], cbw), mb: autoMargin(st.Margin[style.Bottom], cbw),
-		valign: st.VerticalAlign, mid: p.mid,
+		valign: st.VerticalAlign, mid: p.mid, rise: rise,
+	}
+	if st.VerticalAlign == style.VAlignLength {
+		a.rise = clampCoord(a.rise + st.VAlignOffset.Value)
 	}
 	bw, err := l.atomWidth(c, cbw)
 	if err != nil {
@@ -204,6 +214,9 @@ func (l *layouter) atomUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 // shrink-to-fit in cbw (CSS 2.1 §10.3.9).
 func (l *layouter) atomWidth(b *box.Box, cbw float64) (float64, error) {
 	st := b.Style
+	if w, ok := svgPercentWidth(b, cbw); ok {
+		return w, nil
+	}
 	if st.Width.Kind == style.DimAuto {
 		// Percentage paddings count 0 in the contributions: they are added to
 		// the shrink-to-fit width of the rest.
@@ -231,6 +244,9 @@ func moveFrag(f *frag, dx, dy float64) {
 func moveContent(f *frag, dx, dy float64) {
 	for _, c := range f.children {
 		moveFrag(c, dx, dy)
+	}
+	for _, a := range f.abs {
+		moveFrag(a.f, dx, dy)
 	}
 	for _, ln := range f.lines {
 		ln.rect.X += dx

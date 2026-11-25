@@ -30,7 +30,10 @@ var marginRows = [2]struct {
 
 // pieceKey identifies a shaped piece of text of a margin box.
 type pieceKey struct {
-	pos  style.MarginPos
+	pos style.MarginPos
+	// ms tells the styles apart: one position has a different style on each
+	// named page.
+	ms   *marginStyles
 	text string
 }
 
@@ -45,6 +48,7 @@ type marginStyles struct {
 // wrapKey identifies a static text laid out wrapped at a width.
 type wrapKey struct {
 	pos   style.MarginPos
+	ms    *marginStyles
 	text  string
 	width float64
 }
@@ -87,7 +91,7 @@ type marginSlot struct {
 // string is shaped once per render; only the page counters are shaped again on
 // every page. pg.Number is the page number.
 func (p *Paginator) MarginBoxes(pg *Page, total int) (display.List, error) {
-	ps := p.cfg.Page
+	ps := p.pageStyle(pg.Name)
 	if p.mb == nil {
 		p.mb = newLayouter(nil, p.cfg, measureWidth, math.MaxInt32)
 		p.pieces = make(map[pieceKey]*piece)
@@ -229,7 +233,7 @@ func (p *Paginator) layoutBlock(root *box.Box, w float64) (display.List, float64
 // piece returns the layout of text on one line, shaping it on a cache miss
 // only.
 func (p *Paginator) piece(pos style.MarginPos, ms *marginStyles, text string) (*piece, error) {
-	key := pieceKey{pos, text}
+	key := pieceKey{pos, ms, text}
 	if pc, ok := p.pieces[key]; ok {
 		return pc, nil
 	}
@@ -279,11 +283,12 @@ type wrapped struct {
 
 // wrap lays the static text of s out wrapped at width, once per render.
 func (p *Paginator) wrap(s *marginSlot, width float64) (*wrapped, error) {
-	key := wrapKey{s.pos, s.text, width}
+	ms := p.stylesOf(s.box)
+	key := wrapKey{s.pos, ms, s.text, width}
 	if w, ok := p.wraps[key]; ok {
 		return w, nil
 	}
-	items, h, err := p.layoutBlock(textBox(p.stylesOf(s.box).wrapped, s.text), width)
+	items, h, err := p.layoutBlock(textBox(ms.wrapped, s.text), width)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,8 @@ package htmltopdf
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"math"
 	"os"
 	"regexp"
@@ -43,7 +45,7 @@ func TestShadowHostileValues(t *testing.T) {
 		"0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red, 0 0 8px red",
 	}
 	for _, radius := range []string{"0", "1e30px", "50%", "3px 1e30px"} {
-		for _, box := range []string{"width:100px;height:50px", "width:0;height:0", "width:1e-9px;height:1e9px", "width:1e30px;height:10px"} {
+		for _, box := range []string{"width:100px;height:50px", "width:0;height:0", "width:1e-9px;height:900px", "width:1e30px;height:10px"} {
 			for _, v := range values {
 				html := `<div style="margin:30px;` + box + `;border-radius:` + radius + `;background:#eee;box-shadow:` + v + `">x</div>`
 				res, data := renderBytes(t, mustNew(t, m2Options(t)), html)
@@ -60,6 +62,20 @@ func TestShadowHostileValues(t *testing.T) {
 					t.Errorf("box %q shadow %q: %d pages", box, v, res.Pages)
 				}
 			}
+		}
+	}
+}
+
+// A box of height 1e9px is honoured (capped at 1e7px): it needs more pages
+// than the limit allows, so the render fails with a pages *LimitError, with a
+// shadow as without.
+func TestShadowOnHugeHeightHitsThePageLimit(t *testing.T) {
+	for _, shadow := range []string{"", "box-shadow:0 0 8px 2px red"} {
+		html := `<div style="margin:30px;width:1e-9px;height:1e9px;` + shadow + `">x</div>`
+		_, err := mustNew(t, m2Options(t)).Render(context.Background(), strings.NewReader(html), io.Discard)
+		var le *LimitError
+		if !errors.As(err, &le) || le.Limit != LimitPages {
+			t.Errorf("shadow %q: %v, want a pages LimitError", shadow, err)
 		}
 	}
 }
@@ -201,7 +217,8 @@ func TestShadowsDoNotMoveTemplate00(t *testing.T) {
 var extGStateRE = regexp.MustCompile(`/(GT\d+) << /Type /ExtGState /ca ([0-9.]+) /CA ([0-9.]+) >>`)
 
 // alphaAtShadings returns the fill alpha in effect at every "/Sh<n> sh" of the
-// pages: the ExtGState set by the last "gs" before it (1 before any).
+// pages: the ExtGState set by the last "gs" in the graphics state stack ("q" and
+// "Q" save and restore it; 1 before any).
 func alphaAtShadings(t *testing.T, data []byte) []float64 {
 	t.Helper()
 	alpha := map[string]float64{}
@@ -215,7 +232,18 @@ func alphaAtShadings(t *testing.T, data []byte) []float64 {
 	var out []float64
 	for _, p := range pdftest.Validate(t, data).Pages {
 		cur := 1.0
+		var saved []float64
 		for _, l := range strings.Split(string(p.Content), "\n") {
+			switch l {
+			case "q":
+				saved = append(saved, cur)
+			case "Q":
+				if len(saved) == 0 {
+					t.Fatal("Q without q")
+				}
+				cur = saved[len(saved)-1]
+				saved = saved[:len(saved)-1]
+			}
 			if name, ok := strings.CutSuffix(l, " gs"); ok {
 				a, known := alpha[strings.TrimPrefix(name, "/")]
 				if !known {

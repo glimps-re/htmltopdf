@@ -327,8 +327,9 @@ func TestIntrinsicSizes(t *testing.T) {
 	})
 	t.Run("table", func(t *testing.T) {
 		s := contributions(t, `<div id=a style="display:inline-block"><table id=t><tr><td>aaa</td></tr></table></div>`, "t")
-		if s != (sizes{}) {
-			t.Errorf("a table without width: %+v", s)
+		// One word: its width, the padding of the cell and the spacing of the table.
+		if want := widthOf(t, "aaa", "") + 2*1 + 2*2; !near(s.min, want) || !near(s.max, want) {
+			t.Errorf("a table without width: %+v, want %v", s, want)
 		}
 		s = contributions(t, `<div id=a style="display:inline-block"><table id=t style="width:100px"><tr><td>aaa</td></tr></table></div>`, "t")
 		if !near(s.min, 100) || !near(s.max, 100) {

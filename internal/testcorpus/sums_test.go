@@ -5,8 +5,8 @@ package testcorpus
 // injected @page rule was removed (design §4.1): they are the template output.
 var expectedSums = map[string]string{
 	"binary_garbage":                 "f949d66b8ae9ede28ddcb9111da3282c60146ee176bd1be832a667aaba1b07d4",
-	"boxes_pseudo_over":              "87b7e010eb9b2867e6f4a2f97caeabee06de5d8cf188dbdb98967e39bc377aa0",
-	"boxes_pseudo_under":             "ae39f0eefa393779985df36b8052969503edf3b09da6da65c530f59ad0258d46",
+	"boxes_pseudo_over":              "1d8d6f440a297ea90e1334d32d3a826304e44ddf7fb17c8c988ce9972280d35f",
+	"boxes_pseudo_under":             "08ff1667fbf1697004f687c71c5cc77ee0fafedfd6936d87523a0a5662255765",
 	"colspan_over":                   "c69b14352ddf822052b20cfa7a69377d9744550b57ad2568673027e2f58ac912",
 	"colspan_under":                  "387d55f32df64648203873749d9fed0110caa24d9582e48eef6a0e683bd04d17",
 	"css_malformed_0":                "013fd6af02897fee5b979fcb34f3b9d4c17fa7e2ec88a69fb52f775267ceb4f2",
