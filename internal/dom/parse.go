@@ -2,6 +2,7 @@ package dom
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -65,30 +66,49 @@ func parseTree(src io.Reader, b *budget.Budget) (*html.Node, error) {
 	return root, nil
 }
 
-// firstChunk is what readBounded reads before it sizes the buffer for the rest:
-// bytes.Buffer would otherwise double its way up to twice the input.
-const firstChunk = 64 << 10
+// minReadCap is the first buffer size when the reader does not report its Len.
+const minReadCap = 4 << 10
 
+// errInvalidRead reports a reader that returned a count outside [0, len(p)].
+var errInvalidRead = errors.New("dom: reader returned an invalid count")
+
+// readBounded reads at most the InputBytes limit plus one byte, so that an
+// excess fails the charge. A positive Len sizes the first buffer, capped at the
+// limit plus one; otherwise it starts at minReadCap. The buffer doubles when
+// full: allocation is proportional to the input for an honest reader, and
+// otherwise to the larger of the Len hint and the input, capped by the limit.
+// bytes.Buffer.ReadFrom is not used because it reallocates whenever less than
+// 512 bytes are free, doubling an exact buffer.
 func readBounded(src io.Reader, b *budget.Budget) ([]byte, error) {
-	limit := min(b.Max(budget.InputBytes), math.MaxInt32-1) // +1 detects an excess
-	var buf bytes.Buffer
+	limit := int(max(min(b.Max(budget.InputBytes), math.MaxInt32-1), 0)) + 1
+	size := min(minReadCap, limit)
 	if l, ok := src.(interface{ Len() int }); ok {
-		buf.Grow(min(l.Len(), int(limit)) + 1)
+		if n := l.Len(); n > 0 {
+			size = min(n, limit-1) + 1
+		}
 	}
-	n, err := buf.ReadFrom(io.LimitReader(src, min(firstChunk, limit+1)))
-	if err == nil && n == firstChunk && limit+1 > n {
-		buf.Grow(int(limit + 1 - n))
-		var m int64
-		m, err = buf.ReadFrom(io.LimitReader(src, limit+1-n))
-		n += m
+	buf := make([]byte, 0, size)
+	r := io.LimitReader(src, int64(limit))
+	for {
+		if len(buf) == cap(buf) && cap(buf) < limit {
+			buf = append(make([]byte, 0, min(2*cap(buf), limit)), buf...)
+		}
+		n, err := r.Read(buf[len(buf):cap(buf)])
+		if n < 0 || n > cap(buf)-len(buf) {
+			return nil, errInvalidRead
+		}
+		buf = buf[:len(buf)+n]
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("dom: reading input: %w", err)
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("dom: reading input: %w", err)
-	}
-	if err := b.Charge(budget.InputBytes, n); err != nil {
+	if err := b.Charge(budget.InputBytes, int64(len(buf))); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return buf, nil
 }
 
 // EstimateFactor is how many times the Nodes limit the pre-pass estimate may
