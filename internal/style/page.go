@@ -48,6 +48,9 @@ const (
 	ContentText ContentKind = iota
 	ContentPage
 	ContentPages
+	// ContentCounter is counter(name) in the content of a pseudo-element; Text is
+	// the counter name.
+	ContentCounter
 )
 
 // ContentItem is one part of the content of a margin box: a string (already
@@ -55,6 +58,8 @@ const (
 type ContentItem struct {
 	Kind ContentKind
 	Text string
+	// Format is the counter style of ContentCounter.
+	Format CounterFormat
 }
 
 // MarginBox is a margin box with its style and content.
@@ -68,6 +73,8 @@ type MarginBox struct {
 type PageContext struct {
 	// Number is the 1-based page number.
 	Number int
+	// Name is the named page ("@page name", CSS Page 3 §3), "" for none.
+	Name string
 }
 
 // PageStyle is the style of a page: its size and margins in CSS px and its
@@ -86,37 +93,119 @@ type pageEntry struct {
 
 func (r *Resolver) addPages(s *Sheet, level uint8) {
 	for i := range s.pages {
-		if r.mediaMatches(s.pages[i].media) {
-			r.pages = append(r.pages, pageEntry{p: &s.pages[i], level: level})
+		p := &s.pages[i]
+		if !r.mediaMatches(p.media) {
+			continue
 		}
+		if p.name == "" {
+			r.pages = append(r.pages, pageEntry{p: p, level: level})
+			continue
+		}
+		if r.named == nil {
+			r.named = make(map[string][]pageEntry)
+		}
+		r.named[p.name] = append(r.named[p.name], pageEntry{p: p, level: level})
 	}
 }
 
-// Page returns the style of the page described by pc. The result is computed
-// once per resolver and shared.
-func (r *Resolver) Page(PageContext) *PageStyle {
+// Page returns the style of the page described by pc: the @page rules without a
+// name, then those named pc.Name, which win over the first. The result is
+// computed once per name and shared; a name without rule shares the style of the
+// default page.
+func (r *Resolver) Page(pc PageContext) *PageStyle {
 	if r.pageStyle == nil {
-		r.pageStyle = r.buildPage()
+		r.pageStyle = r.buildPage("")
 	}
-	return r.pageStyle
+	if len(r.named[pc.Name]) == 0 {
+		return r.pageStyle
+	}
+	if ps, ok := r.pageNames[pc.Name]; ok {
+		return ps
+	}
+	if r.pageNames == nil {
+		r.pageNames = make(map[string]*PageStyle)
+	}
+	ps := r.buildPage(pc.Name)
+	r.pageNames[pc.Name] = ps
+	return ps
 }
 
-// pageSequence orders the declarations of the @page rules like elements: UA,
-// document normal, document !important, ExtraCSS; box selects a margin box
+// pageOverlay holds, per cascade bucket, the winning specified value of each
+// property of the unnamed @page rules: it is built once per box, so that a page
+// name costs its own rules only.
+type pageOverlay [4][]propSpec
+
+// unnamedOverlay returns the overlay of the unnamed rules for the margin box box
 // ("" for the page itself).
-func (r *Resolver) pageSequence(box string) []*decl {
-	r.bk.reset()
+func (r *Resolver) unnamedOverlay(box string) *pageOverlay {
+	if ov, ok := r.pageOv[box]; ok {
+		return ov
+	}
+	var bk buckets
 	for _, e := range r.pages {
-		decls := e.p.decls
-		if box != "" {
-			decls = e.p.boxes[box]
+		bk.addPage(e, box)
+	}
+	ov := new(pageOverlay)
+	for i := range bk {
+		ov[i] = lastWins(bk[i])
+	}
+	if r.pageOv == nil {
+		r.pageOv = make(map[string]*pageOverlay)
+	}
+	r.pageOv[box] = ov
+	return ov
+}
+
+func (b *buckets) addPage(e pageEntry, box string) {
+	decls := e.p.decls
+	if box != "" {
+		decls = e.p.boxes[box]
+	}
+	for i := range decls {
+		b.add(e.level, &decls[i])
+	}
+}
+
+// lastWins reduces declarations to the last specified value of each property.
+func lastWins(ds []*decl) []propSpec {
+	var out []propSpec
+	var at [numProps]int
+	for _, d := range ds {
+		if d.custom || d.deferred {
+			continue
 		}
-		for i := range decls {
-			r.bk.add(e.level, &decls[i])
+		for _, ps := range d.specs {
+			if j := at[ps.prop]; j > 0 {
+				out[j-1] = ps
+				continue
+			}
+			out = append(out, ps)
+			at[ps.prop] = len(out)
 		}
 	}
-	r.seq = r.bk.flatten(r.seq)
-	return r.seq
+	return out
+}
+
+// applyPage records the specified values of the @page rules for box ("" for the
+// page itself) as the page called name: UA, document normal, document !important,
+// ExtraCSS, the rules named name coming after the unnamed ones of their bucket.
+// The cost is that of the named rules: the unnamed ones are reduced once.
+func (r *Resolver) applyPage(box, name string) {
+	ov := r.unnamedOverlay(box)
+	var named buckets
+	if name != "" {
+		for _, e := range r.named[name] {
+			named.addPage(e, box)
+		}
+	}
+	for i := range ov {
+		for _, ps := range ov[i] {
+			r.set(ps.prop, ps.spec)
+		}
+		for _, d := range named[i] {
+			r.applyPageDecl(d)
+		}
+	}
 }
 
 // DefaultPage returns the page style when no @page rule applies: A4 with 10 mm margins.
@@ -129,12 +218,10 @@ func DefaultPage() *PageStyle {
 	}
 }
 
-func (r *Resolver) buildPage() *PageStyle {
+func (r *Resolver) buildPage(name string) *PageStyle {
 	ps := DefaultPage()
 	r.touched = r.touched[:0]
-	for _, d := range r.pageSequence("") {
-		r.applyPageDecl(d)
-	}
+	r.applyPage("", name)
 	if s := &r.specs[pPageSize]; s.kind == specValue {
 		ps.Width, ps.Height = pageSize(s)
 	}
@@ -147,7 +234,7 @@ func (r *Resolver) buildPage() *PageStyle {
 	r.resetSpecs()
 	r.clampMargins(ps)
 	for i := range ps.Boxes {
-		ps.Boxes[i] = r.buildMarginBox(MarginPos(i))
+		ps.Boxes[i] = r.buildMarginBox(MarginPos(i), name)
 	}
 	return ps
 }
@@ -293,14 +380,12 @@ func pageLength(l css.Length) float64 {
 	return clampPx(l.Value)
 }
 
-func (r *Resolver) buildMarginBox(pos MarginPos) *MarginBox {
-	name := marginBoxNames[pos]
+func (r *Resolver) buildMarginBox(pos MarginPos, name string) *MarginBox {
+	box := marginBoxNames[pos]
 	r.touched = r.touched[:0]
 	r.set(pTextAlign, spec{kind: specValue, n: int32(marginBoxAlign[pos])})
 	r.set(pVerticalAlign, spec{kind: specValue, n: int32(VAlignMiddle)})
-	for _, d := range r.pageSequence(name) {
-		r.applyPageDecl(d)
-	}
+	r.applyPage(box, name)
 	var content []ContentItem
 	if s := &r.specs[pContent]; s.kind == specValue && !s.none {
 		content = r.capContent(s.items)

@@ -24,7 +24,7 @@ func checkComputed(t *testing.T, c *Computed) {
 			t.Fatalf("bad dimension %+v", d)
 		}
 	}
-	for _, d := range []Dim{c.FlexBasis, c.RowGap, c.ColumnGap} {
+	for _, d := range append([]Dim{c.FlexBasis, c.RowGap, c.ColumnGap, c.Height, c.MinWidth, c.VAlignOffset}, c.Inset[:]...) {
 		if !finite(d.Value) {
 			t.Fatalf("bad dimension %+v", d)
 		}
@@ -37,6 +37,18 @@ func checkComputed(t *testing.T, c *Computed) {
 	if len(c.GridColumns) > MaxGridTracks || c.FlexGrow < 0 || c.FlexGrow > MaxFlexFactor || c.FlexShrink < 0 || c.FlexShrink > MaxFlexFactor ||
 		c.fade < 0 || c.fade > 1 || c.Color.A < 0 || c.Color.A > 1 {
 		t.Fatalf("bad M2 values %+v", c)
+	}
+	if c.Rotate < 0 || c.Rotate >= 2*math.Pi || len(c.CounterReset) > MaxCounterOps || len(c.CounterIncrement) > MaxCounterOps ||
+		len(c.Content) > maxContentItems || len(c.Page) > MaxIdentBytes ||
+		(c.Position == PositionAbsolute && c.Display != DisplayBlock && c.Display != DisplayFlex && c.Display != DisplayGrid &&
+			c.Display != DisplayListItem && c.Display != DisplayTable && c.Display != DisplayNone &&
+			c.Display != DisplayTableColumn && c.Display != DisplayTableColumnGroup) {
+		t.Fatalf("bad M3 values %+v", c)
+	}
+	for _, op := range append(append([]CounterOp(nil), c.CounterReset...), c.CounterIncrement...) {
+		if len(op.Name) > MaxIdentBytes || op.Name == "" {
+			t.Fatalf("bad counter %+v", op)
+		}
 	}
 	vals := []float64{c.FontSize, c.LetterSpacing, c.BorderSpacing[0], c.BorderSpacing[1], c.LineHeight.Value}
 	for _, b := range c.Border {
@@ -63,6 +75,11 @@ func FuzzStyle(f *testing.F) {
 		"div{box-shadow:0 1px 2px 3px rgba(0,0,0,.2),inset 1px 1px red,1em 1rem;opacity:.5;color:blue}",
 		"div{box-shadow:" + strings.Repeat("1px 1px 1px red,", 200) + "1px 1px;--s:1px 2px;box-shadow:var(--s) green}",
 		"div{box-shadow:inherit;box-shadow:none}p{box-shadow:-1px 1e30px 0 -1e30px currentcolor}",
+		"p::before{content:counter(c,decimal-leading-zero) \"  \";position:absolute;top:-1e30px;z-index:99999999999;counter-increment:c 2147483647 d}",
+		"p::after{content:leader(\".\") target-counter(attr(href),page);content:\"\"} div{counter-reset:a 1e9 b -5 " + strings.Repeat("n ", 200) + "}",
+		"p{height:50%;min-width:1e30px;vertical-align:-1e30px;transform:rotate(1e30turn);page:cover;align-items:baseline;position:fixed}",
+		"div{position:absolute;display:table-cell;height:1e30mm;transform:rotate(-1e-30deg)} @page cover{margin:50in;size:1e9in;@top-left{content:\"x\"}}",
+		"p{background:radial-gradient(circle farthest-corner at center,rgba(1,2,3,0),red 70%);opacity:.3} @page a b{} @page n:first{} @page n{margin:0}",
 	} {
 		f.Add(s, "color:red;--q:1")
 	}
@@ -97,6 +114,25 @@ func FuzzStyle(f *testing.F) {
 			}
 			checkComputed(t, c)
 			styles[i] = c
+		}
+		for i := range d.Elements {
+			for _, pe := range []css.PseudoElement{css.PseudoBefore, css.PseudoAfter} {
+				c, err := r.Pseudo(d, int32(i), pe, styles[i])
+				if err != nil {
+					return
+				}
+				if c != nil {
+					checkComputed(t, c)
+					if len(c.Content) == 0 {
+						t.Fatal("pseudo style without content")
+					}
+				}
+			}
+		}
+		for _, name := range []string{"cover", "n", "x"} {
+			if p := r.Page(PageContext{Number: 1, Name: name}); p.Width < MinPageSidePx || p.Height > MaxPageSidePx {
+				t.Fatalf("named page size %v x %v", p.Width, p.Height)
+			}
 		}
 		ps := r.Page(PageContext{Number: 1})
 		if ps.Width < MinPageSidePx || ps.Width > MaxPageSidePx || ps.Height < MinPageSidePx || ps.Height > MaxPageSidePx {

@@ -22,6 +22,8 @@ type ruleRef struct {
 	rule  *crule
 	order uint32
 	level uint8
+	// pseudo is the pseudo-element of the selector that indexed the rule.
+	pseudo css.PseudoElement
 }
 
 type matched struct {
@@ -45,8 +47,14 @@ type Resolver struct {
 	b         *budget.Budget
 	env       css.MediaEnv
 	ix        css.Index[ruleRef]
-	pages     []pageEntry
+	pix       css.Index[ruleRef] // selectors of pseudo-elements
+	hasPseudo bool
+	pcache    map[cacheKey]*Computed
+	pages     []pageEntry            // rules without a name
+	named     map[string][]pageEntry // rules by page name
 	pageStyle *PageStyle
+	pageNames map[string]*PageStyle
+	pageOv    map[string]*pageOverlay
 	cache     map[cacheKey]*Computed
 	anon      map[anonKey]*Computed
 	seed      maphash.Seed
@@ -77,6 +85,11 @@ func NewResolver(ua, extra *Sheet, doc []*Sheet, env css.MediaEnv, b *budget.Bud
 				continue
 			}
 			for _, sel := range rule.sels {
+				if sel.Pseudo() != css.PseudoNone {
+					r.pix.Add(sel, ruleRef{rule: rule, order: order, level: level, pseudo: sel.Pseudo()})
+					r.hasPseudo = true
+					continue
+				}
 				r.ix.Add(sel, ruleRef{rule: rule, order: order, level: level})
 			}
 		}
@@ -183,12 +196,20 @@ func (r *Resolver) Anonymous(parent *Computed, display Display) (*Computed, erro
 
 // match returns the rules matching e, ordered by specificity then source order.
 func (r *Resolver) match(d *dom.Document, e int32) ([]matched, error) {
+	return r.matchIn(&r.ix, d, e, css.PseudoNone)
+}
+
+// matchIn is match over the selectors of ix that target pe.
+func (r *Resolver) matchIn(ix *css.Index[ruleRef], d *dom.Document, e int32, pe css.PseudoElement) ([]matched, error) {
 	var err error
-	if r.cands, err = r.ix.Candidates(d, e, r.cands[:0], r.b); err != nil {
+	if r.cands, err = ix.Candidates(d, e, r.cands[:0], r.b); err != nil {
 		return nil, err
 	}
 	r.matched = r.matched[:0]
 	for i := range r.cands {
+		if r.cands[i].Selector.Pseudo() != pe {
+			continue
+		}
 		ok, err := r.cands[i].Selector.Match(d, e, r.b)
 		if err != nil {
 			return nil, err
@@ -220,8 +241,55 @@ func (r *Resolver) match(d *dom.Document, e int32) ([]matched, error) {
 	return r.matched, nil
 }
 
+// Pseudo returns the computed style of the ::before or ::after box of element e,
+// whose own style is elem, or nil when the element generates no such box: no rule
+// gives it a content, the content is none or normal, or the pseudo-element or
+// its element is display: none. A pseudo-element inherits
+// from its element. A new style is charged to the Styles limit.
+func (r *Resolver) Pseudo(d *dom.Document, e int32, pe css.PseudoElement, elem *Computed) (*Computed, error) {
+	if !r.hasPseudo || elem == nil || elem.Display == DisplayNone {
+		return nil, nil
+	}
+	m, err := r.matchIn(&r.pix, d, e, pe)
+	if err != nil || len(m) == 0 {
+		return nil, err
+	}
+	var h maphash.Hash
+	h.SetSeed(r.seed)
+	var buf [4]byte
+	for i := range m {
+		binary.LittleEndian.PutUint32(buf[:], m[i].ref.order)
+		_, _ = h.Write(buf[:])
+	}
+	_ = h.WriteByte(byte(pe))
+	// As in Element, the key is the parent style and a 64-bit hash with a
+	// per-render random seed: a collision cannot be chosen by the document.
+	key := cacheKey{parent: elem, hash: h.Sum64()}
+	c, ok := r.pcache[key]
+	if !ok {
+		if err := r.b.Charge(budget.Styles, 1); err != nil {
+			return nil, err
+		}
+		if c, err = r.buildFor(elem, m, nil, true); err != nil {
+			return nil, err
+		}
+		if r.pcache == nil {
+			r.pcache = make(map[cacheKey]*Computed)
+		}
+		r.pcache[key] = c
+	}
+	if c.Content == nil || c.Display == DisplayNone {
+		return nil, nil
+	}
+	return c, nil
+}
+
 // build computes a style from the matched rules and the style attribute.
 func (r *Resolver) build(parent *Computed, m []matched, inline []decl) (*Computed, error) {
+	return r.buildFor(parent, m, inline, false)
+}
+
+func (r *Resolver) buildFor(parent *Computed, m []matched, inline []decl, pseudo bool) (*Computed, error) {
 	seq := r.sequence(m, inline)
 	if err := r.b.Charge(budget.Work, int64(len(seq))); err != nil {
 		return nil, err
@@ -263,7 +331,7 @@ func (r *Resolver) build(parent *Computed, m []matched, inline []decl) (*Compute
 			return nil, err
 		}
 	}
-	c, err := compute(parent, &r.specs, r.touched, r.b, &r.grid)
+	c, err := computeFor(parent, &r.specs, r.touched, r.b, &r.grid, pseudo)
 	if err != nil {
 		return nil, err
 	}

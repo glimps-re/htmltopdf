@@ -99,7 +99,7 @@ func TestInvalidKeywords(t *testing.T) {
 		{"flex-direction: row-reverse", "flex-direction"},
 		{"flex-wrap: wrap-reverse", "flex-wrap"},
 		{"justify-content: stretch", "justify-content"},
-		{"align-items: baseline", "align-items"},
+		{"align-items: last baseline", "align-items"},
 		{"align-items: last baseline", "align-items"},
 		{"flex-grow: -1", "flex-grow"},
 		{"flex-shrink: x", "flex-shrink"},
@@ -279,23 +279,17 @@ func TestOpacity(t *testing.T) {
 			t.Errorf("%+v", c.BackgroundColor)
 		}
 	})
-	t.Run("gradient warns once", func(t *testing.T) {
-		x := resolve(t, `<div><p>x</p></div>`, `div { opacity: .5; background: linear-gradient(red, blue) }`, "")
-		w, _ := x.b.Warnings()
-		n := 0
-		for _, v := range w {
-			if v.Detail == "opacity on gradient" {
-				n++
-				if v.Code != "unsupported-property" {
-					t.Errorf("code %v", v.Code)
-				}
-			}
+	t.Run("gradient stops are faded without touching the rule", func(t *testing.T) {
+		x := resolve(t, `<div class=a><p>x</p></div><div id=b>y</div>`, `.a { opacity: .5; background: radial-gradient(circle, red, transparent 70%) } #b { background: radial-gradient(circle, red, transparent 70%) }`, "")
+		g := x.by(t, "div").BackgroundImage
+		if g == nil || g.Shape != css.GradientCircle || !nearPx(g.Stops[0].Color.A, .5) || g.Stops[1].Color.A != 0 {
+			t.Errorf("%+v", g)
 		}
-		if n != 1 {
-			t.Errorf("%d warnings: %v", n, x.warnings())
+		if u := x.by(t, "#b").BackgroundImage; u == nil || u.Stops[0].Color.A != 1 {
+			t.Errorf("unfaded sibling: %+v", u)
 		}
-		if x.by(t, "div").BackgroundImage == nil {
-			t.Error("the gradient is kept")
+		if len(x.warnings()) != 0 {
+			t.Errorf("warnings: %v", x.warnings())
 		}
 	})
 }

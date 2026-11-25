@@ -24,7 +24,7 @@ var (
 		"normal": int32(ItemStretch), "stretch": int32(ItemStretch),
 		"flex-start": int32(ItemStart), "start": int32(ItemStart), "self-start": int32(ItemStart),
 		"flex-end": int32(ItemEnd), "end": int32(ItemEnd), "self-end": int32(ItemEnd),
-		"center": int32(ItemCenter),
+		"center": int32(ItemCenter), "baseline": int32(ItemBaseline),
 	}
 	flexWrapKeywords      = map[string]int32{"nowrap": 0, "wrap": 1}
 	flexDirectionKeywords = map[string]int32{"row": 0}

@@ -267,7 +267,6 @@ func TestParseGradientRejects(t *testing.T) {
 		"linear-gradient(red,, blue)",
 		"linear-gradient(red, blue,)",
 		"repeating-linear-gradient(red, blue)",
-		"radial-gradient(red, blue)",
 		"conic-gradient(red, blue)",
 		"red",
 		"linear-gradient(red, blue) red",
@@ -318,7 +317,10 @@ func TestGradientStopLimit(t *testing.T) {
 }
 
 func FuzzValues(f *testing.F) {
-	for _, s := range []string{"rgb(1,2,3)", "linear-gradient(to top, red 1%, blue)", "#fff", "1e30px", "rgb(1 2 3 / 4)", "calc(1px)"} {
+	for _, s := range []string{
+		"rgb(1,2,3)", "linear-gradient(to top, red 1%, blue)", "#fff", "1e30px", "rgb(1 2 3 / 4)", "calc(1px)",
+		"radial-gradient(circle farthest-corner at center center, rgba(1,2,3,0), red 70%)", "radial-gradient(at center, red, blue)", "radial-gradient(circle circle at, red)",
+	} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, v string) {
@@ -339,7 +341,7 @@ func FuzzValues(f *testing.F) {
 				}
 			}
 			if g, ok := ParseGradient(d.Value); ok {
-				if len(g.Stops) < 2 || len(g.Stops) > MaxGradientStops || g.Angle < 0 || g.Angle >= 360 {
+				if len(g.Stops) < 2 || len(g.Stops) > MaxGradientStops || g.Angle < 0 || g.Angle >= 360 || g.Shape > GradientEllipse || (g.Shape != GradientLinear && (g.Angle != 0 || g.Corner != CornerNone)) {
 					t.Fatalf("bad gradient %+v", g)
 				}
 				for i, s := range g.Stops {

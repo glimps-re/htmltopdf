@@ -258,7 +258,7 @@ func TestTextAndTableProperties(t *testing.T) {
 
 func TestInvalidAndUnsupportedDeclarations(t *testing.T) {
 	x := resolve(t, `<p>x</p>`, `p { color: #010101; color: nonsense; margin: 1px 2px 3px 4px 5px; padding: -1px; width: -5px;
-		display: inline-flex; box-shadow: 0; foo: bar; font-weight: 1500; z-index: 3 }`, "")
+		display: inline-flex; box-shadow: 0; foo: bar; font-weight: 1500; float: left }`, "")
 	p := x.by(t, "p")
 	if p.Color != rgb(1, 1, 1) {
 		t.Errorf("an invalid declaration is dropped: %+v", p.Color)
@@ -269,7 +269,7 @@ func TestInvalidAndUnsupportedDeclarations(t *testing.T) {
 	for _, want := range []string{
 		"invalid-value: color: nonsense", "invalid-value: margin: 1 2 3 4 5", "invalid-value: padding: -1", "invalid-value: width: -5",
 		"invalid-value: display: inline-flex", "invalid-value: font-weight: 1500", "invalid-value: box-shadow: 0",
-		"unsupported-property: foo", "unsupported-property: z-index",
+		"unsupported-property: foo", "unsupported-property: float",
 	} {
 		if !x.has(want) {
 			t.Errorf("missing warning %q in %v", want, x.warnings())

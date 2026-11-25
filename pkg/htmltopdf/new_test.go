@@ -101,7 +101,7 @@ func TestExtraCSSIsStrict(t *testing.T) {
 		"pseudo-class in selector":  "a:visited:nope { color: red }",
 		"unterminated string":       "p { content: 'x }",
 		"too large":                 strings.Repeat("p{color:red}", 100000),
-		"unsupported z-index":       "p { z-index: 3 }",
+		"unsupported float":         "p { float: left }",
 		"unsupported page selector": "@page :first { size: A3 }",
 	}
 	for name, src := range rejected {

@@ -78,6 +78,19 @@ const (
 	pColumnGap
 	pGridColumns
 	pBoxShadow
+	pPosition
+	pTop
+	pRight
+	pBottom
+	pLeft
+	pZIndex
+	pHeight
+	pMinWidth
+	pTransform
+	pPage
+	pElementContent
+	pCounterReset
+	pCounterIncrement
 	numProps
 )
 
@@ -154,6 +167,10 @@ var longhands = map[string][]prop{
 	"align-items": {pAlignItems}, "flex-grow": {pFlexGrow}, "flex-shrink": {pFlexShrink}, "flex-basis": {pFlexBasis},
 	"flex": {pFlexGrow, pFlexShrink, pFlexBasis}, "row-gap": {pRowGap}, "column-gap": {pColumnGap},
 	"gap": {pRowGap, pColumnGap}, "grid-template-columns": {pGridColumns}, "box-shadow": {pBoxShadow},
+	"position": {pPosition}, "top": {pTop}, "right": {pRight}, "bottom": {pBottom}, "left": {pLeft},
+	"z-index": {pZIndex}, "height": {pHeight}, "min-width": {pMinWidth}, "transform": {pTransform},
+	"page": {pPage}, "content": {pElementContent}, "counter-reset": {pCounterReset},
+	"counter-increment": {pCounterIncrement},
 }
 
 // declCtx tells where a declaration appears: properties differ between
@@ -223,6 +240,8 @@ type spec struct {
 	items  []ContentItem
 	grid   []gridGroup
 	shadow *shadowList
+	// counters holds the entries of counter-reset and counter-increment.
+	counters []CounterOp
 }
 
 type propSpec struct {
@@ -370,7 +389,7 @@ func parseLonghand(p prop, toks []css.Token) (spec, bool) {
 	case pTextDecoration:
 		return parseTextDecoration(toks)
 	case pVerticalAlign:
-		return keyword(toks, verticalAlignKeywords)
+		return parseVerticalAlign(toks)
 	case pListStyleType:
 		return parseListStyleType(toks)
 	case pContent:
@@ -407,7 +426,7 @@ func parseLonghand(p prop, toks []css.Token) (spec, bool) {
 		l, ok := parseBoxShadow(toks)
 		return spec{shadow: &l}, ok
 	}
-	return spec{}, false
+	return parseM3Longhand(p, toks)
 }
 
 var (

@@ -1,0 +1,55 @@
+# Chrome counter values: int32 saturation and decimal-leading-zero (M3-T1 probe 7, for M3-01/M3-02)
+# Source: tmp/m3probe/counters_gen.py -> counters.html (dev-only probe page, never committed to Go code), 2026-11-24, run by tmp/m3probe/run.sh: chromium --headless --disable-gpu --no-sandbox --dump-dom,
+# as Chromium 156.0.8078.73 built on Debian GNU/Linux 13 (trixie) (headless, getBoundingClientRect). Units: integers as text.
+# Format: {"name","reset" (counter-reset value on the container div, "" none),"increments" (counter-increment of each successive <p>),"out" per p: the text of counter(c) in "decimal" and "decimal-leading-zero"}. Each case is isolated in its own <section> (a counter-reset scopes to following siblings). Printed with --print-to-pdf and read with pdftotext -layout (pseudo-element text is not in the DOM).
+# Findings: values saturate at int32 (2147483647 / -2147483648) for reset, increment and sums; an out-of-int32 integer is clamped; decimal-leading-zero pads 0..9 only: -5 prints "-5" (no padding for negatives), 7 "07", 0 "00", 123 "123".
+# Invalid increments (1e3, 1.5, inherit) drop the whole declaration; the same name twice in counter-reset: the last wins; twice in counter-increment: both apply.
+{"name": "sat+ twice", "reset": "c 0", "increments": ["c 2147483647", "c 2147483647"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}, {"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "sat+ three", "reset": "c 0", "increments": ["c 2147483647", "c 2147483647", "c 5"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}, {"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}, {"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "sat- twice", "reset": "c 0", "increments": ["c -2147483648", "c -2147483648"], "out": [{"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}, {"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}]}
+{"name": "min then -1", "reset": "c 0", "increments": ["c -2147483648", "c -1"], "out": [{"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}, {"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}]}
+{"name": "max then +1", "reset": "c 0", "increments": ["c 2147483647", "c 1"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}, {"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "reset max inc 1", "reset": "c 2147483647", "increments": ["c 1"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "reset min inc -1", "reset": "c -2147483648", "increments": ["c -1"], "out": [{"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}]}
+{"name": "reset 2147483648 (over int32)", "reset": "c 2147483648", "increments": ["c 0"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "reset -2147483649 (under int32)", "reset": "c -2147483649", "increments": ["c 0"], "out": [{"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}]}
+{"name": "reset 99999999999", "reset": "c 99999999999", "increments": ["c 0"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "inc 99999999999", "reset": "c 0", "increments": ["c 99999999999"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "inc -99999999999", "reset": "c 0", "increments": ["c -99999999999"], "out": [{"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}]}
+{"name": "inc 2147483648", "reset": "c 0", "increments": ["c 2147483648", "c 1"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}, {"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "inc 1e3 invalid", "reset": "c 0", "increments": ["c 1e3"], "out": [{"decimal": "0", "decimal-leading-zero": "00", "decimal_explicit": "0"}]}
+{"name": "inc 1.5 invalid", "reset": "c 7", "increments": ["c 1.5"], "out": [{"decimal": "7", "decimal-leading-zero": "07", "decimal_explicit": "7"}]}
+{"name": "inc +3", "reset": "c 0", "increments": ["c +3"], "out": [{"decimal": "3", "decimal-leading-zero": "03", "decimal_explicit": "3"}]}
+{"name": "inc -0", "reset": "c 0", "increments": ["c -0", "c"], "out": [{"decimal": "0", "decimal-leading-zero": "00", "decimal_explicit": "0"}, {"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}]}
+{"name": "default inc 1 (no value)", "reset": "c 0", "increments": ["c", "c", "c"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}, {"decimal": "2", "decimal-leading-zero": "02", "decimal_explicit": "2"}, {"decimal": "3", "decimal-leading-zero": "03", "decimal_explicit": "3"}]}
+{"name": "default reset 0 (no value)", "reset": "c", "increments": ["c"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}]}
+{"name": "reset 5 inc inc", "reset": "c 5", "increments": ["c", "c"], "out": [{"decimal": "6", "decimal-leading-zero": "06", "decimal_explicit": "6"}, {"decimal": "7", "decimal-leading-zero": "07", "decimal_explicit": "7"}]}
+{"name": "no reset: implicit counter", "reset": "", "increments": ["c", "c"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}, {"decimal": "2", "decimal-leading-zero": "02", "decimal_explicit": "2"}]}
+{"name": "inc none", "reset": "c 3", "increments": ["none", "c"], "out": [{"decimal": "3", "decimal-leading-zero": "03", "decimal_explicit": "3"}, {"decimal": "4", "decimal-leading-zero": "04", "decimal_explicit": "4"}]}
+{"name": "reset none", "reset": "none", "increments": ["c"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}]}
+{"name": "two counters in one reset", "reset": "c 1 d 5", "increments": ["c 10"], "out": [{"decimal": "11", "decimal-leading-zero": "11", "decimal_explicit": "11"}]}
+{"name": "same name twice in reset", "reset": "c 1 c 2", "increments": ["c"], "out": [{"decimal": "3", "decimal-leading-zero": "03", "decimal_explicit": "3"}]}
+{"name": "same name twice in inc", "reset": "c 0", "increments": ["c 3 c 4"], "out": [{"decimal": "7", "decimal-leading-zero": "07", "decimal_explicit": "7"}]}
+{"name": "inc: c then d (one declaration)", "reset": "c 0", "increments": ["c 2 d 3"], "out": [{"decimal": "2", "decimal-leading-zero": "02", "decimal_explicit": "2"}]}
+{"name": "inc ident named none-like: 'inherit' invalid", "reset": "c 4", "increments": ["c inherit"], "out": [{"decimal": "4", "decimal-leading-zero": "04", "decimal_explicit": "4"}]}
+{"name": "value -5", "reset": "c 0", "increments": ["c -5"], "out": [{"decimal": "-5", "decimal-leading-zero": "-5", "decimal_explicit": "-5"}]}
+{"name": "value 0", "reset": "c 0", "increments": ["c 0"], "out": [{"decimal": "0", "decimal-leading-zero": "00", "decimal_explicit": "0"}]}
+{"name": "value 7", "reset": "c 0", "increments": ["c 7"], "out": [{"decimal": "7", "decimal-leading-zero": "07", "decimal_explicit": "7"}]}
+{"name": "value 123", "reset": "c 0", "increments": ["c 123"], "out": [{"decimal": "123", "decimal-leading-zero": "123", "decimal_explicit": "123"}]}
+{"name": "value 1", "reset": "c 0", "increments": ["c 1"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}]}
+{"name": "value 9", "reset": "c 0", "increments": ["c 9"], "out": [{"decimal": "9", "decimal-leading-zero": "09", "decimal_explicit": "9"}]}
+{"name": "value 10", "reset": "c 0", "increments": ["c 10"], "out": [{"decimal": "10", "decimal-leading-zero": "10", "decimal_explicit": "10"}]}
+{"name": "value 99", "reset": "c 0", "increments": ["c 99"], "out": [{"decimal": "99", "decimal-leading-zero": "99", "decimal_explicit": "99"}]}
+{"name": "value 100", "reset": "c 0", "increments": ["c 100"], "out": [{"decimal": "100", "decimal-leading-zero": "100", "decimal_explicit": "100"}]}
+{"name": "value -1", "reset": "c 0", "increments": ["c -1"], "out": [{"decimal": "-1", "decimal-leading-zero": "-1", "decimal_explicit": "-1"}]}
+{"name": "value -9", "reset": "c 0", "increments": ["c -9"], "out": [{"decimal": "-9", "decimal-leading-zero": "-9", "decimal_explicit": "-9"}]}
+{"name": "value -10", "reset": "c 0", "increments": ["c -10"], "out": [{"decimal": "-10", "decimal-leading-zero": "-10", "decimal_explicit": "-10"}]}
+{"name": "value -99", "reset": "c 0", "increments": ["c -99"], "out": [{"decimal": "-99", "decimal-leading-zero": "-99", "decimal_explicit": "-99"}]}
+{"name": "value -123", "reset": "c 0", "increments": ["c -123"], "out": [{"decimal": "-123", "decimal-leading-zero": "-123", "decimal_explicit": "-123"}]}
+{"name": "value 12345", "reset": "c 0", "increments": ["c 12345"], "out": [{"decimal": "12345", "decimal-leading-zero": "12345", "decimal_explicit": "12345"}]}
+{"name": "value 100000", "reset": "c 0", "increments": ["c 100000"], "out": [{"decimal": "100000", "decimal-leading-zero": "100000", "decimal_explicit": "100000"}]}
+{"name": "value 2147483647", "reset": "c 0", "increments": ["c 2147483647"], "out": [{"decimal": "2147483647", "decimal-leading-zero": "2147483647", "decimal_explicit": "2147483647"}]}
+{"name": "value -2147483648", "reset": "c 0", "increments": ["c -2147483648"], "out": [{"decimal": "-2147483648", "decimal-leading-zero": "-2147483648", "decimal_explicit": "-2147483648"}]}
+{"name": "nested reset: reset c 0 / p inc / div reset c 10 / p inc / end / p inc", "reset": "c 0 on the container", "increments": ["see name"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}, {"decimal": "11", "decimal-leading-zero": "11", "decimal_explicit": "11"}, {"decimal": "2", "decimal-leading-zero": "02", "decimal_explicit": "2"}]}
+{"name": "nested increment on a div: p inc / div inc 5 > p inc / p inc", "reset": "c 0 on the container", "increments": ["see name"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}, {"decimal": "7", "decimal-leading-zero": "07", "decimal_explicit": "7"}, {"decimal": "8", "decimal-leading-zero": "08", "decimal_explicit": "8"}]}
+{"name": "sibling reset on a p: p inc / p reset c 20 / p inc", "reset": "c 0 on the container", "increments": ["see name"], "out": [{"decimal": "1", "decimal-leading-zero": "01", "decimal_explicit": "1"}, {"decimal": "20", "decimal-leading-zero": "20", "decimal_explicit": "20"}, {"decimal": "2", "decimal-leading-zero": "02", "decimal_explicit": "2"}]}

@@ -33,7 +33,7 @@ func ExampleConverter_Render_warnings() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	html := `<style>p { z-index: 3 }</style><img src="logo.png"><p>text</p>`
+	html := `<style>p { float: left }</style><img src="logo.png"><p>text</p>`
 	res, err := conv.Render(context.Background(), strings.NewReader(html), &bytes.Buffer{})
 	if err != nil {
 		log.Fatal(err)
@@ -43,7 +43,7 @@ func ExampleConverter_Render_warnings() {
 	}
 	// Output:
 	// unsupported-element img 1
-	// unsupported-property z-index 1
+	// unsupported-property float 1
 }
 
 func ExampleConverter_Render_limits() {

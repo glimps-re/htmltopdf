@@ -32,6 +32,8 @@ type crule struct {
 
 // cpage is a compiled @page rule.
 type cpage struct {
+	// name is the page name of "@page <name>", "" for the default page.
+	name  string
 	decls []decl
 	boxes map[string][]decl
 	media []css.MediaQuery
@@ -98,30 +100,27 @@ func (c *compiler) styleRule(r *css.Rule, media []css.MediaQuery) error {
 	if err != nil {
 		return err
 	}
-	// Rules for ::before and ::after wait for M3-01.
-	kept := sels[:0]
-	for _, s := range sels {
-		if s.Pseudo() == css.PseudoNone {
-			kept = append(kept, s)
-		}
-	}
-	if len(kept) == 0 {
+	if len(sels) == 0 {
 		return nil
 	}
 	decls := c.decls(r.Decls, ctxElement)
 	if len(decls) == 0 {
 		return nil
 	}
-	c.sheet.rules = append(c.sheet.rules, crule{sels: kept, decls: decls, media: media})
+	c.sheet.rules = append(c.sheet.rules, crule{sels: sels, decls: decls, media: media})
 	return nil
 }
 
 func (c *compiler) pageRule(r *css.Rule, media []css.MediaQuery) {
-	if len(trim(r.Prelude)) != 0 {
-		c.b.Warn(budget.WarnUnsupportedAtRule, "@page selector")
-		return
+	name := ""
+	if prelude := trim(r.Prelude); len(prelude) != 0 {
+		var ok bool
+		if name, ok = customIdent(prelude); !ok {
+			c.b.Warn(budget.WarnUnsupportedAtRule, "@page selector")
+			return
+		}
 	}
-	p := cpage{decls: c.decls(r.Decls, ctxPage), media: media}
+	p := cpage{name: name, decls: c.decls(r.Decls, ctxPage), media: media}
 	for i := range r.Rules {
 		box := &r.Rules[i]
 		if box.Kind != css.RuleMarginBox {
@@ -209,6 +208,10 @@ func warnTruncated(b *budget.Budget, specs []propSpec) {
 			b.Warn(budget.WarnClamped, "font-family")
 		case specs[i].prop == pGridColumns && specs[i].spec.n == gridCut:
 			b.Warn(budget.WarnClamped, "grid tracks")
+		case specs[i].prop == pElementContent && specs[i].spec.n == listCut:
+			b.Warn(budget.WarnClamped, "content")
+		case (specs[i].prop == pCounterReset || specs[i].prop == pCounterIncrement) && specs[i].spec.n == listCut:
+			b.Warn(budget.WarnClamped, "counters")
 		case specs[i].prop == pBoxShadow:
 			if sh := specs[i].spec.shadow; sh != nil && sh.inset {
 				b.Warn(budget.WarnUnsupportedProperty, "box-shadow inset")

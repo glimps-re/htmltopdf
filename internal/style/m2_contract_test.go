@@ -302,25 +302,14 @@ func TestContractOpacity(t *testing.T) {
 			t.Errorf("deep product %v want %v", last.Color.A, want)
 		}
 	})
-	t.Run("one warning for gradient under opacity", func(t *testing.T) {
-		x := resolve(t, `<div><p>x</p></div>`, `div { opacity: .5; background: linear-gradient(red, blue) }`, "")
-		n := 0
-		w, _ := x.b.Warnings()
-		for _, v := range w {
-			if v.Detail == "opacity on gradient" {
-				n++
-			}
+	t.Run("opacity folds into the gradient stops", func(t *testing.T) {
+		x := resolve(t, `<div><p>x</p></div>`, `div { opacity: .5; background: linear-gradient(red, rgba(0,0,255,.5)) }`, "")
+		if x.has("unsupported-property") {
+			t.Errorf("warned: %v", x.warnings())
 		}
-		if n < 1 {
-			t.Errorf("no gradient warning: %v", x.warnings())
-		}
-		x = resolve(t, `<div><p>x</p></div>`, `div { background: linear-gradient(red, blue) }`, "")
-		if x.has("unsupported-property: opacity") {
-			t.Error("gradient without opacity must not warn")
-		}
-		x = resolve(t, `<div>x</div>`, `div { opacity: 1; background: linear-gradient(red, blue) }`, "")
-		if x.has("unsupported-property: opacity") {
-			t.Error("opacity 1 must not warn")
+		g := x.by(t, "div").BackgroundImage
+		if g == nil || !ctNear(g.Stops[0].Color.A, .5) || !ctNear(g.Stops[1].Color.A, .25) {
+			t.Errorf("stops %+v", g)
 		}
 	})
 }

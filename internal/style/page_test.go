@@ -182,7 +182,7 @@ func TestMarginBoxes(t *testing.T) {
 		t.Errorf("bottom-left style: %+v", bl.Style)
 	}
 	br := ps.Boxes[MarginBottomRight]
-	want := []ContentItem{{ContentText, "Page "}, {ContentPage, ""}, {ContentText, " of "}, {ContentPages, ""}}
+	want := []ContentItem{{Kind: ContentText, Text: "Page "}, {Kind: ContentPage}, {Kind: ContentText, Text: " of "}, {Kind: ContentPages}}
 	if br == nil || len(br.Content) != len(want) {
 		t.Fatalf("bottom-right: %+v", br)
 	}
@@ -241,7 +241,7 @@ func TestMarginBoxWarnings(t *testing.T) {
 
 func TestPageSelectorsAreWarned(t *testing.T) {
 	b := newBudget()
-	ss, err := css.ParseStylesheet([]byte(`@page :first { size: A3 } @page cover { size: A3 } @page { size: A5 }`), css.OriginExtra, b)
+	ss, err := css.ParseStylesheet([]byte(`@page :first { size: A3 } @page cover:left { size: A3 } @page cover { size: A3 } @page { size: A5 }`), css.OriginExtra, b)
 	if err != nil {
 		t.Fatal(err)
 	}

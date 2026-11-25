@@ -19,8 +19,8 @@ type computeCtx struct {
 	grid   *gridCache
 	// err is the first budget error met while computing.
 	err error
-	// root is true for the element without parent.
-	root bool
+	// root is true for the element without parent; pseudo for a pseudo-element.
+	root, pseudo bool
 	// colorSet tells which border colors were specified, curBorder which of them
 	// were currentcolor; curBackground is currentcolor on background-color.
 	colorSet      [4]bool
@@ -55,8 +55,14 @@ func (x *computeCtx) px(l css.Length) float64 { return x.dim(l, x.c.FontSize).Va
 // the render, nil where grid-template-columns has no effect. The error is a
 // budget error.
 func compute(parent *Computed, specs *[numProps]spec, touched []prop, b *budget.Budget, grid *gridCache) (*Computed, error) {
+	return computeFor(parent, specs, touched, b, grid, false)
+}
+
+// computeFor is compute for the style of an element, or of a pseudo-element
+// when pseudo is true: only that one keeps its content.
+func computeFor(parent *Computed, specs *[numProps]spec, touched []prop, b *budget.Budget, grid *gridCache, pseudo bool) (*Computed, error) {
 	c := initialStyle
-	x := &computeCtx{c: &c, parent: parent, root: parent == nil, b: b, grid: grid}
+	x := &computeCtx{c: &c, parent: parent, root: parent == nil, b: b, grid: grid, pseudo: pseudo}
 	if parent != nil {
 		c.inheritFrom(parent)
 	}
@@ -84,6 +90,9 @@ func (x *computeCtx) finish() {
 	c := x.c
 	if x.parent != nil && (x.parent.Display == DisplayFlex || x.parent.Display == DisplayGrid) {
 		c.Display = blockified(c.Display)
+	}
+	if c.Position == PositionAbsolute {
+		c.Display = blockifiedAbsolute(c.Display)
 	}
 	for i := range c.Border {
 		if !x.colorSet[i] || x.curBorder[i] {
@@ -113,16 +122,28 @@ func (x *computeCtx) applyOpacity() {
 	if c.fade == 0 {
 		return
 	}
-	c.raw = &unfaded{color: c.Color, background: c.BackgroundColor}
+	c.raw = &unfaded{color: c.Color, background: c.BackgroundColor, gradient: c.BackgroundImage}
 	c.Color.A *= product
 	c.BackgroundColor.A *= product
 	for i := range c.Border {
 		c.raw.border[i] = c.Border[i].Color
 		c.Border[i].Color.A *= product
 	}
-	if c.BackgroundImage != nil && x.b != nil {
-		x.b.Warn(budget.WarnUnsupportedProperty, "opacity on gradient")
+	if c.BackgroundImage != nil {
+		c.BackgroundImage = faded(c.BackgroundImage, product)
 	}
+}
+
+// faded returns a copy of g whose stop alphas are multiplied by f; the shared
+// gradient of the cascade is never modified.
+func faded(g *css.Gradient, f float64) *css.Gradient {
+	out := *g
+	out.Stops = make([]css.ColorStop, len(g.Stops))
+	for i, st := range g.Stops {
+		st.Color.A *= f
+		out.Stops[i] = st
+	}
+	return &out
 }
 
 func (x *computeCtx) flexFactor(v float64, name string) float64 {
@@ -183,7 +204,7 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 	case pBackgroundColor:
 		c.BackgroundColor, x.curBackground = src.rawBackground(), false
 	case pBackgroundImage:
-		c.BackgroundImage = src.BackgroundImage
+		c.BackgroundImage = src.rawGradient()
 	case pOverflow:
 		c.OverflowHidden = src.OverflowHidden
 	case pFontFamily:
@@ -211,7 +232,7 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 	case pTextDecoration:
 		c.TextDecoration = src.TextDecoration
 	case pVerticalAlign:
-		c.VerticalAlign = src.VerticalAlign
+		c.VerticalAlign, c.VAlignOffset = src.VerticalAlign, src.VAlignOffset
 	case pListStyleType:
 		c.ListStyleNone = src.ListStyleNone
 	case pTextTransform:
@@ -246,6 +267,29 @@ func (x *computeCtx) copyProp(p prop, src *Computed) {
 		c.GridColumns = src.GridColumns
 	case pBoxShadow:
 		c.shadowSrc = src.shadowSrc
+	case pPosition:
+		c.Position = src.Position
+	case pTop, pRight, pBottom, pLeft:
+		c.Inset[p-pTop] = src.Inset[p-pTop]
+	case pZIndex:
+		c.ZIndex, c.ZAuto = src.ZIndex, src.ZAuto
+	case pHeight:
+		c.Height = src.Height
+	case pMinWidth:
+		c.MinWidth = src.MinWidth
+	case pTransform:
+		c.Rotate = src.Rotate
+	case pPage:
+		c.Page = src.Page
+	case pElementContent:
+		c.Content = nil
+		if x.pseudo {
+			c.Content = src.Content
+		}
+	case pCounterReset:
+		c.CounterReset = src.CounterReset
+	case pCounterIncrement:
+		c.CounterIncrement = src.CounterIncrement
 	}
 }
 
@@ -291,7 +335,7 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 			c.MaxWidth = x.dim(s.len, c.FontSize)
 		}
 	case pBorderTopWidth, pBorderRightWidth, pBorderBottomWidth, pBorderLeftWidth:
-		c.Border[p-pBorderTopWidth].Width = x.px(s.len)
+		c.Border[p-pBorderTopWidth].Width = snapBorderWidth(x.px(s.len))
 	case pBorderTopStyle, pBorderRightStyle, pBorderBottomStyle, pBorderLeftStyle:
 		c.Border[p-pBorderTopStyle].Style = BorderStyle(u8(s.n))
 	case pBorderTopColor, pBorderRightColor, pBorderBottomColor, pBorderLeftColor:
@@ -349,7 +393,10 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 	case pTextDecoration:
 		c.TextDecoration = TextDecoration(u8(s.n))
 	case pVerticalAlign:
-		c.VerticalAlign = VerticalAlign(u8(s.n))
+		c.VerticalAlign, c.VAlignOffset = VerticalAlign(u8(s.n)), Dim{}
+		if c.VerticalAlign == VAlignLength {
+			c.VAlignOffset = x.dim(s.len, c.FontSize)
+		}
 	case pListStyleType:
 		c.ListStyleNone = s.n == 1
 	case pTextTransform:
@@ -390,7 +437,22 @@ func (x *computeCtx) applyValue(p prop, s *spec) {
 		if s.shadow != nil {
 			c.shadowSrc = s.shadow.shadows
 		}
+	default:
+		x.applyM3(p, s)
 	}
+}
+
+// snapBorderWidth snaps a border width as Chrome does at computed-value time
+// (CSS Backgrounds 4): a width of 1 px or more is floored to whole px, a width
+// under 1 px becomes 1 px, 0 stays 0.
+func snapBorderWidth(w float64) float64 {
+	switch {
+	case w >= 1:
+		return math.Floor(w)
+	case w > 0:
+		return 1
+	}
+	return 0
 }
 
 func (x *computeCtx) lengthOrAuto(s *spec) Dim {
@@ -476,6 +538,16 @@ func (x *computeCtx) lineHeight(s *spec) LineHeight {
 
 // u8 narrows an enum value stored in a spec: parsers only store small values.
 func u8(n int32) uint8 { return uint8(min(max(n, 0), math.MaxUint8)) }
+
+// blockifiedAbsolute is the display of an absolutely positioned box (CSS 2.1 §9.7).
+func blockifiedAbsolute(d Display) Display {
+	switch d {
+	case DisplayInline, DisplayInlineBlock, DisplayTableRowGroup, DisplayTableHeaderGroup, DisplayTableFooterGroup,
+		DisplayTableRow, DisplayTableCell, DisplayTableCaption, DisplayTableColumn, DisplayTableColumnGroup:
+		return DisplayBlock
+	}
+	return d
+}
 
 func blockified(d Display) Display {
 	if d == DisplayInline || d == DisplayInlineBlock {

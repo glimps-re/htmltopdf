@@ -24,30 +24,55 @@ type ColorStop struct {
 	Pos   float64
 }
 
-// Gradient is a linear-gradient().
+// GradientShape tells a linear gradient from a radial one.
+type GradientShape uint8
+
+// Gradient shapes. Radial gradients are always "farthest-corner at center".
+const (
+	GradientLinear GradientShape = iota
+	GradientCircle
+	GradientEllipse
+)
+
+// Gradient is a linear-gradient() or a radial-gradient().
 type Gradient struct {
+	// Shape is GradientLinear for every linear gradient.
+	Shape GradientShape
 	// Angle is the direction in degrees, CSS convention: 0 points up and
-	// angles grow clockwise. It is in [0, 360) and unused when Corner is set.
+	// angles grow clockwise. It is in [0, 360) and unused when Corner is set or
+	// Shape is not linear.
 	Angle  float64
 	Corner Corner
 	// Stops has 2 to MaxGradientStops entries with non-decreasing positions.
 	Stops []ColorStop
 }
 
-// ParseGradient parses linear-gradient(): an optional angle (deg, rad, grad,
+// ParseGradient parses linear-gradient() or radial-gradient(). A linear one has an optional angle (deg, rad, grad,
 // turn or the unitless 0) or "to <side|corner>", then at least two color stops
-// with optional percentage positions. Missing positions are spread as in CSS
-// Images §3.5.3 and positions are made non-decreasing. Lengths as positions,
-// interpolation hints, repeating gradients and other gradient types are
-// rejected.
+// with optional percentage positions. A radial one has an optional
+// "[circle | ellipse] [farthest-corner] [at center]" (other sizes and positions
+// are rejected), then the stops. Colors may be translucent. Missing positions
+// are spread as in CSS Images §3.5.3 and positions are made non-decreasing.
+// Lengths as positions, interpolation hints, repeating gradients and other
+// gradient types are rejected.
 func ParseGradient(toks []Token) (Gradient, bool) {
 	name, args, ok := function(toks)
-	if !ok || name != "linear-gradient" {
+	if !ok || (name != "linear-gradient" && name != "radial-gradient") {
 		return Gradient{}, false
 	}
 	parts := splitTop(args)
 	g := Gradient{Angle: 180}
-	if dir, ok := direction(parts[0]); ok {
+	if name == "radial-gradient" {
+		g.Angle = 0
+		g.Shape = GradientEllipse
+		if shape, isConfig, ok := radialConfig(parts[0]); isConfig {
+			if !ok {
+				return Gradient{}, false
+			}
+			g.Shape = shape
+			parts = parts[1:]
+		}
+	} else if dir, ok := direction(parts[0]); ok {
 		g.Angle, g.Corner = dir.angle, dir.corner
 		parts = parts[1:]
 	}
@@ -65,6 +90,59 @@ func ParseGradient(toks []Token) (Gradient, bool) {
 	}
 	placeStops(g.Stops, positioned)
 	return g, true
+}
+
+// radialConfig parses the optional first argument of radial-gradient(). isConfig
+// is false when the argument is not one (it is then the first color stop); ok is
+// false when it is one but not of the supported form.
+func radialConfig(toks []Token) (shape GradientShape, isConfig, ok bool) {
+	fs := fields(toks)
+	if len(fs) == 0 {
+		return 0, false, false
+	}
+	shape = GradientEllipse
+	seenShape, seenSize, seenAt := false, false, false
+	for i := 0; i < len(fs); i++ {
+		if len(fs[i]) != 1 || fs[i][0].Type != TIdent {
+			return 0, isConfig, false
+		}
+		switch kw := lowerASCII(fs[i][0].Text); kw {
+		case "circle", "ellipse":
+			if seenShape || seenAt {
+				return 0, true, false
+			}
+			seenShape = true
+			shape = GradientCircle
+			if kw == "ellipse" {
+				shape = GradientEllipse
+			}
+		case "farthest-corner":
+			if seenSize || seenAt {
+				return 0, true, false
+			}
+			seenSize = true
+		case "at":
+			if seenAt || i+1 >= len(fs) {
+				return 0, true, false
+			}
+			seenAt = true
+			for _, f := range fs[i+1:] {
+				if len(f) != 1 || f[0].Type != TIdent || lowerASCII(f[0].Text) != "center" {
+					return 0, true, false
+				}
+			}
+			if len(fs)-i-1 > 2 {
+				return 0, true, false
+			}
+			i = len(fs)
+		case "closest-side", "closest-corner", "farthest-side":
+			return 0, true, false
+		default:
+			return 0, i > 0, false
+		}
+		isConfig = true
+	}
+	return shape, true, true
 }
 
 type dirResult struct {
@@ -126,6 +204,13 @@ func sideDirection(a, b string) (dirResult, bool) {
 		return dirResult{corner: CornerTopLeft}, true
 	}
 	return dirResult{}, false
+}
+
+// ParseAngle parses an angle token (deg, rad, grad, turn, or the unitless 0)
+// and returns it in degrees, normalised to [0, 360).
+func ParseAngle(t Token) (float64, bool) {
+	d, ok := angle(t)
+	return d.angle, ok
 }
 
 func angle(t Token) (dirResult, bool) {

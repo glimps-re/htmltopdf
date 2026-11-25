@@ -209,6 +209,7 @@ const (
 	ItemStart
 	ItemEnd
 	ItemCenter
+	ItemBaseline
 )
 
 // TrackKind is the kind of a grid Track.
@@ -257,13 +258,49 @@ const (
 // VerticalAlign is the computed vertical-align.
 type VerticalAlign uint8
 
-// Vertical alignments.
+// Vertical alignments. VAlignLength is vertical-align: <length>, the offset being
+// Computed.VAlignOffset.
 const (
 	VAlignBaseline VerticalAlign = iota
 	VAlignTop
 	VAlignMiddle
 	VAlignBottom
+	VAlignLength
 )
+
+// Position is the computed position. Only the containing block of its
+// descendants and the layer of an absolute box are implemented: a relative box
+// has no offset (design §5.2.3).
+type Position uint8
+
+// Positions; fixed and sticky are invalid values.
+const (
+	PositionStatic Position = iota
+	PositionRelative
+	PositionAbsolute
+)
+
+// CounterFormat is the style of a counter() in a content value.
+type CounterFormat uint8
+
+// Counter formats.
+const (
+	CounterDecimal CounterFormat = iota
+	CounterDecimalLeadingZero
+)
+
+// CounterOp is one entry of counter-reset or counter-increment: the reset value
+// or the increment, with saturating int32 arithmetic.
+type CounterOp struct {
+	Name  string
+	Value int32
+}
+
+// MaxCounterOps bounds the entries kept from a counter-reset or counter-increment.
+const MaxCounterOps = 32
+
+// MaxIdentBytes bounds a counter or page name.
+const MaxIdentBytes = 256
 
 // Computed is the computed style of an element. It is immutable and shared by
 // every element with the same style: never modify it.
@@ -285,7 +322,8 @@ type Computed struct {
 	TableLayoutFixed bool
 
 	BackgroundColor css.Color
-	// BackgroundImage is the linear gradient painted over the background color.
+	// BackgroundImage is the gradient painted over the background color; the
+	// opacity of the element and its ancestors is folded into its stop alphas.
 	BackgroundImage *css.Gradient
 	// OverflowHidden is true when the box clips its content.
 	OverflowHidden bool
@@ -305,6 +343,8 @@ type Computed struct {
 	WhiteSpace     WhiteSpace
 	TextDecoration TextDecoration
 	VerticalAlign  VerticalAlign
+	// VAlignOffset is the offset of VAlignLength in px, positive up.
+	VAlignOffset Dim
 
 	// ListStyleNone is true for list-style-type: none.
 	ListStyleNone bool
@@ -334,6 +374,28 @@ type Computed struct {
 	// again against the colour and opacity of the inheriting element.
 	shadowSrc []shadowSpec
 
+	// Position is not inherited. Inset is top, right, bottom and left.
+	Position Position
+	Inset    [4]Dim
+	// ZIndex is used unless ZAuto.
+	ZIndex int32
+	ZAuto  bool
+	// Rotate is transform: rotate() in radians in [0, 2π), 0 for none.
+	Rotate float64
+	// Height is auto, px or a percentage that layout resolves.
+	Height Dim
+	// MinWidth is auto (the automatic minimum of a flex item, 0 elsewhere), px or a
+	// percentage.
+	MinWidth Dim
+	// Page is the named page of the box, "" for auto. It is not inherited.
+	Page string
+	// Content is the content of a ::before or ::after box, nil when it has none:
+	// it is only set on the style of a pseudo-element. It is shared: never modify it.
+	Content []ContentItem
+	// CounterReset and CounterIncrement are nil for none. They are shared: never
+	// modify them.
+	CounterReset, CounterIncrement []CounterOp
+
 	// ownFade is 1 − opacity and fade is 1 − the product of the opacities of the
 	// element and its ancestors, so that the zero value is opaque. When fade is
 	// not 0, raw holds the colours before the product was applied.
@@ -349,7 +411,18 @@ type Computed struct {
 type unfaded struct {
 	color, background css.Color
 	border            [4]css.Color
+	gradient          *css.Gradient
 }
+
+func (c *Computed) rawGradient() *css.Gradient {
+	if c.raw != nil {
+		return c.raw.gradient
+	}
+	return c.BackgroundImage
+}
+
+// UsedOpacity is the product of the opacities of the element and its ancestors.
+func (c *Computed) UsedOpacity() float64 { return 1 - c.fade }
 
 func (c *Computed) rawColor() css.Color {
 	if c.raw != nil {
@@ -390,6 +463,10 @@ func newInitial() Computed {
 		Color:            css.Color{A: 1},
 		FlexShrink:       1,
 		FlexBasis:        Dim{Kind: DimAuto},
+		Height:           Dim{Kind: DimAuto},
+		MinWidth:         Dim{Kind: DimAuto},
+		Inset:            [4]Dim{{Kind: DimAuto}, {Kind: DimAuto}, {Kind: DimAuto}, {Kind: DimAuto}},
+		ZAuto:            true,
 		rootFont:         initialFontSize,
 	}
 	// medium; the width is dropped by finish while the style is none.
