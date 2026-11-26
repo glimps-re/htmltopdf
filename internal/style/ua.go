@@ -6,15 +6,15 @@ import (
 )
 
 // UASource is the user-agent stylesheet: the subset of HTML rendering that the
-// converter implements, with Chrome's values. Embedded and form elements are
-// display: none (the resolver warns about them).
+// converter implements, with Chrome's values. Embedded and form elements other
+// than img are display: none (the resolver warns about them).
 const UASource = `
 html, body, address, article, aside, blockquote, center, details, dialog, dir, div, dl, dd, dt,
 fieldset, figcaption, figure, footer, form, header, hgroup, hr, legend, listing, main, menu, nav,
 ol, p, plaintext, pre, section, summary, ul, h1, h2, h3, h4, h5, h6, xmp { display: block }
 
 area, base, datalist, head, link, meta, noscript, param, rp, script, source, style, template, title, track,
-audio, button, canvas, embed, iframe, img, input, object, select, textarea, video { display: none }
+audio, button, canvas, embed, iframe, input, object, select, textarea, video { display: none }
 
 li { display: list-item }
 table { display: table; border-collapse: separate; border-spacing: 2px; box-sizing: border-box }

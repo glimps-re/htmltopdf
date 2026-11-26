@@ -113,9 +113,10 @@ func (r *Resolver) mediaMatches(media []css.MediaQuery) bool {
 	return true
 }
 
-// unsupportedElements are the elements that are never loaded or drawn.
+// unsupportedElements are the elements that are never loaded or drawn. An img
+// is warned by the box builder, and only when its image is rejected.
 var unsupportedElements = map[string]bool{
-	"img": true, "link": true, "iframe": true, "object": true, "embed": true, "video": true,
+	"link": true, "iframe": true, "object": true, "embed": true, "video": true,
 	"audio": true, "canvas": true, "input": true, "textarea": true, "select": true, "button": true, "base": true,
 }
 

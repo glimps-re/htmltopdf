@@ -63,6 +63,7 @@ func (e *emitter) emitBox(f *frag, out display.List) display.List {
 		out = recolorBorder(out, f.borderColor, f.borderLine)
 	}
 	out = emitReplaced(f, out)
+	out = emitReplacedLink(f, out)
 	for _, r := range f.rules {
 		out = append(out, columnRule(r, st.ColumnRule))
 	}
@@ -263,6 +264,8 @@ func inlineBox(out display.List, st *style.Computed, ln *lineFrag, x0, x1 float6
 }
 
 // emitLinks adds one link per run of consecutive items with the same target.
+// An atomic inline whose box is in a link (img, svg, inline-block) joins the
+// run with its border box.
 func emitLinks(ln *lineFrag, out display.List) display.List {
 	var (
 		href   string
@@ -272,26 +275,52 @@ func emitLinks(ln *lineFrag, out display.List) display.List {
 	)
 	flush := func() {
 		if href != "" && x1 > x0 {
-			l := display.Link{Rect: display.Rect{X: x0, Y: ln.baseline - asc, W: x1 - x0, H: asc + desc}, URI: href}
-			if href[0] == '#' {
-				l.URI, l.Dest = "", href[1:]
-			}
-			out = append(out, l)
+			out = append(out, newLink(href, display.Rect{X: x0, Y: ln.baseline - asc, W: x1 - x0, H: asc + desc}))
 		}
 		href = ""
 	}
 	for i := range ln.items {
 		it := &ln.items[i]
-		if it.kind != itemText {
+		itHref, left, right, up, down := it.href, it.x, it.x+it.w, it.ascent, it.descent
+		switch {
+		case it.kind == itemText:
+		case it.atom != nil && it.atom.f.box.Href != "":
+			r := it.atom.f.rect.Translate(it.atom.f.dx, it.atom.f.dy)
+			itHref, left, right, up, down = it.atom.f.box.Href, r.X, r.Right(), ln.baseline-r.Y, r.Bottom()-ln.baseline
+		default:
 			continue
 		}
-		if it.href != href {
+		if itHref != href {
 			flush()
-			href, x0, x1, asc, desc = it.href, it.x, it.x, 0, 0
+			href, x0, x1, asc, desc = itHref, left, right, 0, 0
 		}
-		x1 = it.x + it.w
-		asc, desc = math.Max(asc, it.ascent), math.Max(desc, it.descent)
+		// An atom moved by a relative offset or a negative margin can sit left
+		// of the items before it: the run covers every item, in any order.
+		x0, x1 = math.Min(x0, left), math.Max(x1, right)
+		asc, desc = math.Max(asc, up), math.Max(desc, down)
 	}
 	flush()
 	return out
+}
+
+// newLink is the link to href over r: an internal one for "#id".
+func newLink(href string, r display.Rect) display.Link {
+	l := display.Link{Rect: r, URI: href}
+	if href[0] == '#' {
+		l.URI, l.Dest = "", href[1:]
+	}
+	return l
+}
+
+// emitReplacedLink adds the link of a block-level replaced box in a link: its
+// border box. An atomic inline one gets its link from its line (emitLinks).
+func emitReplacedLink(f *frag, out display.List) display.List {
+	b := f.box
+	if !b.Replaced() || b.Href == "" || !blockLevel(b) {
+		return out
+	}
+	if !(f.rect.W > 0 && f.rect.H > 0) {
+		return out
+	}
+	return append(out, newLink(b.Href, f.rect))
 }

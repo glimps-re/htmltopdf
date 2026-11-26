@@ -402,8 +402,8 @@ func TestWarningCountsAccumulate(t *testing.T) {
 	for _, w := range res.Warnings {
 		counts[w.Code] += w.Count
 	}
-	if counts[WarnUnsupportedElement] != 7 {
-		t.Errorf("img occurrences = %d, want 7", counts[WarnUnsupportedElement])
+	if counts[WarnImageRejected] != 7 {
+		t.Errorf("img occurrences = %d, want 7", counts[WarnImageRejected])
 	}
 	if counts[WarnBlockedLink] != 3 {
 		t.Errorf("blocked links = %d, want 3", counts[WarnBlockedLink])

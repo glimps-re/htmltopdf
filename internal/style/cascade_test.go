@@ -21,7 +21,7 @@ func TestUASheetHasNoWarning(t *testing.T) {
 }
 
 func TestUADefaults(t *testing.T) {
-	x := resolve(t, `<h1>t</h1><p>p</p><a href=x>l</a><a>n</a><ul><li>i</ul><table><tr><th>h<td>c</table><b>b</b><i>i</i><img src=x><script>1</script>`, "", "")
+	x := resolve(t, `<h1>t</h1><p>p</p><a href=x>l</a><a>n</a><ul><li>i</ul><table><tr><th>h<td>c</table><b>b</b><i>i</i><img src=x><video></video><script>1</script>`, "", "")
 	if c := x.by(t, "h1"); c.Display != DisplayBlock || c.FontSize != 32 || c.FontWeight != 700 || !near(c.Margin[Top].Value, 21.44) {
 		t.Errorf("h1: %+v", c)
 	}
@@ -46,14 +46,20 @@ func TestUADefaults(t *testing.T) {
 	if c := x.by(t, "b"); c.FontWeight != 700 {
 		t.Errorf("b: %d", c.FontWeight)
 	}
-	if c := x.by(t, "img"); c.Display != DisplayNone {
+	if c := x.by(t, "img"); c.Display != DisplayInline {
 		t.Errorf("img: %v", c.Display)
+	}
+	if c := x.by(t, "video"); c.Display != DisplayNone {
+		t.Errorf("video: %v", c.Display)
 	}
 	if c := x.by(t, "script"); c.Display != DisplayNone {
 		t.Errorf("script: %v", c.Display)
 	}
-	if !x.warnings()["unsupported-element: img"] {
-		t.Errorf("no warning for img: %v", x.warnings())
+	if !x.warnings()["unsupported-element: video"] {
+		t.Errorf("no warning for video: %v", x.warnings())
+	}
+	if x.warnings()["unsupported-element: img"] {
+		t.Error("img must not warn: the box builder warns a rejected image")
 	}
 	if x.warnings()["unsupported-element: script"] {
 		t.Error("script must not warn")

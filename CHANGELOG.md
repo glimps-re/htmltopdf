@@ -6,6 +6,43 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Raster images: `<img>` whose `src` is a base64 `data:` URL holding a PNG or a
+  JPEG is laid out as a replaced box (attributes, `width`/`height`, `min-`/`max-width`
+  with the ratio kept, `display`, borders, radius, opacity, transforms, links) and
+  drawn. Every image is decoded under internal caps (16 384 px per side, 4 Mpx per
+  image, 64 distinct images and 16 Mpx per document, work charged to `MaxWork`)
+  and re-encoded: no input image byte reaches the PDF. Nothing is ever fetched.
+- `WarnImageRejected` (`image-rejected`): an image that is not drawn; `Detail` is
+  the reason (`scheme`, `type`, `encoding`, `format`, `size`, `count`, `total`,
+  `corrupt`), never the `src`. A rejected image draws its `alt` text instead; a
+  corrupt one keeps its box, blank. `<img>` no longer warns `unsupported-element`.
+- Links: an image, inline `<svg>` or inline-block inside `<a href>` is clickable
+  over its border box.
+
+### Fixed
+- An inline box (inline-block, svg, image) taller than a page moves to the next
+  page once and is clipped there, instead of adding pages until `MaxPages`.
+
+### Documented deviations from Chrome
+- A percent-encoded `data:` payload, or a C0 control, tab or newline inside
+  `data:`, is rejected (Chrome accepts them).
+- `min-height` and `max-height` are unsupported, so the ratio rule under them does
+  not apply; a percentage height of an inline image falls back to `auto`.
+- An image taller than the page moves whole to the next page and is clipped there
+  (Chrome slices it).
+- No `object-fit`, EXIF orientation or colour management.
+- A progressive 4:2:0 JPEG above about 3.7 Mpx is rejected as `size` (conservative
+  memory estimate).
+- `url()` in CSS stays unsupported.
+
+### Known issues
+- A huge empty `height`, padding, border or table height still adds pages until
+  `MaxPages` fails the render.
+- A huge `line-height` can push glyphs outside the page area.
+
+## [0.1.0]
+
 First release: a pure-Go HTML+CSS to PDF renderer for reports, built as four
 milestones (M1 to M4). The entry below lists what each added. `docs/css-support.md`
 is the reference for what is supported, approximated or ignored.

@@ -2,6 +2,8 @@ package box
 
 import (
 	"errors"
+	"math"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html/atom"
@@ -9,6 +11,7 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/budget"
 	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/dom"
+	"github.com/glimps-re/htmltopdf/internal/raster"
 	"github.com/glimps-re/htmltopdf/internal/style"
 	"github.com/glimps-re/htmltopdf/internal/svg"
 )
@@ -38,7 +41,10 @@ type Styler interface {
 //
 // Elements with display none, and their subtrees, produce no box. An svg element
 // of an HTML document is one KindSVG box (its children are parsed, not walked);
-// other foreign elements are skipped with an unsupported-element warning.
+// other foreign elements are skipped with an unsupported-element warning. An img
+// element is one KindImage box when raster accepts its src; otherwise it warns
+// image-rejected with the reason keyword and becomes the text of its alt
+// attribute, or nothing.
 // ::before and ::after boxes come from Styler.Pseudo, with their generated text
 // as a text child; counters are evaluated in document order. Table display
 // values are built as ordinary blocks: Style.Display keeps the real value for
@@ -70,6 +76,7 @@ type builder struct {
 	b        *budget.Budget
 	counters counterSet
 	svgs     *svg.Parser
+	images   *raster.Set
 	// generated counts the bytes of generated text against MaxGeneratedBytes.
 	generated  int
 	generating bool
@@ -211,6 +218,8 @@ func (bd *builder) element(f *flow, e int32, parent *style.Computed, href string
 	switch {
 	case isSVG:
 		return bd.svgBox(f, e, cs, href)
+	case el.Tag == atom.Img:
+		return bd.imgBox(f, el, cs, href)
 	case el.Tag == atom.Br:
 		return bd.lineBreak(f, &Box{Kind: KindLineBreak, Tag: el.Tag, Style: cs, ID: el.ID, Href: href})
 	case cs.Display == style.DisplayInline:
@@ -614,7 +623,13 @@ func (bd *builder) svgBox(f *flow, e int32, cs *style.Computed, href string) err
 	if bx.SVG, err = bd.svgParser().Parse(e); err != nil {
 		return err
 	}
-	if cs.Display == style.DisplayInline || cs.Display == style.DisplayInlineBlock {
+	return bd.addReplaced(f, bx)
+}
+
+// addReplaced adds the replaced box bx: an atomic inline, or a block when its
+// display says so.
+func (bd *builder) addReplaced(f *flow, bx *Box) error {
+	if d := bx.Style.Display; d == style.DisplayInline || d == style.DisplayInlineBlock {
 		f.trailing = nil
 		if err := f.add(bx); err != nil {
 			return err
@@ -623,6 +638,119 @@ func (bd *builder) svgBox(f *flow, e int32, cs *style.Computed, href string) err
 		return nil
 	}
 	return bd.addBlock(f, bx)
+}
+
+// imgBox adds the replaced box of the img element el, or the text of its alt
+// attribute when raster rejects its src. Only the header of the image is read.
+// A missing src is a rejected one (scheme): nothing is ever fetched.
+func (bd *builder) imgBox(f *flow, el *dom.Element, cs *style.Computed, href string) error {
+	if bd.images == nil {
+		bd.images = raster.NewSet(bd.b)
+	}
+	src, _ := el.Attr("src")
+	img, err := bd.images.Add(src)
+	var rej *raster.RejectError
+	if errors.As(err, &rej) {
+		// The detail is the reason keyword only: src is hostile and up to
+		// MaxInputBytes long.
+		bd.b.Warn(budget.WarnImageRejected, rej.Reason.String())
+		return bd.altText(f, el, cs, href)
+	}
+	if err != nil {
+		return err
+	}
+	bx, err := bd.elementBox(KindImage, el, cs, href)
+	if err != nil {
+		return err
+	}
+	bx.Img = &Img{Src: img, Width: bd.dimensionAttr(el, "width"), Height: bd.dimensionAttr(el, "height")}
+	return bd.addReplaced(f, bx)
+}
+
+// altText adds the alt attribute of a rejected img as an inline text run styled
+// by the img, its white space collapsed whatever white-space says. An absent or
+// blank alt adds nothing; width and height do not apply to the text.
+func (bd *builder) altText(f *flow, el *dom.Element, cs *style.Computed, href string) error {
+	alt, _ := el.Attr("alt")
+	// Attribute values are not sanitized by the parser, unlike text nodes: alt is
+	// hostile text (bidi overrides, controls) and must get the same treatment.
+	// Sanitizing first turns U+2028 into a space that the trim removes.
+	alt = strings.Trim(dom.SanitizeText(alt), htmlSpace)
+	if alt == "" {
+		return nil
+	}
+	sink := &textBoxes{bd: bd, f: f, style: cs, href: href, collapse: true}
+	if err := processText(alt, false, &f.ws, sink); err != nil {
+		return err
+	}
+	return sink.err
+}
+
+// htmlSpace is the ASCII white space of HTML.
+const htmlSpace = " \t\n\f\r"
+
+// dimensionAttr reads the width or height attribute of an img with the HTML
+// rules for parsing dimension values. An absent or invalid value is unset; a
+// value above css.MaxLengthPx is clamped to it and warned. The result is always
+// finite and non-negative: layout relies on it.
+func (bd *builder) dimensionAttr(el *dom.Element, name string) svg.Length {
+	v, ok := el.Attr(name)
+	if !ok {
+		return svg.Length{}
+	}
+	n, pct, ok := parseDimension(v)
+	if !ok {
+		return svg.Length{}
+	}
+	if n > css.MaxLengthPx {
+		n = css.MaxLengthPx
+		bd.b.Warn(budget.WarnClamped, "img "+name)
+	}
+	return svg.Length{Value: n, Percent: pct, Set: true}
+}
+
+// maxDimensionDigits is the number of significant integer digits beyond which
+// a dimension is above css.MaxLengthPx whatever its digits: such a number is
+// not converted, so a long run of digits costs one scan.
+const maxDimensionDigits = 9
+
+// parseDimension implements the HTML rules for parsing dimension values: ASCII
+// white space, at least one digit, an optional fraction, then % for a
+// percentage; anything after the number is ignored ("100px" is 100). A dot not
+// followed by a digit ends the number, which is then a length ("50.%" is 50).
+// A sign, NaN or Infinity is invalid. The value is finite and non-negative.
+func parseDimension(v string) (n float64, pct, ok bool) {
+	v = strings.TrimLeft(v, htmlSpace)
+	intEnd := digitsEnd(v, 0)
+	if intEnd == 0 {
+		return 0, false, false
+	}
+	end, bareDot := intEnd, false
+	if end < len(v) && v[end] == '.' {
+		if frac := digitsEnd(v, end+1); frac > end+1 {
+			end = frac
+		} else {
+			bareDot = true
+		}
+	}
+	pct = !bareDot && end < len(v) && v[end] == '%'
+	if len(strings.TrimLeft(v[:intEnd], "0")) > maxDimensionDigits {
+		return math.MaxFloat64, pct, true
+	}
+	n, err := strconv.ParseFloat(v[:end], 64)
+	if err != nil {
+		return 0, false, false
+	}
+	return n, pct, true
+}
+
+// digitsEnd returns the index of the first byte of v at or after i that is not
+// an ASCII digit.
+func digitsEnd(v string, i int) int {
+	for i < len(v) && v[i] >= '0' && v[i] <= '9' {
+		i++
+	}
+	return i
 }
 
 // inlineByDefault reports whether an element is display: inline in the user agent

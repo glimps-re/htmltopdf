@@ -22,9 +22,12 @@ func warningCount(t *testing.T, x *doc, code budget.Code, detail string) int {
 }
 
 func TestUnsupportedElementWarningCountsOccurrences(t *testing.T) {
-	x := resolve(t, `<img src=a><p>x</p><img src=b><div><img src=c></div><input>`, "", "")
-	if got := warningCount(t, x, budget.WarnUnsupportedElement, "img"); got != 3 {
-		t.Errorf("img count = %d, want 3", got)
+	x := resolve(t, `<iframe src=a></iframe><p>x</p><iframe src=b></iframe><div><iframe src=c></iframe><img src=d></div><input>`, "", "")
+	if got := warningCount(t, x, budget.WarnUnsupportedElement, "iframe"); got != 3 {
+		t.Errorf("iframe count = %d, want 3", got)
+	}
+	if got := warningCount(t, x, budget.WarnUnsupportedElement, "img"); got != 0 {
+		t.Errorf("img count = %d, want 0", got)
 	}
 	if got := warningCount(t, x, budget.WarnUnsupportedElement, "input"); got != 1 {
 		t.Errorf("input count = %d, want 1", got)

@@ -123,6 +123,8 @@ func SpikeHostile() []Case {
 			return []byte(`<html><body><table><tr><td colspan="999999999" rowspan="65534">x</td></tr>` +
 				`<tr><td colspan="2147483647">y</td></tr></table></body></html>`)
 		}),
+		// Nothing is fetched: each img warns image-rejected "scheme" and draws
+		// nothing (no alt).
 		mk("hostile_remote", "no-resource-access", Degraded, func() []byte {
 			return []byte(`<html><head><link rel="stylesheet" href="http://127.0.0.1:1/x.css"></head><body>` +
 				`<img src="http://169.254.169.254/latest/meta-data/"><img src="file:///etc/passwd"><p>ssrf</p></body></html>`)

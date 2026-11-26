@@ -244,12 +244,20 @@ const (
 	WarnInvalidValue        WarningCode = "invalid-value"        // declaration dropped: unparsable or unsupported value
 	WarnUnsupportedAtRule   WarningCode = "unsupported-at-rule"  // @import, @font-face, @supports, unknown at-rules, unsupported margin boxes
 	WarnUnsupportedSelector WarningCode = "unsupported-selector" // selector list dropped
-	WarnUnsupportedElement  WarningCode = "unsupported-element"  // img, link, iframe, object, video, canvas, form controls
+	WarnUnsupportedElement  WarningCode = "unsupported-element"  // link, iframe, object, video, canvas, form controls
 	WarnBlockedLink         WarningCode = "blocked-link"         // href with a scheme other than http, https, mailto
 	WarnMissingGlyph        WarningCode = "missing-glyph"        // no font draws the character; .notdef drawn
 	WarnClamped             WarningCode = "clamped"              // length, page size or margins, colspan, rowspan clamped
 	WarnVarBudget           WarningCode = "var-budget"           // MaxVarBytes reached: further var() are invalid at computed-value time
 	WarnShapingFallback     WarningCode = "shaping-fallback"     // the shaper failed on a run; drawn with nominal glyphs
+	// WarnImageRejected is an img that is not drawn; its alt text, if any, is
+	// drawn instead (a corrupt image keeps its box, blank). Detail is the reason
+	// only, never the src: scheme (not a data: URL; never fetched), type (not
+	// PNG or JPEG), encoding (not base64), format (bad or unsupported data),
+	// size, count or total (image caps), corrupt (decoding failed). Once 64
+	// distinct images are held, count takes precedence: a further http: src
+	// warns count, not scheme.
+	WarnImageRejected WarningCode = "image-rejected"
 )
 
 // Limit names the limit reported by a LimitError.

@@ -50,6 +50,34 @@ func ExampleConverter_RenderTemplate() {
 	// Output: 1 page
 }
 
+// logoPNG is a 2×2 gray PNG.
+const logoPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAAAAABX3VL4AAAAE0lEQVR4nAAGAPn/Av8AAAAAAwAFDQECdkt/VgAAAABJRU5ErkJggg=="
+
+func ExampleConverter_RenderTemplate_image() {
+	conv, err := htmltopdf.New(htmltopdf.Options{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	t := template.Must(template.New("report").Parse(`<img src="{{.Logo}}" alt="logo"><p>Report</p>`))
+	var trusted template.URL = logoPNG
+	for _, data := range []map[string]any{
+		// html/template rewrites a data: URL given as a string to #ZgotmplZ:
+		// the image is rejected and its alt text is drawn instead.
+		{"Logo": logoPNG},
+		// A trusted URL typed as template.URL is kept: the image is drawn.
+		{"Logo": trusted},
+	} {
+		res, err := conv.RenderTemplate(context.Background(), t, data, &bytes.Buffer{})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(len(res.Warnings), "warnings", res.Warnings)
+	}
+	// Output:
+	// 1 warnings [{image-rejected scheme 1}]
+	// 0 warnings []
+}
+
 func ExampleConverter_Render_warnings() {
 	conv, err := htmltopdf.New(htmltopdf.Options{})
 	if err != nil {
@@ -64,7 +92,7 @@ func ExampleConverter_Render_warnings() {
 		fmt.Println(w.Code, w.Detail, w.Count)
 	}
 	// Output:
-	// unsupported-element img 1
+	// image-rejected scheme 1
 	// unsupported-property float 1
 }
 

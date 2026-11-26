@@ -132,16 +132,14 @@ const (
 	WarnClamped             Code = "clamped"
 	WarnVarBudget           Code = "var-budget"
 	WarnShapingFallback     Code = "shaping-fallback"
-	// WarnImageRejected is an image not drawn; the detail is the reason keyword.
-	// It is not in WarningCodes: it has no public code yet.
-	WarnImageRejected Code = "image-rejected"
+	WarnImageRejected       Code = "image-rejected"
 )
 
 // WarningCodes returns every code, for the tests that compare it with the public list.
 func WarningCodes() []Code {
 	return []Code{
 		WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
-		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback,
+		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback, WarnImageRejected,
 	}
 }
 

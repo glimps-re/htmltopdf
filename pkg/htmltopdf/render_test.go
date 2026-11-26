@@ -111,7 +111,7 @@ func TestWarnings(t *testing.T) {
 		counts[string(w.Code)+": "+w.Detail] = w.Count
 	}
 	for _, want := range []string{
-		"unsupported-property: float", "unsupported-property: foo", "unsupported-element: img", "blocked-link: ",
+		"unsupported-property: float", "unsupported-property: foo", "image-rejected: scheme", "blocked-link: ",
 	} {
 		found := false
 		for k := range counts {
@@ -121,8 +121,8 @@ func TestWarnings(t *testing.T) {
 			t.Errorf("no warning %q in %v", want, counts)
 		}
 	}
-	if counts["unsupported-element: img"] != 2 {
-		t.Errorf("img count = %d, want 2", counts["unsupported-element: img"])
+	if counts["image-rejected: scheme"] != 2 {
+		t.Errorf("img count = %d, want 2", counts["image-rejected: scheme"])
 	}
 	if res.WarningsDropped != 0 {
 		t.Errorf("dropped %d", res.WarningsDropped)

@@ -25,7 +25,7 @@ var (
 	_ error                                                                    = (*LimitError)(nil)
 	_                                                                          = [...]error{ErrInvalidOptions, ErrLimit, ErrInternal}
 	_ [11]Limit                                                                = [...]Limit{LimitInputBytes, LimitNodes, LimitCSSBytes, LimitSelectors, LimitStyles, LimitBoxes, LimitGlyphs, LimitPages, LimitOutputBytes, LimitWork, LimitHTMLDepth}
-	_ [10]WarningCode                                                          = [...]WarningCode{WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement, WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback}
+	_ [11]WarningCode                                                          = [...]WarningCode{WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement, WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback, WarnImageRejected}
 )
 
 func TestClassify(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCorpusReportsRenderAndValidate(t *testing.T) {
 func TestWarningCodesMatchTheBudgetCodes(t *testing.T) {
 	public := []WarningCode{
 		WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
-		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback,
+		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback, WarnImageRejected,
 	}
 	internal := map[string]bool{}
 	for _, c := range budget.WarningCodes() {

@@ -45,13 +45,30 @@
 // lists every one with its difference. Output is deterministic: the same input
 // and options give the same bytes.
 //
+// # Images
+//
+// An <img> is drawn when its src is a data: URL holding a base64 PNG or JPEG;
+// nothing else is ever fetched or read. Each image has at most 16384 pixels per
+// side and 4194304 pixels in all; a render holds at most 64 distinct images
+// (identical src values are one image) and 16777216 pixels in all. Their
+// encoded bytes count against MaxInputBytes and their decoding against MaxWork.
+// Every image is decoded and re-encoded (PNG losslessly, JPEG at quality 90): no
+// byte of the input image reaches the PDF. A rejected image warns
+// WarnImageRejected and its alt text is drawn instead; one whose data fails to
+// decode (corrupt) keeps its box, blank.
+//
+// With RenderTemplate, html/template replaces a data: URL in src with
+// "#ZgotmplZ" unless the value has type template.URL: convert only image URLs
+// that the caller built or checked.
+//
 // # Non-goals
 //
-// JavaScript, forms, raster images (<img>, url()), @font-face and any other
-// resource loading (external stylesheets, @import), floats, bidirectional
-// reordering, PDF/A and encryption are not supported. The PDF is not tagged:
-// it has no structure tree and is not PDF/UA; text stays extractable. Fonts
-// are given as bytes in Options.Fonts and are trusted operator configuration.
+// JavaScript, forms, images other than PNG and JPEG `data:` URLs in <img>,
+// url() in CSS, @font-face and any other resource loading (external
+// stylesheets, @import), floats, bidirectional reordering, PDF/A and
+// encryption are not supported. The PDF is not tagged: it has no structure
+// tree and is not PDF/UA; text stays extractable. Fonts are given as bytes in
+// Options.Fonts and are trusted operator configuration.
 //
 // Only 64-bit platforms are supported: the PDF writer and the resource limits use
 // int values beyond 2^31.
