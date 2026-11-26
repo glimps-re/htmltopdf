@@ -76,6 +76,8 @@ type Doc struct {
 	Objects int
 	// Dests are the named destinations of the catalog /Dests, by name.
 	Dests map[string]Dest
+	// Images are the image XObjects, by resource name (Im0, Im1...).
+	Images map[string]*Image
 }
 
 type parser struct {
@@ -290,6 +292,7 @@ func Parse(data []byte) (*Doc, error) {
 		}
 	}
 	doc.Fonts = r.allFonts
+	doc.Images = r.allImages
 	doc.Objects = len(r.offsets) - 1
 	return doc, nil
 }
@@ -303,6 +306,7 @@ type reader struct {
 
 	fontCache map[string]*Font
 	allFonts  map[string]*Font
+	allImages map[string]*Image
 }
 
 func (r *reader) readXref() error {
@@ -380,7 +384,10 @@ func (r *reader) object(n int) (any, error) {
 	}
 	if d, ok := v.(Dict); ok && bytes.HasPrefix(r.data[p.pos:], []byte("\nstream\n")) {
 		p.pos += len("\nstream\n")
-		length, _ := d["Length"].(float64)
+		length, err := r.length(d["Length"])
+		if err != nil {
+			return nil, fmt.Errorf("object %d: %w", n, err)
+		}
 		if !(length >= 0 && length <= float64(len(r.data)-p.pos)) || length != math.Trunc(length) {
 			return nil, fmt.Errorf("object %d: bad /Length", n)
 		}
@@ -682,6 +689,10 @@ func checkContent(content []byte, res Dict, r *reader) error {
 			}
 		}
 	}
+	xobjs, err := r.images(res)
+	if err != nil {
+		return err
+	}
 	depth := 0
 	toks := bytes.Fields(content)
 	for i, t := range toks {
@@ -696,6 +707,10 @@ func checkContent(content []byte, res Dict, r *reader) error {
 			if err := nameBefore(toks, i, "sh", "shading", shs); err != nil {
 				return err
 			}
+		case "Do":
+			if err := nameBefore(toks, i, "Do", "XObject", xobjs); err != nil {
+				return err
+			}
 		case "gs":
 			if err := nameBefore(toks, i, "gs", "ExtGState", gs); err != nil {
 				return err
@@ -706,6 +721,23 @@ func checkContent(content []byte, res Dict, r *reader) error {
 		return errors.New("content: unbalanced q/Q")
 	}
 	return nil
+}
+
+// length resolves a stream /Length, direct or indirect.
+func (r *reader) length(v any) (float64, error) {
+	if ref, ok := v.(Ref); ok {
+		r.seen[int(ref)] = true
+		o, err := r.object(int(ref))
+		if err != nil {
+			return 0, err
+		}
+		v = o
+	}
+	n, ok := v.(float64)
+	if !ok {
+		return 0, errors.New("/Length is not a number")
+	}
+	return n, nil
 }
 
 func decodeText(s string) (string, error) {

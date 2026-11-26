@@ -53,6 +53,7 @@ type Content struct {
 	opacities    opacitySet
 	fonts        []fontUse
 	shadings     []*shadingEntry
+	images       []*imageEntry
 	tmp          []byte
 }
 
@@ -266,3 +267,31 @@ func (c *Content) Clip() { c.op("W n") }
 
 // Stroke strokes the current path (S).
 func (c *Content) Stroke() { c.op("S") }
+
+// DrawImage paints the image in the rectangle with lower-left corner x, y and
+// size wPt x hPt, in points. A zero id, or a non-finite or non-positive size,
+// records ErrImage.
+func (c *Content) DrawImage(id ImageID, x, y, wPt, hPt float64) {
+	if c.err != nil {
+		return
+	}
+	if id.e == nil || !(wPt > 0 && hPt > 0) || !validNum(wPt) || !validNum(hPt) || !validNum(x) || !validNum(y) {
+		c.fail(ErrImage)
+		return
+	}
+	if id.e.seen != c {
+		id.e.seen = c
+		c.images = append(c.images, id.e)
+	}
+	c.Save()
+	c.Concat(wPt, 0, 0, hPt, x, y)
+	if c.err != nil {
+		return
+	}
+	prev := len(c.buf)
+	c.buf = append(c.buf, '/')
+	c.buf = append(c.buf, id.e.name()...)
+	c.buf = append(c.buf, " Do\n"...)
+	c.commit(prev)
+	c.Restore()
+}

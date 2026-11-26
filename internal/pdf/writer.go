@@ -7,6 +7,7 @@
 package pdf
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"crypto/sha256"
@@ -109,6 +110,8 @@ type Writer struct {
 	fonts    []*fontEntry
 	fontRefs []nameRef
 	shadings shadingSet
+	images   []*imageEntry
+	imgBuf   *bufio.Writer
 	started  bool
 	closed   bool
 	// dests are the named destinations; firstHeight is the height of the first
@@ -518,6 +521,7 @@ func (w *Writer) closeResources() error {
 	}
 	w.obj = appendNameDict(w.obj, "Shading", w.shadings.refs)
 	w.obj = appendNameDict(w.obj, "Font", w.fontRefs)
+	w.obj = appendNameDict(w.obj, "XObject", w.imageRefs())
 	w.obj = append(w.obj, " >>"...)
 	return w.emit(resourcesRef, w.obj)
 }

@@ -254,6 +254,9 @@ func (w *Writer) mergeFonts(c *Content) error {
 	if err := w.checkShadings(c); err != nil {
 		return err
 	}
+	if err := w.checkImages(c); err != nil {
+		return err
+	}
 	for _, u := range c.fonts {
 		if u.e.owner != w {
 			return ErrFontID
