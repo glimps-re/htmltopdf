@@ -49,8 +49,12 @@ func TestTemplate03ReleaseGate(t *testing.T) {
 					t.Errorf("page %d: no N/M footer counter at the end of the page text", i+1)
 					continue
 				}
-				n, _ := strconv.Atoi(m[1])
-				total, _ := strconv.Atoi(m[2])
+				n, errN := strconv.Atoi(m[1])
+				total, errTotal := strconv.Atoi(m[2])
+				if errN != nil || errTotal != nil {
+					t.Errorf("page %d: footer counter %q is not numeric: %v %v", i+1, m[0], errN, errTotal)
+					continue
+				}
 				if n != i+1 || total != res.Pages {
 					t.Errorf("page %d: footer reads %s/%s, want %d/%d", i+1, m[1], m[2], i+1, res.Pages)
 				}
@@ -66,6 +70,9 @@ func TestTemplate03ReleaseGate(t *testing.T) {
 				}
 			}
 			want.strings = folded
+			if len(want.strings) == 0 {
+				t.Fatal("no template strings collected: the order check would pass vacuously")
+			}
 			for i := range pages {
 				pages[i] = strings.ToUpper(pages[i])
 			}

@@ -54,6 +54,10 @@ is the reference for what is supported, approximated or ignored.
   and inline-blocks laid out apart are never cut by the size of the page they are
   measured on, and a multi-column box there runs its last column downwards. Lines
   and boxes at the length clamp pile up inside their box.
+- Overflow of fixed-height boxes never loses text: content that overflows a fixed
+  `height` in a flex or grid item, a table cell or an inline-block counts for the
+  page fit and is drawn on a page, as in block flow (it is clipped only by
+  `overflow: hidden`).
 - `position: fixed` (drawn on every page), dashed and dotted borders,
   `text-decoration-thickness`.
 - `Converter.RenderTemplate`: renders an html/template with data under the same
@@ -75,6 +79,13 @@ is the reference for what is supported, approximated or ignored.
   earlier page or not at all. Text that author lengths (line-height,
   vertical-align, text-indent, negative margin-left) place outside the page is
   clipped, as in Chrome.
+- Overflow of a fixed-height box is placed on pages as one block and does not push
+  the following siblings: a margin inside an overflowing item is not cut at page
+  breaks (a huge margin there adds pages, and past `MaxPages` the render fails with
+  a `LimitError`), and on a continuation page the rest of the overflow can overlap
+  the next content; the text stays drawn.
+- Inside a multi-column container, content overflowing a fixed-height box counts
+  towards the column height, so the container can be taller than in Chrome.
 - The PDF is not tagged (no structure tree, not PDF/UA).
 - Non-goals: JavaScript, forms, raster images, `@font-face`, external resources,
   floats, bidirectional reordering, PDF/A, encryption.
@@ -92,3 +103,12 @@ is the reference for what is supported, approximated or ignored.
   shift a line by a fraction of a pixel.
 - The outer border geometry of collapsed-border tables differs from Chrome's.
 - Percentage widths of table columns are distributed approximately.
+- Multi-column layout time grows quadratically with the number of lines in the
+  container: about 7000 hostile lines reach the default `MaxWork` and the render
+  fails with a `LimitError`.
+- With a line-height smaller than the font size, a baseline can sit a few pixels
+  below the content area (inside the page margin); the kept-text check does not
+  flag it.
+- Relative offsets (`position: relative` with `top`) are ignored when deciding
+  where a page ends, so a line near a page bottom can be drawn below the page area
+  without being flagged.
