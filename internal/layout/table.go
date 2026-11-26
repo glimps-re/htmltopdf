@@ -1015,6 +1015,9 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if err := l.chargeCut(work); err != nil {
 					return complete, nil, err
 				}
+				if at, err = l.cutEnd([]*frag{wrf}, work.from, at); err != nil {
+					return complete, nil, err
+				}
 				piece, err := l.chargedCut(wrf, work.from, at)
 				if err != nil {
 					return complete, nil, err

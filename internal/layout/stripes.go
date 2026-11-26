@@ -101,6 +101,33 @@ func (l *layouter) chargedCut(f *frag, from, to float64) (*frag, error) {
 	return piece, l.b.Charge(budget.Work, visits)
 }
 
+// cutEnd is textCutEnd for the fragments frags cut together in the window
+// [from, to): their common end, which leaves no text of any of them astride it
+// above the middle of the window.
+//
+// What it looks at is charged to Work.
+func (l *layouter) cutEnd(frags []*frag, from, to float64) (float64, error) {
+	page := l.pageH
+	if page <= 0 {
+		page = to - from
+	}
+	// The floor comes from the whole window: it must not halve with every pass.
+	floor := from + math.Max((to-from)/2, cutEps)
+	for changed := true; changed; {
+		changed = false
+		for _, f := range frags {
+			end, visits := textCutEnd(f, from, to, floor, page)
+			if err := l.b.Charge(budget.Work, visits); err != nil {
+				return to, err
+			}
+			if end < to {
+				to, changed = end, true
+			}
+		}
+	}
+	return to, nil
+}
+
 // stripeExtent is the extent of band s for the fit and slice tests: its height,
 // or the bottom of the content of its items that overflows it. A scratch
 // layout runs no fit test.
@@ -151,9 +178,13 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 			}
 			// A band taller than an empty page: the part that fits goes here.
 			l.b.Warn(budget.WarnClamped, "flex or grid line sliced")
-			room := l.bottom - y
+			end, err := l.cutEnd(s.frags, off, off+l.bottom-y)
+			if err != nil {
+				return complete, nil, err
+			}
+			room := end - off
 			for _, fr := range s.frags {
-				piece, err := l.chargedCut(fr, off, off+room)
+				piece, err := l.chargedCut(fr, off, end)
 				if err != nil {
 					return complete, nil, err
 				}

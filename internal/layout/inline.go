@@ -222,8 +222,12 @@ func decorThickness(st *style.Computed) float64 {
 }
 
 // lineHeightParts returns the contribution above and below the baseline of a
-// font box of content area asc+desc under the computed line-height.
-func lineHeightParts(st *style.Computed, asc, desc, gap float64) (top, bottom float64) {
+// font box of content area asc+desc under the computed line-height. With a
+// page area height page > 0, a positive leading is capped so that the box is
+// at most one page area tall: the half-leading of a hostile line-height would
+// otherwise put the glyphs pages below the top of their line, out of sight on
+// a page that clips the line box.
+func lineHeightParts(st *style.Computed, asc, desc, gap, page float64) (top, bottom float64) {
 	var lh float64
 	switch st.LineHeight.Kind {
 	case style.LineHeightNumber:
@@ -234,6 +238,9 @@ func lineHeightParts(st *style.Computed, asc, desc, gap float64) (top, bottom fl
 		lh = asc + desc + gap
 	}
 	leading := lh - (asc + desc)
+	if page > 0 && leading > 0 {
+		leading = math.Min(leading, math.Max(page-(asc+desc), 0))
+	}
 	return asc + leading/2, desc + leading/2
 }
 
@@ -293,6 +300,22 @@ func (l *layouter) primaryFace(st *style.Computed) (*text.Face, float32) {
 	return p.face, p.size
 }
 
+// maxRiseFraction bounds the vertical-align: <length> offset of an inline box,
+// nested offsets added up, to this part of the page area height, up or down: a
+// raised and a lowered span with the text around them then stay within one
+// page area, where a hostile offset would put the text of the line pages away
+// from its top, out of sight.
+const maxRiseFraction = 0.25
+
+// clampRise returns the offset r clamped to ±maxRiseFraction of the page area
+// height, or to the length clamp without a page.
+func (l *layouter) clampRise(r float64) float64 {
+	if l.pageH <= 0 {
+		return clampCoord(r)
+	}
+	return clampAbs(r, maxRiseFraction*l.pageH)
+}
+
 func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecoration, cbw, rise float64) error {
 	for _, c := range boxes {
 		switch c.Kind {
@@ -314,7 +337,7 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			openW, closeW := inlineEdges(cst, cbw, !c.Continuation)
 			inRise := rise
 			if cst.VerticalAlign == style.VAlignLength {
-				inRise = clampCoord(rise + cst.VAlignOffset.Value)
+				inRise = l.clampRise(rise + cst.VAlignOffset.Value)
 			}
 			in := &info{box: c, href: c.Href, decor: d, color: cst.Color, rise: inRise}
 			if !c.Continuation {
@@ -351,7 +374,7 @@ func (l *layouter) boxMetrics(st *style.Computed) (e extVal, top, bottom float64
 		return extVal{}, 0, 0
 	}
 	e = l.extents(face, size)
-	top, bottom = lineHeightParts(st, e.asc, e.desc, e.gap)
+	top, bottom = lineHeightParts(st, e.asc, e.desc, e.gap, l.pageH)
 	return e, top, bottom
 }
 
@@ -412,7 +435,7 @@ func (l *layouter) shapeBox(c *box.Box, decor style.TextDecoration) (*shapedText
 			sh.clusters[i] = sh.clusters[i-1]
 		}
 	}
-	top, bottom := lineHeightParts(st, asc, desc, gap)
+	top, bottom := lineHeightParts(st, asc, desc, gap, l.pageH)
 	sh.info = &info{box: c, href: c.Href, decor: decor, color: st.Color, asc: asc, desc: desc, top: top, bottom: bottom}
 
 	wrap := !sh.nowrap
@@ -701,6 +724,31 @@ func (l *layouter) finishLine(p *paragraph, ln *lineOut, segs []seg, strip bool)
 		ln.top += tallBottom - h
 	}
 	ln.w = x
+	l.trimLeading(ln)
+}
+
+// trimLeading lowers the empty leading of a line without atom so that its box
+// is at most one page area tall, above the baseline first, never below the
+// extent of its items (rises included): leadings capped one by one, and the
+// rises of its spans, still add up to more than a page, which would put the
+// text out of sight on a page that clips the line. A line with atoms is
+// sliced instead.
+func (l *layouter) trimLeading(ln *lineOut) {
+	ex := ln.height() - l.pageH
+	if l.pageH <= 0 || ex <= 0 || ln.hasAtom() {
+		return
+	}
+	above, below := math.Inf(-1), math.Inf(-1)
+	for i := range ln.items {
+		above, below = math.Max(above, ln.items[i].ascent), math.Max(below, ln.items[i].descent)
+	}
+	if d := math.Min(ex, ln.top-above); d > 0 {
+		ln.top -= d
+		ex -= d
+	}
+	if d := math.Min(ex, ln.bottom-below); d > 0 {
+		ln.bottom -= d
+	}
 }
 
 // edgeItem builds the line item of an inline box edge.

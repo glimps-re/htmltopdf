@@ -61,6 +61,10 @@ type layouter struct {
 	// for each layout of the content of a segment in columns.
 	cols      int
 	onColumns func()
+	// colTop is the top of the columns being filled: a line that a margin
+	// pushes past the bottom of its column moves to the next one only if it
+	// fits there.
+	colTop float64
 	// sliced is set when a box with break-inside: avoid is split because it does
 	// not fit a page (or a column): a column height that does that is too short.
 	sliced bool

@@ -46,7 +46,7 @@ const (
 	// Calibrated so that one unit stays below 20 ns on every variant.
 	WorkPerPixel = 5
 	// JPEGQuality is the quality of the re-encoded JPEG images.
-	JPEGQuality = 90
+	JPEGQuality = 95
 )
 
 // headerWork is the Work charged by Add for reading a header, on top of the

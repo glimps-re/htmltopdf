@@ -219,6 +219,9 @@ func (l *layouter) fillColumns(b *box.Box, in []level, lv level, resuming bool, 
 		l.onColumns()
 	}
 	l.cols++
+	colTop := l.colTop
+	l.colTop = y0
+	defer func() { l.colTop = colTop }()
 	// Columns are fragmentainers with a height, also inside a cell or an item laid
 	// out apart: what does not fit goes on to the next one. There the last column
 	// has no next one, so it is unbounded and the content that is left runs down

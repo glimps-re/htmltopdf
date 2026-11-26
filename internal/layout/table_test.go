@@ -341,8 +341,10 @@ func TestTableRowSplitsBetweenLines(t *testing.T) {
 	}
 }
 
+// A line taller than the page from its glyphs alone (line-height cannot make
+// it so: its leading is capped to the page) makes a row that is sliced.
 func TestTableTallSingleLineRowIsSliced(t *testing.T) {
-	r := newRun(t, `<table style="width:400px"><tr><td style="line-height:2000px">x</table><p>after</p>`, opts{css: tableDoc})
+	r := newRun(t, `<table style="width:400px"><tr><td style="font-size:2000px;line-height:1">x</table><p>after</p>`, opts{css: tableDoc})
 	pages := r.all(t)
 	if len(pages) < 4 {
 		t.Fatalf("%d pages for a 2000 px row on 600 px pages", len(pages))

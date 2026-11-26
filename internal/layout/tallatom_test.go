@@ -228,7 +228,8 @@ func TestCapAtom(t *testing.T) {
 		{name: "huge line-height", h: 1e8, lines: []*lineFrag{{rect: display.Rect{H: 1e8}, baseline: 5e7, items: []lineItem{{text: &display.Text{Baseline: 5e7, Size: 16}}}}}, capped: true, wantH: page},
 		{name: "replaced child", h: 1e8, children: []*frag{{box: &box.Box{Kind: box.KindSVG}, rect: display.Rect{Y: 500, H: 1e8 - 500}}}, capped: true, wantH: 500},
 		{name: "fixed-height child", h: 1e8, children: []*frag{{box: &box.Box{Kind: box.KindBlock, Style: fixed}, rect: display.Rect{H: 1e8}}}, wantH: 1e8},
-		{name: "huge margins and rise", h: 1e8, mt: 1e8, mb: -1e8, rise: -1e8, capped: true, wantH: 0},
+		// The rise comes in clamped by clampRise: ±¼ of the page.
+		{name: "huge margins and rise", h: 1e8, mt: 1e8, mb: -1e8, rise: -page / 4, capped: true, wantH: 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -241,9 +242,9 @@ func TestCapAtom(t *testing.T) {
 			if a.base > a.h+a.mb+1e-6 {
 				t.Errorf("baseline %v below the capped box %v + %v", a.base, a.h, a.mb)
 			}
-			for _, v := range []float64{a.mt, a.mb, a.rise} {
+			for _, v := range []float64{a.mt, a.mb} {
 				if math.Abs(v) > page {
-					t.Errorf("margin or rise %v not clamped to ±%v", v, page)
+					t.Errorf("margin %v not clamped to ±%v", v, page)
 				}
 			}
 		})

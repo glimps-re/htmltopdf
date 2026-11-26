@@ -52,7 +52,7 @@
 // side and 4194304 pixels in all; a render holds at most 64 distinct images
 // (identical src values are one image) and 16777216 pixels in all. Their
 // encoded bytes count against MaxInputBytes and their decoding against MaxWork.
-// Every image is decoded and re-encoded (PNG losslessly, JPEG at quality 90): no
+// Every image is decoded and re-encoded (PNG losslessly, JPEG at quality 95): no
 // byte of the input image reaches the PDF. A rejected image warns
 // WarnImageRejected and its alt text is drawn instead; one whose data fails to
 // decode (corrupt) keeps its box, blank.

@@ -23,6 +23,11 @@ uses [Semantic Versioning](https://semver.org/).
 ### Fixed
 - An inline box (inline-block, svg, image) taller than a page moves to the next
   page once and is clipped there, instead of adding pages until `MaxPages`.
+- The text of a line is no longer pushed off the page by the margins or the
+  `vertical-align` of an inline box, by `line-height`, or by `vertical-align` on
+  text; a page break inside a flex or grid line, a table row or columns ends above
+  the text it would cut through (except a glyph taller than half the page, or
+  overlapping lines from a `line-height` below the font size).
 
 ### Documented deviations from Chrome
 - A percent-encoded `data:` payload, or a C0 control, tab or newline inside
@@ -35,11 +40,13 @@ uses [Semantic Versioning](https://semver.org/).
 - A progressive 4:2:0 JPEG above about 3.7 Mpx is rejected as `size` (conservative
   memory estimate).
 - `url()` in CSS stays unsupported.
+- The leading of `line-height` is capped so that a line box is at most one page
+  area tall, and `vertical-align: <length>` is clamped to ±¼ of the page area
+  height (nested offsets summed), so that the text of a line stays on a page.
 
 ### Known issues
 - A huge empty `height`, padding, border or table height still adds pages until
   `MaxPages` fails the render.
-- A huge `line-height` can push glyphs outside the page area.
 
 ## [0.1.0]
 

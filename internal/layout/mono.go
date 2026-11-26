@@ -1,7 +1,9 @@
 package layout
 
 import (
+	"cmp"
 	"math"
+	"slices"
 
 	"github.com/glimps-re/htmltopdf/internal/box"
 	"github.com/glimps-re/htmltopdf/internal/display"
@@ -158,9 +160,24 @@ func lineBottom(ln *lineFrag) float64 {
 	for i := range ln.items {
 		if a := ln.items[i].atom; a != nil {
 			bottom = math.Max(bottom, a.bottom(reachBottom))
+		} else if t := ln.items[i].text; t != nil {
+			bottom = math.Max(bottom, t.Baseline)
 		}
 	}
 	return bottom
+}
+
+// lineTop returns the highest edge of the line ln a cut must look at: its box,
+// its baseline and the tops of its glyphs, which a line-height smaller than
+// the font puts above the box.
+func lineTop(ln *lineFrag) float64 {
+	top := math.Min(ln.rect.Y, ln.baseline)
+	for i := range ln.items {
+		if ln.items[i].text != nil {
+			top = math.Min(top, ln.baseline-ln.items[i].ascent)
+		}
+	}
+	return top
 }
 
 // lineFitBottom is the bottom of the line ln as the fit tests count it: its box
@@ -186,7 +203,9 @@ func (a *atomBox) bottom(of func(*frag) float64) float64 {
 
 // capAtom sets a.h and a.base, the height the atom takes in its line and its
 // baseline (base when hasBase, else the bottom margin edge), after clamping its
-// vertical margins and vertical-align offset to ±page. It runs once a.f is
+// vertical margins to ±page (its vertical-align offset is already within
+// ±maxRiseFraction of a page, see clampRise), which lowerLift then lowers so
+// that the text of the line stays on a page. It runs once a.f is
 // laid out; page <= 0 caps nothing.
 //
 // An atom taller than the page takes at most the room a page leaves its line,
@@ -197,13 +216,14 @@ func (a *atomBox) bottom(of func(*frag) float64) float64 {
 // page per page height, and the page budget fails the render.
 func (a *atomBox) capAtom(page, strut, base float64, hasBase bool) {
 	if page > 0 {
-		a.mt, a.mb, a.rise = clampAbs(a.mt, page), clampAbs(a.mb, page), clampAbs(a.rise, page)
+		a.mt, a.mb = clampAbs(a.mt, page), clampAbs(a.mb, page)
 	}
 	h := a.f.rect.H
 	a.h, a.base = h, h+a.mb
 	if hasBase {
 		a.base = base
 	}
+	defer a.lowerLift(page, strut)
 	if page <= 0 || h <= page {
 		return
 	}
@@ -216,6 +236,53 @@ func (a *atomBox) capAtom(page, strut, base float64, hasBase bool) {
 		a.capped = true
 		a.setCap(c)
 	}
+}
+
+// lowerLift lowers the positive vertical-align offset, then the positive
+// margins, that put the baseline of the line more than a page area below the
+// top of a's margin box (page - strut for a baseline or middle atom, whose
+// line keeps strut below its baseline; page for a bottom atom, which ends at
+// the bottom of its line). Each is clamped to ±page already, but together
+// they can still push the text of the line past the bottom of the page the
+// line starts on, where it would be clipped out of sight. The height of a
+// itself is not lowered: a capped atom is already shorter than the page.
+func (a *atomBox) lowerLift(page, strut float64) {
+	if page <= 0 {
+		return
+	}
+	var ex float64
+	switch a.valign {
+	case style.VAlignTop:
+		return
+	case style.VAlignBottom:
+		ex = a.mt + a.h + a.mb - page
+	case style.VAlignMiddle:
+		// Both margins lift the baseline by half their value.
+		above, _ := a.extents()
+		ex = 2 * (above - (page - strut))
+	default:
+		above, _ := a.extents()
+		ex = above - (page - strut)
+		a.rise -= takePositive(&ex, a.rise)
+	}
+	a.mt -= takePositive(&ex, a.mt)
+	if (a.valign != style.VAlignBaseline && a.valign != style.VAlignLength) || a.base >= a.h+a.mb {
+		// The bottom margin lifts a baseline atom only when the atom has no
+		// baseline of its own: its baseline is then the bottom margin edge.
+		a.mb -= takePositive(&ex, a.mb)
+		a.base = math.Min(a.base, a.h+a.mb)
+	}
+}
+
+// takePositive returns the part of the excess *ex that v, when positive, can
+// absorb, and deducts it from *ex.
+func takePositive(ex *float64, v float64) float64 {
+	if *ex <= 0 || v <= 0 {
+		return 0
+	}
+	d := math.Min(*ex, v)
+	*ex -= d
+	return d
 }
 
 // setCap sets the capped height c of the atom and moves what depends on it.
@@ -321,28 +388,31 @@ func liftLayers(f *frag, limit float64) {
 }
 
 // line returns the part of the line ln in the window [from, to), or nil.
-// A line without atom belongs to the window of its baseline. A line with
-// atoms can be taller than a page and is cut through: it is in every window it
-// overlaps, its text in the one of its baseline, its atoms clipped to each.
+// Each text item belongs to the window of its own baseline (a vertical-align
+// offset moves it away from that of the line); the other items of a line
+// without atom go with the window of the line's baseline. A line with atoms
+// can be taller than a page and is cut through: it is in every window it
+// overlaps, its atoms clipped to each.
 func (c *cutter) line(ln *lineFrag) *lineFrag {
 	from, to := c.from, c.to
-	atoms := false
+	in := func(y float64) bool { return y >= from && y < to }
+	atoms, own, text := false, in(ln.baseline), false
 	for i := range ln.items {
 		if ln.items[i].atom != nil {
 			atoms = true
-			break
+		} else if t := ln.items[i].text; t != nil && in(t.Baseline) {
+			text = true
 		}
 	}
-	if !atoms && (ln.baseline < from || ln.baseline >= to) || atoms && (lineBottom(ln) <= from || ln.rect.Y >= to) {
+	if !atoms && !own && !text || atoms && (lineBottom(ln) <= from || ln.rect.Y >= to) {
 		return nil
 	}
 	nl := *ln
 	nl.items = make([]lineItem, 0, len(ln.items))
-	own := ln.baseline >= from && ln.baseline < to
 	for _, it := range ln.items {
 		switch {
 		case it.text != nil:
-			if !atoms || own {
+			if in(it.text.Baseline) {
 				c := *it.text
 				it.text = &c
 				nl.items = append(nl.items, it)
@@ -350,11 +420,96 @@ func (c *cutter) line(ln *lineFrag) *lineFrag {
 		case it.atom != nil:
 			it.atom = it.atom.clip(c)
 			nl.items = append(nl.items, it)
-		default:
+		case atoms || own:
 			nl.items = append(nl.items, it)
 		}
 	}
 	return &nl
+}
+
+// textCutEnd returns where a cut of f in the window [from, to) ends: to, or
+// higher, at the top of the glyphs of a text that the end would cut through
+// (its line box crosses the end, its baseline is at or past it, its glyphs
+// start above it), which would go to the next window with its top clipped.
+// The end is never above floor, and a glyph taller than the window keeps the
+// window of its baseline. page bounds how far below the window a glyph is
+// looked for. The count returned, for Work, is the items looked at below the
+// window: as for a cut, those in it are its output, paid once per page.
+func textCutEnd(f *frag, from, to, floor, page float64) (float64, int64) {
+	// Moving the end up can put it astride another text, so the end moves on,
+	// in one sweep over the candidates, baselines down: a text whose baseline
+	// is above the current end cannot straddle it, nor any end above it, nor can
+	// the texts after it. The floor (callers pass the middle of the window)
+	// keeps a pile of overlapping glyphs from shrinking the windows and
+	// multiplying the pages.
+	var cands []straddle
+	visits := collectStraddles(f, from, to, page, &cands)
+	slices.SortFunc(cands, func(a, b straddle) int { return cmp.Compare(b.baseline, a.baseline) })
+	end := to
+	for _, c := range cands {
+		if c.baseline < end {
+			break
+		}
+		if c.lo < end-cutEps && c.top >= floor && c.baseline-c.top <= end-from {
+			end = c.top
+		}
+	}
+	return end, visits
+}
+
+// straddle is a text that a window end can go through: the top of its glyphs,
+// lo the lowest end above which it does not straddle (its glyph top or its line
+// box top, the lower), and its baseline.
+type straddle struct{ top, lo, baseline float64 }
+
+// collectStraddles appends to out the texts under f with a baseline in the
+// window or below it and glyphs starting above to, and returns the items looked
+// at below the window.
+func collectStraddles(f *frag, from, to, page float64, out *[]straddle) int64 {
+	var visits int64
+	ci, cj, li, lj := 0, len(f.children), 0, len(f.lines)
+	if ix := f.index(); ix != nil {
+		ci, cj = window(ix.children, len(f.children), f.rect.Y, from, to+page)
+		li, lj = window(ix.lines, len(f.lines), f.rect.Y, from, to+page)
+	}
+	for _, ln := range f.lines[li:lj] {
+		if lineTop(ln) >= to {
+			visits += int64(len(ln.items))
+		}
+		for i := range ln.items {
+			it := &ln.items[i]
+			if it.atom != nil {
+				if mayStraddle(it.atom.f, from, to, page) {
+					visits += collectStraddles(it.atom.f, from, to, page, out)
+				}
+				continue
+			}
+			if it.text == nil {
+				continue
+			}
+			top := ln.baseline - it.ascent
+			if it.text.Baseline >= from && top < to-cutEps && ln.rect.Y < to-cutEps {
+				*out = append(*out, straddle{top: top, lo: math.Max(top, ln.rect.Y), baseline: it.text.Baseline})
+			}
+		}
+	}
+	for _, c := range f.children[ci:cj] {
+		if c.rect.Y >= to {
+			visits++
+		}
+		if mayStraddle(c, from, to, page) {
+			visits += collectStraddles(c, from, to, page, out)
+		}
+	}
+	return visits
+}
+
+// mayStraddle reports whether f can hold a text straddling an end of the
+// window [from, to): its content reaches the window, and starts less than a
+// page below its end (a glyph straddling it that starts more than a page above
+// its box is taller than the window).
+func mayStraddle(f *frag, from, to, page float64) bool {
+	return reachBottom(f) >= from && f.rect.Y < to+page
 }
 
 func (a *atomBox) shift(dx, dy float64) {
@@ -372,7 +527,7 @@ func (l *layouter) atomUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 		valign: st.VerticalAlign, mid: p.mid, rise: rise,
 	}
 	if st.VerticalAlign == style.VAlignLength {
-		a.rise = clampCoord(a.rise + st.VAlignOffset.Value)
+		a.rise = l.clampRise(a.rise + st.VAlignOffset.Value)
 	}
 	bw, err := l.atomWidth(c, cbw)
 	if err != nil {

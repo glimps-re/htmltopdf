@@ -64,7 +64,7 @@ func (f *frag) index() *cutIndex {
 		}
 		if len(f.lines) >= minIndexed {
 			ix.lines = buildSpans(len(f.lines), f.rect.Y,
-				func(i int) float64 { return math.Min(f.lines[i].rect.Y, f.lines[i].baseline) },
+				func(i int) float64 { return lineTop(f.lines[i]) },
 				func(i int) float64 { return lineBottom(f.lines[i]) })
 		}
 		f.cut = ix

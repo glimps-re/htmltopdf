@@ -114,23 +114,25 @@ type pageText struct {
 // baseline, for the test of a run above the page.
 const descentFraction = 0.3
 
+// xMidFraction is the height of the middle of the lowercase letters above the
+// baseline, in font sizes, for the test of a run cut by the page edge.
+const xMidFraction = 0.25
+
 // maxReported bounds the losses a TextLost report lists.
 const maxReported = 10
 
-// tallLine reports a line box taller than the page that starts on it: the
-// author put the text in it with line-height, and the text is clipped by the
-// page as in Chrome (design ruling: author lengths that place text outside
-// the page are documented, not fixed).
-func tallLine(ln *lineFrag, height float64) bool {
-	return ln.rect.H > height && ln.rect.Y >= 0 && ln.rect.Y <= height
-}
-
-// visible reports whether the glyphs of t reach the page area: its baseline is
-// below the top and its top above the bottom (a font as tall as the page covers
-// it). A line box taller than the page counts too: the author put the text in it
-// with line-height.
+// visible reports whether the glyphs of t are seen on the page area: the
+// middle of their x-height (xMidFraction of the size above the baseline) is
+// inside it, or, for a font taller than the page, they cover it. No line
+// counts otherwise, however tall: text laid outside the page area, or cut by
+// its edge down to its descenders or the tops of its capitals, is lost
+// whatever put it there.
 func visible(t *display.Text, height float64) bool {
-	return t.Baseline+descentFraction*t.Size >= 0 && t.Baseline-t.Size <= height
+	if t.Size > height {
+		return t.Baseline+descentFraction*t.Size >= 0 && t.Baseline-t.Size <= height
+	}
+	mid := t.Baseline - xMidFraction*t.Size
+	return mid >= 0 && mid <= height
 }
 
 // walk records the text drawn by the fragment f. Flow text counts when its line
@@ -154,7 +156,7 @@ func (p *pageText) walk(f *frag, parent textClass, height float64) {
 		for i := range ln.items {
 			it := &ln.items[i]
 			if t := it.text; t != nil && it.box != nil {
-				if class != classFlow || tallLine(ln, height) || visible(t, height) {
+				if class != classFlow || visible(t, height) {
 					p.got[it.box] += countRunes(t.Text)
 				}
 			}
