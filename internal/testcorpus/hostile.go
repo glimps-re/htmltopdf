@@ -151,6 +151,7 @@ func Hostile(l budget.Limits) []Case {
 	cs = append(cs, cssCases(l)...)
 	cs = append(cs, layoutCases(l)...)
 	cs = append(cs, valueCases()...)
+	cs = append(cs, tallAtomCases()...)
 	cs = append(cs, robustCases()...)
 	return cs
 }
@@ -643,4 +644,56 @@ func robustCases() []Case {
 		}},
 		{Name: "unclosed_tags", Want: Robust, HTML: func() []byte { return []byte("<html><body><table><tr><td><b><i><p") }},
 	}
+}
+
+// TallAtomPageCSS sizes the pages of the tall-atom documents: 400×300 px, no
+// margin.
+const TallAtomPageCSS = "@page { size: 400px 300px; margin: 0 }"
+
+// TallAtomDoc is a one-tag document with an atomic inline (svg, inline-block)
+// far taller than a page, or an offset or line-height that pushes it past one.
+// Rendered with the default limits it succeeds in at most MaxPages pages of
+// TallAtomPageCSS and loses none of its text.
+type TallAtomDoc struct {
+	Name     string
+	HTML     string
+	MaxPages int
+}
+
+// TallAtomDocs returns the documents of TallAtomDoc.
+func TallAtomDocs() []TallAtomDoc {
+	ib := func(css, inner string) string {
+		return `<span style="display:inline-block;` + css + `">` + inner + `</span>`
+	}
+	lines := repeat(`<span style="display:block">w</span>`, 60)
+	return []TallAtomDoc{
+		{"tall_atom_svg", `<p>a <svg height="99999999"></svg></p>`, 1},
+		{"tall_atom_inline_block", `<p>a ` + ib("height:99999999px", "") + `</p>`, 1},
+		{"tall_atom_svg_in_flex", `<div style="display:flex"><p>a <svg height="1e30"></svg></p></div>`, 2},
+		{"tall_atom_svg_in_table", `<table><tr><td>a <svg height="99999999"></svg></td></tr></table>`, 2},
+		{"tall_atom_svg_in_float", `<div style="float:right">a <svg height="99999999"></svg></div>`, 2},
+		{"tall_atom_50", repeat(`<svg height="99999999"></svg>`, 50), 100},
+		{"tall_atom_nested_inline_blocks", ib("height:99999999px", ib("height:99999999px", "x")), 2},
+		{"tall_atom_valign_down", `<p>a <svg height="10" style="vertical-align:-1e8px"></svg></p>`, 2},
+		{"tall_atom_valign_up", `<p>a ` + ib("vertical-align:1e8px", "x") + `</p>`, 2},
+		{"tall_atom_tall_and_lowered", `<p>a <svg height="99999999" style="vertical-align:-1e8px"></svg></p>`, 2},
+		{"tall_atom_valign_bottom", `<p>a <svg height="99999999" style="vertical-align:bottom"></svg></p>`, 2},
+		{"tall_atom_margin_top", `<p>a <svg height="10" style="margin-top:99999999px"></svg></p>`, 2},
+		{"tall_atom_margin_bottom", `<p>a <svg height="10" style="margin-bottom:99999999px"></svg></p>`, 2},
+		{"tall_atom_negative_margin_bottom", `<p>a <svg height="99999999" style="margin-bottom:-99999999px"></svg> b</p>`, 2},
+		{"tall_atom_line_height_and_atom", `<p style="line-height:99999999px">a <svg width="1" height="1"></svg></p>`, 1},
+		{"tall_atom_lowered_text_and_atom", `<p><span style="vertical-align:-1e8px">x</span><svg width="1" height="1"></svg></p>`, 1},
+		{"tall_atom_line_height_in_atom", `<div>a ` + ib("line-height:99999999px", "z") + `</div>`, 2},
+		{"tall_atom_line_height_around_atom", `<p style="line-height:99999999px">a ` + ib("line-height:normal", lines) + `</p>`, 5},
+		{"tall_atom_absolute_box_at_bottom", `<p>a ` + ib("position:relative;height:99999999px", `<span style="position:absolute;top:99999990px">absz</span>`) + `</p>`, 2},
+	}
+}
+
+func tallAtomCases() []Case {
+	docs := TallAtomDocs()
+	cs := make([]Case, len(docs))
+	for i, d := range docs {
+		cs[i] = Case{Name: d.Name, Want: Success, HTML: func() []byte { return doc(style(TallAtomPageCSS), d.HTML) }}
+	}
+	return cs
 }

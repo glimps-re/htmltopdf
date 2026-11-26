@@ -11,6 +11,7 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/display"
 	"github.com/glimps-re/htmltopdf/internal/style"
+	"github.com/glimps-re/htmltopdf/internal/testcorpus"
 )
 
 const (
@@ -333,38 +334,14 @@ func TestAtomPushedBelowThePageByTheLeading(t *testing.T) {
 // One-tag hostile documents render through the whole pipeline with the default
 // budget, in a bounded number of pages.
 func TestTallAtomHostileDocuments(t *testing.T) {
-	docs := []struct {
-		name, html string
-		maxPages   int
-	}{
-		{"svg", `<p>a <svg height="99999999"></svg></p>`, 1},
-		{"inline-block", `<p>a <span style="display:inline-block;height:99999999px"></span></p>`, 1},
-		{"svg in flex", `<div style="display:flex"><p>a <svg height="1e30"></svg></p></div>`, 2},
-		{"svg in a table", `<table><tr><td>a <svg height="99999999"></svg></td></tr></table>`, 2},
-		{"svg in a float", `<div style="float:right">a <svg height="99999999"></svg></div>`, 2},
-		{"50 tall atoms", strings.Repeat(`<svg height="99999999"></svg>`, 50), 100},
-		{"nested inline-blocks", `<span style="display:inline-block;height:99999999px"><span style="display:inline-block;height:99999999px">x</span></span>`, 2},
-		{"vertical-align down", `<p>a <svg height="10" style="vertical-align:-1e8px"></svg></p>`, 2},
-		{"vertical-align up", `<p>a <span style="display:inline-block;vertical-align:1e8px">x</span></p>`, 2},
-		{"tall and lowered", `<p>a <svg height="99999999" style="vertical-align:-1e8px"></svg></p>`, 2},
-		{"vertical-align bottom", `<p>a <svg height="99999999" style="vertical-align:bottom"></svg></p>`, 2},
-		{"margin-top", `<p>a <svg height="10" style="margin-top:99999999px"></svg></p>`, 2},
-		{"margin-bottom", `<p>a <svg height="10" style="margin-bottom:99999999px"></svg></p>`, 2},
-		{"negative margin-bottom", `<p>a <svg height="99999999" style="margin-bottom:-99999999px"></svg> b</p>`, 2},
-		{"line-height and an atom", `<p style="line-height:99999999px">a <svg width="1" height="1"></svg></p>`, 1},
-		{"lowered text and an atom", `<p><span style="vertical-align:-1e8px">x</span><svg width="1" height="1"></svg></p>`, 1},
-		{"line-height in an atom", `<div>a <span style="display:inline-block;line-height:99999999px">z</span></div>`, 2},
-		{"line-height around a tall atom", `<p style="line-height:99999999px">a <span style="display:inline-block;line-height:normal">` + strings.Repeat(`<span style="display:block">w</span>`, 60) + `</span></p>`, 5},
-		{"absolute box at the bottom", `<p>a <span style="display:inline-block;position:relative;height:99999999px"><span style="position:absolute;top:99999990px">absz</span></span></p>`, 2},
-	}
-	for _, d := range docs {
-		t.Run(d.name, func(t *testing.T) {
-			o := pipe(t, context.Background(), d.html, tallAtomPage, nil, hostileMaxPages)
+	for _, d := range testcorpus.TallAtomDocs() {
+		t.Run(d.Name, func(t *testing.T) {
+			o := pipe(t, context.Background(), d.HTML, tallAtomPage, nil, hostileMaxPages)
 			if o.err != nil {
 				t.Fatalf("%s: %v", o.stage, o.err)
 			}
-			if o.pages > d.maxPages {
-				t.Errorf("%d pages, want at most %d", o.pages, d.maxPages)
+			if o.pages > d.MaxPages {
+				t.Errorf("%d pages, want at most %d", o.pages, d.MaxPages)
 			}
 		})
 	}

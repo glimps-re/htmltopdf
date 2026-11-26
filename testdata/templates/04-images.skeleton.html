@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Analysis report with images</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm }
+  body { font-family: sans-serif; font-size: 10pt; color: #0d1117; margin: 0 }
+  .head { display: flex; align-items: center; justify-content: space-between; height: 64px; border-bottom: 3px solid #ea5b0c; margin-bottom: 14px }
+  .head img { height: 48px }
+  .head .meta { font-size: 8pt; color: #6e7781; text-align: right }
+  h1 { font-size: 18pt; margin: 6px 0 4px }
+  h2 { font-size: 12pt; margin: 16px 0 6px; color: #ea5b0c }
+  p { line-height: 1.4; margin: 6px 0 }
+  .shot { max-width: 100%; border: 1px solid #d0d7de }
+  .chart { display: block; width: 70%; margin: 8px auto }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt }
+  th { background: #0d1117; color: #e6edf3; text-align: left; padding: 4px 6px }
+  td { padding: 3px 6px; border-bottom: 1px solid #d0d7de; vertical-align: middle }
+  tr:nth-child(even) td { background: #f6f8fa }
+  .th { width: 24px; height: 24px; vertical-align: middle }
+  .r { text-align: right }
+  .mono { font-family: monospace }
+  .photo { width: 150px; border-radius: 6px }
+  .note { background: #fff4ec; border: 1px solid #ea5b0c; padding: 6px 10px; margin: 10px 0 }
+  .break { break-before: page }
+</style>
+</head>
+<body>
+<div class="head">
+  <img src="{{LOGO}}" alt="ACME Security">
+  <div class="meta">Scan 4f2a-91c7<br>Confidential</div>
+</div>
+<h1>Analysis report</h1>
+<p>This report lists the files submitted for analysis, the screenshot captured while the sample ran and the verdict of each engine. <a href="https://example.test/report/4f2a">Open the full report online</a>.</p>
+
+<h2>Execution</h2>
+<p>The sample opened a window and asked for credentials:</p>
+<p><img class="shot" src="{{SHOT1}}" alt="Screenshot of the credentials prompt" width="640"></p>
+<p>A second capture, taken 30 seconds later, shows the persistence dialog.</p>
+<p><img class="shot" src="{{SHOT2}}" alt="Screenshot of the persistence dialog"></p>
+
+<h2>Detections over time</h2>
+<img class="chart" src="{{CHART}}" alt="Bar chart of detections per engine">
+<p>The bars are drawn with a translucent fill: the grid of the page shows through.</p>
+
+<h2>Photographs</h2>
+<p>Camera originals attached by the submitter:
+<img class="photo" src="{{PHOTO}}" alt="Photograph of the device"> and
+<img class="photo" src="{{CMYK}}" alt="Print scan of the form"></p>
+<p><a href="https://example.test/full-size.png"><img src="{{T2}}" width="96" height="96" alt="Full-size capture"></a> Click the capture to open it at full size.</p>
+
+<div class="note"><img src="http://intranet.example/evidence/capture-7.png" alt="Capture 7 is not embedded: remote images are never fetched"></div>
+
+<h2 class="break">Files</h2>
+<table>
+<thead><tr><th>Preview</th><th>Name</th><th>Verdict</th><th class="r">Size</th></tr></thead>
+<tbody>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-00.bin</td><td>Clean</td><td class="r">17 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-01.bin</td><td>Suspicious</td><td class="r">30 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-02.bin</td><td>Malicious</td><td class="r">43 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-03.bin</td><td>Clean</td><td class="r">56 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-04.bin</td><td>Suspicious</td><td class="r">69 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-05.bin</td><td>Malicious</td><td class="r">82 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-06.bin</td><td>Clean</td><td class="r">95 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-07.bin</td><td>Suspicious</td><td class="r">108 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-08.bin</td><td>Malicious</td><td class="r">121 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-09.bin</td><td>Clean</td><td class="r">134 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-10.bin</td><td>Suspicious</td><td class="r">147 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-11.bin</td><td>Malicious</td><td class="r">160 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-12.bin</td><td>Clean</td><td class="r">173 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-13.bin</td><td>Suspicious</td><td class="r">186 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-14.bin</td><td>Malicious</td><td class="r">199 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-15.bin</td><td>Clean</td><td class="r">212 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-16.bin</td><td>Suspicious</td><td class="r">225 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-17.bin</td><td>Malicious</td><td class="r">238 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-18.bin</td><td>Clean</td><td class="r">251 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-19.bin</td><td>Suspicious</td><td class="r">264 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-20.bin</td><td>Malicious</td><td class="r">277 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-21.bin</td><td>Clean</td><td class="r">290 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-22.bin</td><td>Suspicious</td><td class="r">303 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-23.bin</td><td>Malicious</td><td class="r">316 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-24.bin</td><td>Clean</td><td class="r">329 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-25.bin</td><td>Suspicious</td><td class="r">342 KB</td></tr>
+<tr><td><img class="th" src="{{T2}}" alt="thumbnail"></td><td class="mono">sample-26.bin</td><td>Malicious</td><td class="r">355 KB</td></tr>
+<tr><td><img class="th" src="{{T3}}" alt="thumbnail"></td><td class="mono">sample-27.bin</td><td>Clean</td><td class="r">368 KB</td></tr>
+<tr><td><img class="th" src="{{T0}}" alt="thumbnail"></td><td class="mono">sample-28.bin</td><td>Suspicious</td><td class="r">381 KB</td></tr>
+<tr><td><img class="th" src="{{T1}}" alt="thumbnail"></td><td class="mono">sample-29.bin</td><td>Malicious</td><td class="r">394 KB</td></tr>
+</tbody>
+</table>
+<p>End of report.</p>
+</body>
+</html>
