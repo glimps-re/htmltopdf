@@ -132,6 +132,9 @@ const (
 	WarnClamped             Code = "clamped"
 	WarnVarBudget           Code = "var-budget"
 	WarnShapingFallback     Code = "shaping-fallback"
+	// WarnImageRejected is an image not drawn; the detail is the reason keyword.
+	// It is not in WarningCodes: it has no public code yet.
+	WarnImageRejected Code = "image-rejected"
 )
 
 // WarningCodes returns every code, for the tests that compare it with the public list.

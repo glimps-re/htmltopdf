@@ -21,6 +21,7 @@ import (
 	"github.com/glimps-re/htmltopdf/internal/css"
 	"github.com/glimps-re/htmltopdf/internal/display"
 	"github.com/glimps-re/htmltopdf/internal/pdf"
+	"github.com/glimps-re/htmltopdf/internal/raster"
 	"github.com/glimps-re/htmltopdf/internal/text"
 )
 
@@ -85,6 +86,9 @@ type Painter struct {
 	// anchored are the names of anchors, one destination per name and page (an
 	// inline box wrapped over lines has an anchor on each).
 	anchored map[string]struct{}
+	// images are the Sources drawn so far; the key is never iterated, so the
+	// XObject order is the first-draw order.
+	images map[*raster.Source]imageState
 }
 
 // Anchor is a destination on a page: the internal target Name, Y points above the
@@ -102,7 +106,7 @@ func (p *Painter) Anchors() []Anchor { return p.anchors }
 // NewPainter returns a Painter that adds fonts to w, reads their metrics through
 // s and reports clamped values on b.
 func NewPainter(w *pdf.Writer, s *text.Shaper, b *budget.Budget) *Painter {
-	return &Painter{w: w, shaper: s, b: b, fonts: map[*text.Face]pdf.FontID{}}
+	return &Painter{w: w, shaper: s, b: b, fonts: map[*text.Face]pdf.FontID{}, images: map[*raster.Source]imageState{}}
 }
 
 // pdfColor converts a css color.
@@ -152,6 +156,8 @@ func (p *Painter) Page(c *pdf.Content, g Geometry, l display.List) ([]pdf.Link, 
 			s.drawPath(v)
 		case display.FillGradient:
 			s.fillGradient(v)
+		case display.Image:
+			s.image(v)
 		}
 	}
 	if s.err == nil && len(s.stack) > 0 {

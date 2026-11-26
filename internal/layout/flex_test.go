@@ -24,7 +24,7 @@ func flexRun(t *testing.T, container, items string, w float64) ([]stripe, float6
 // flexStripesOf lays every line of the container c out, as flex() does one by one.
 func flexStripesOf(tb testing.TB, l *layouter, c *box.Box, inner cbox) ([]stripe, float64) {
 	tb.Helper()
-	p, err := l.planFlex(c, inner.w)
+	p, err := l.planFlex(c, inner)
 	if err != nil {
 		tb.Fatal(err)
 	}

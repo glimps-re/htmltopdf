@@ -37,13 +37,20 @@ type flexPlan struct {
 	colGap, rowGap float64
 }
 
-// planFlex resolves the flex lines of the container b in a content box of width w.
-func (l *layouter) planFlex(b *box.Box, w float64) (*flexPlan, error) {
+// planFlex resolves the flex lines of the container b in its content box inner.
+func (l *layouter) planFlex(b *box.Box, inner cbox) (*flexPlan, error) {
 	st := b.Style
+	w := inner.w
 	p := &flexPlan{rowGap: math.Max(0, px(st.RowGap, w)), colGap: math.Max(0, px(st.ColumnGap, w))}
+	// The cross size of a single line is definite: an item stretched to it is
+	// known before its main size, which an image follows through its ratio.
+	stretchTo := -1.0
+	if !st.FlexWrap && inner.hdef && st.AlignItems == style.ItemStretch {
+		stretchTo = inner.h
+	}
 	items := make([]flexItem, len(b.Children))
 	for i, c := range b.Children {
-		if err := l.flexItemOf(&items[i], c, w); err != nil {
+		if err := l.flexItemOf(&items[i], c, w, stretchTo); err != nil {
 			return nil, err
 		}
 	}
@@ -61,7 +68,7 @@ func (l *layouter) planFlex(b *box.Box, w float64) (*flexPlan, error) {
 func (l *layouter) flex(b *box.Box, f *frag, lv level, inner cbox, decor style.TextDecoration, resuming, emptyAtEntry bool) (status, []level, error) {
 	st := l.stripes[b]
 	if !resuming || st == nil || st.w != inner.w || st.decor != decor {
-		p, err := l.planFlex(b, inner.w)
+		p, err := l.planFlex(b, inner)
 		if err != nil {
 			return complete, nil, err
 		}
@@ -81,7 +88,8 @@ func (l *layouter) flex(b *box.Box, f *frag, lv level, inner cbox, decor style.T
 }
 
 // flexItemOf fills it from the box c: its flex base size, bounds and factors.
-func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w float64) error {
+// stretchTo is the definite cross size of its line, -1 when there is none.
+func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w, stretchTo float64) error {
 	if err := l.b.Charge(budget.Work, 1); err != nil {
 		return err
 	}
@@ -109,6 +117,9 @@ func (l *layouter) flexItemOf(it *flexItem, c *box.Box, w float64) error {
 		it.base = specified
 	default:
 		it.base = maxContent
+		if bw, ok := stretchedImageWidth(it, c, w, stretchTo); ok {
+			it.base = bw + extra
+		}
 	}
 	it.min = minContent
 	if specified >= 0 {
@@ -319,7 +330,7 @@ func (l *layouter) layLine(line []*flexItem, inner cbox, gap float64, st *style.
 			// Only an item whose height is auto stretches, to the line cross
 			// size (Flexbox §8.3), even when its content is taller.
 			y, h = it.mt, f.rect.H
-			if it.box.Style.Height.Kind == style.DimAuto {
+			if autoHeight(it.box) {
 				h = math.Max(0, cross-it.mt-it.mb)
 			}
 		default:
@@ -370,4 +381,33 @@ func justifyOffsets(j style.Justify, free float64, n int) (start, between float6
 		return free / float64(n+1), free / float64(n+1)
 	}
 	return 0, 0
+}
+
+// autoHeight reports whether the height of the flex item c is auto: no CSS
+// height, and for an image no height attribute, which is a presentational hint.
+func autoHeight(c *box.Box) bool {
+	if c.Style.Height.Kind != style.DimAuto {
+		return false
+	}
+	return c.Kind != box.KindImage || c.Img == nil || !c.Img.Height.Set
+}
+
+// stretchedImageWidth is the content width of the image item it of box c
+// stretched to the definite cross size stretchTo: the stretched height through
+// the ratio (the transferred size of Flexbox §9.8). ok is false when c is not
+// such an item: its width or height is given, or it does not stretch.
+func stretchedImageWidth(it *flexItem, c *box.Box, w, stretchTo float64) (float64, bool) {
+	if stretchTo < 0 || c.Kind != box.KindImage || !autoHeight(c) || it.autoT || it.autoB ||
+		c.Img == nil || c.Img.Width.Set {
+		return 0, false
+	}
+	iw, ih, ok := imgIntrinsic(c)
+	if !ok {
+		return 0, false
+	}
+	st := c.Style
+	vert := padPx(st.Padding[style.Top], w) + padPx(st.Padding[style.Bottom], w) +
+		st.Border[style.Top].Width + st.Border[style.Bottom].Width
+	h := math.Max(0, stretchTo-it.mt-it.mb-vert)
+	return clampCoord(h * iw / ih), true
 }

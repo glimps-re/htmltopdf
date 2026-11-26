@@ -199,7 +199,7 @@ func TestLayLineLeavesThePlanAlone(t *testing.T) {
 		}
 	}
 	find(root)
-	p, err := l.planFlex(c, 400)
+	p, err := l.planFlex(c, cbox{w: 400})
 	if err != nil {
 		t.Fatal(err)
 	}

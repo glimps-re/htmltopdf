@@ -103,7 +103,7 @@ func isFixedBox(bx *box.Box) bool {
 	if bx.Style == nil || bx.Style.Position != style.PositionFixed || bx.Anonymous {
 		return false
 	}
-	return bx.Kind == box.KindBlock || bx.Kind == box.KindInlineBlock || bx.Kind == box.KindSVG
+	return bx.Kind == box.KindBlock || bx.Kind == box.KindInlineBlock || bx.Replaced()
 }
 
 // registerFixed records a fixed box met in the flow at its static position. A box

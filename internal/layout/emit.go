@@ -62,7 +62,7 @@ func (e *emitter) emitBox(f *frag, out display.List) display.List {
 	if f.borderColor != nil && len(out) > n {
 		out = recolorBorder(out, f.borderColor, f.borderLine)
 	}
-	out = emitSVGBox(f, out)
+	out = emitReplaced(f, out)
 	for _, r := range f.rules {
 		out = append(out, columnRule(r, st.ColumnRule))
 	}

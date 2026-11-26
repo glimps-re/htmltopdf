@@ -59,7 +59,7 @@ func (t *treeText) walk(b *box.Box, parent textClass) {
 	class := parent
 	if b.Style != nil {
 		// Only a box with a fragment of its own is rotated, not an inline box.
-		class = classOf(b.Style, parent, b.Kind == box.KindBlock || b.Kind == box.KindInlineBlock || b.Kind == box.KindSVG)
+		class = classOf(b.Style, parent, b.Kind == box.KindBlock || b.Kind == box.KindInlineBlock || b.Replaced())
 		if b.Style.OverflowHidden && parent != classNone && b.Kind != box.KindText {
 			t.hidden = append(t.hidden, b)
 		}
@@ -82,7 +82,7 @@ func (t *treeText) walk(b *box.Box, parent textClass) {
 func firstText(b *box.Box, parent textClass) *box.Box {
 	class := parent
 	if b.Style != nil {
-		class = classOf(b.Style, parent, b.Kind == box.KindBlock || b.Kind == box.KindInlineBlock || b.Kind == box.KindSVG)
+		class = classOf(b.Style, parent, b.Kind == box.KindBlock || b.Kind == box.KindInlineBlock || b.Replaced())
 	}
 	if class == classNone {
 		return nil

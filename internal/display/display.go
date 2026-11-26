@@ -5,6 +5,7 @@ package display
 
 import (
 	"github.com/glimps-re/htmltopdf/internal/css"
+	"github.com/glimps-re/htmltopdf/internal/raster"
 	"github.com/glimps-re/htmltopdf/internal/text"
 )
 
@@ -181,6 +182,17 @@ type Path struct {
 	Join, Cap    uint8
 }
 
+// Image draws Src scaled to Rect, the content box of its box, with the opacity
+// Opacity in [0, 1]. A nil Src draws nothing.
+type Image struct {
+	Rect    Rect
+	Src     *raster.Source
+	Opacity float64
+}
+
+// Translate implements Item.
+func (v Image) Translate(dx, dy float64) Item { v.Rect = v.Rect.Translate(dx, dy); return v }
+
 // Translate implements Item.
 func (v FillRect) Translate(dx, dy float64) Item { v.Rect = v.Rect.Translate(dx, dy); return v }
 
@@ -246,3 +258,4 @@ func (PopClip) isItem()       {}
 func (PushTransform) isItem() {}
 func (PopTransform) isItem()  {}
 func (Path) isItem()          {}
+func (Image) isItem()         {}

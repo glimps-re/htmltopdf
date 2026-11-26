@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/net/html/atom"
 
+	"github.com/glimps-re/htmltopdf/internal/raster"
 	"github.com/glimps-re/htmltopdf/internal/style"
 	"github.com/glimps-re/htmltopdf/internal/svg"
 )
@@ -41,6 +42,8 @@ const (
 	// KindSVG is a replaced box, inline-level or block-level by its display,
 	// without children: the drawing is in Box.SVG.
 	KindSVG
+	// KindImage is a replaced box like KindSVG: the raster image is in Box.Img.
+	KindImage
 )
 
 // String returns the name of the kind, as the dump shows it.
@@ -58,8 +61,20 @@ func (k Kind) String() string {
 		return "inline-block"
 	case KindSVG:
 		return "svg"
+	case KindImage:
+		return "img"
 	}
 	return "kind(" + strconv.Itoa(int(k)) + ")"
+}
+
+// Img is the image of a KindImage box.
+type Img struct {
+	// Src is the validated image, shared by every box with the same src.
+	Src *raster.Source
+	// Width and Height are the width and height attributes, HTML dimension
+	// values: a non-negative number or a percentage, Set false when absent or
+	// invalid.
+	Width, Height svg.Length
 }
 
 // Box is a node of the box tree.
@@ -82,6 +97,8 @@ type Box struct {
 	Anchor bool
 	// SVG is the drawing of a KindSVG box.
 	SVG *svg.Image
+	// Img is the image of a KindImage box.
+	Img *Img
 	// Href is the sanitized target of the link the box is in (design §8.2): the
 	// box of an a element, and every box inside it, blocks included. The string
 	// is shared, not copied. An internal link is "#" and the id of a box that
@@ -104,6 +121,10 @@ type Box struct {
 	// fragment marks an inline box produced by a split: it is dropped if empty.
 	fragment bool
 }
+
+// Replaced reports whether b is a replaced box (KindSVG or KindImage): atomic,
+// without children, sized from its intrinsic dimensions.
+func (b *Box) Replaced() bool { return b.Kind == KindSVG || b.Kind == KindImage }
 
 // Dump writes an indented text form of the tree rooted at b, for tests and
 // debugging: one box per line with its kind, tag and flags.
@@ -129,6 +150,9 @@ func dump(w io.Writer, b *Box, depth int) error {
 	}
 	if b.SVG != nil {
 		sb.WriteString(" shapes=" + strconv.Itoa(len(b.SVG.Shapes)))
+	}
+	if b.Img != nil && b.Img.Src != nil {
+		sb.WriteString(" " + strconv.Itoa(b.Img.Src.Width) + "x" + strconv.Itoa(b.Img.Src.Height))
 	}
 	if b.Href != "" {
 		sb.WriteString(" href=" + strconv.Quote(b.Href))

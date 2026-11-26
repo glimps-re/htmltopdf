@@ -152,8 +152,8 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		lv = in[0]
 	}
 	g := geometry(st, cb)
-	if b.Kind == box.KindSVG {
-		g = svgGeom(b, g, cb)
+	if b.Replaced() {
+		g = replacedGeom(b, g, cb)
 	}
 	if st.Display == style.DisplayTable && !st.TableLayoutFixed {
 		var err error
@@ -169,7 +169,7 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		mc    colGeom
 		multi bool
 	)
-	if !lv.childrenDone && b.Kind != box.KindSVG && st.Display != style.DisplayTable && st.Display != style.DisplayFlex && st.Display != style.DisplayGrid {
+	if !lv.childrenDone && !b.Replaced() && st.Display != style.DisplayTable && st.Display != style.DisplayFlex && st.Display != style.DisplayGrid {
 		mc, multi = l.columnsOf(st, g.w)
 	}
 	f := &frag{box: b, first: !resuming, last: true}
@@ -219,8 +219,8 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 
 	cx := f.rect.X + g.bl + g.pl
 	hh, hasH := usedHeight(st, g, cb)
-	if b.Kind == box.KindSVG && !hasH {
-		hh, hasH = svgAutoHeight(b, g.w, cb.h, cb.hdef), true
+	if b.Replaced() && !hasH {
+		hh, hasH = replacedAutoHeight(b, g.w, cb), true
 	}
 	inner := cbox{x: cx, w: g.w, h: hh, hdef: hasH}
 	if !resuming {
@@ -333,13 +333,13 @@ func (l *layouter) layBlock(b *box.Box, in []level, cb cbox, decor style.TextDec
 		used += contentHere(f, l.y, pre, lv.pre)
 		if fill := hh - used; fill > 0 {
 			room := l.bottom - l.y
-			if !l.unbounded && b.Kind == box.KindSVG && fill > room && !l.pageEmpty {
+			if !l.unbounded && b.Replaced() && fill > room && !l.pageEmpty {
 				// A replaced box is not sliced: it moves whole to the next page; one
 				// taller than a page stays and the page clips it.
 				l.unwait(f)
 				return result{status: nothing}, nil
 			}
-			if !l.unbounded && fill > room && b.Kind != box.KindSVG {
+			if !l.unbounded && fill > room && !b.Replaced() {
 				consume := math.Max(room, 0)
 				if l.pageEmpty {
 					consume = math.Max(room, 1)

@@ -41,6 +41,15 @@ func attrPx(a svg.Length, base float64) (v float64, ok bool) {
 	return clampCoord(a.Value), true
 }
 
+// heightAttr resolves a height attribute in cb: ok is false when it is unset,
+// or a percentage of an indefinite height.
+func heightAttr(a svg.Length, cb cbox) (v float64, ok bool) {
+	if a.Percent && !cb.hdef {
+		return 0, false
+	}
+	return attrPx(a, cb.h)
+}
+
 // svgSized returns the width and height that CSS (px) or the attributes (px) give
 // to the box: -1 for one that is not given.
 func svgSized(b *box.Box) (w, h float64) {
@@ -84,8 +93,8 @@ func svgAutoWidth(b *box.Box, cbw float64) float64 {
 
 // svgAutoHeight is the content height of an svg box of content width w whose CSS
 // height is auto: its height attribute, else through the viewBox ratio, else 150.
-func svgAutoHeight(b *box.Box, w, cbh float64, hdef bool) float64 {
-	if v, ok := attrPx(b.SVG.Height, cbh); ok && (!b.SVG.Height.Percent || hdef) {
+func svgAutoHeight(b *box.Box, w float64, cb cbox) float64 {
+	if v, ok := heightAttr(b.SVG.Height, cb); ok {
 		return v
 	}
 	if r, ok := svgRatio(b); ok {
@@ -113,13 +122,7 @@ func emitSVG(f *frag, out display.List) display.List {
 	if b.SVG == nil || len(b.SVG.Shapes) == 0 {
 		return out
 	}
-	r := f.rect
-	content := display.Rect{
-		X: r.X + f.border[style.Left] + f.padding[style.Left],
-		Y: r.Y + f.border[style.Top] + f.padding[style.Top],
-	}
-	content.W = r.W - f.border[style.Left] - f.border[style.Right] - f.padding[style.Left] - f.padding[style.Right]
-	content.H = r.H - f.border[style.Top] - f.border[style.Bottom] - f.padding[style.Top] - f.padding[style.Bottom]
+	content := contentBox(f)
 	if !(content.W > 0 && content.H > 0) {
 		return out
 	}
@@ -163,20 +166,72 @@ func emitSVG(f *frag, out display.List) display.List {
 	return append(out, display.PopClip{})
 }
 
-func emitSVGBox(f *frag, out display.List) display.List {
-	if f.box.Kind != box.KindSVG {
-		return out
+// emitReplaced draws the content of a replaced box: its drawing or its image.
+func emitReplaced(f *frag, out display.List) display.List {
+	switch f.box.Kind {
+	case box.KindSVG:
+		return emitSVG(f, out)
+	case box.KindImage:
+		return emitImage(f, out)
 	}
-	return emitSVG(f, out)
+	return out
 }
 
-// blockLevel reports whether c is a block-level child: a block, or an svg box
-// whose display is not inline-level.
+// replacedGeom is the geometry of the replaced box b: svgGeom or imgGeom.
+func replacedGeom(b *box.Box, g geom, cb cbox) geom {
+	switch b.Kind {
+	case box.KindSVG:
+		return svgGeom(b, g, cb)
+	case box.KindImage:
+		return imgGeom(b, g, cb)
+	}
+	return g
+}
+
+// replacedAutoHeight is the content height of the replaced box b of content
+// width w whose CSS height is auto.
+func replacedAutoHeight(b *box.Box, w float64, cb cbox) float64 {
+	switch b.Kind {
+	case box.KindSVG:
+		return svgAutoHeight(b, w, cb)
+	case box.KindImage:
+		return imgAutoHeight(b, w, cb)
+	}
+	return 0
+}
+
+// replacedSizes are the intrinsic contributions of the content of a replaced box.
+func replacedSizes(b *box.Box) sizes {
+	switch b.Kind {
+	case box.KindSVG:
+		if b.SVG.Width.Set && b.SVG.Width.Percent || svgFills(b) {
+			return sizes{0, math.MaxFloat32}
+		}
+		w := svgAutoWidth(b, 0)
+		return sizes{w, w}
+	case box.KindImage:
+		return imgSizes(b)
+	}
+	return sizes{}
+}
+
+// blockLevel reports whether c is a block-level child: a block, or a replaced
+// box whose display is not inline-level.
 func blockLevel(c *box.Box) bool {
-	if c.Kind == box.KindSVG {
+	if c.Replaced() {
 		return c.Style.Display != style.DisplayInline && c.Style.Display != style.DisplayInlineBlock
 	}
 	return c.Kind == box.KindBlock
+}
+
+// replacedAtomWidth is the border box width of an atomic replaced box whose
+// width does not come from its contributions: an image with an auto CSS width,
+// or an svg whose width is a percentage attribute.
+func replacedAtomWidth(b *box.Box, cbw float64) (float64, bool) {
+	if w, ok := imgAtomWidth(b, cbw); ok {
+		return w, true
+	}
+	return svgPercentWidth(b, cbw)
 }
 
 // svgPercentWidth is the border box width of an atomic svg whose width is a

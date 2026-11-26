@@ -38,15 +38,8 @@ func (l *layouter) sizeEntry(b *box.Box) (sizeEntry, error) {
 	var c sizes
 	var err error
 	switch {
-	case b.Kind == box.KindSVG:
-		w := svgAutoWidth(b, 0)
-		c = sizes{w, w}
-		if b.SVG.Width.Set && b.SVG.Width.Percent {
-			c = sizes{0, math.MaxFloat32}
-		}
-		if svgFills(b) {
-			c = sizes{0, math.MaxFloat32}
-		}
+	case b.Replaced():
+		c = replacedSizes(b)
 	case b.Style.Display == style.DisplayTable:
 		c, err = l.tableSizes(b)
 	case hasInlineChildren(b):
@@ -185,7 +178,7 @@ func (l *layouter) walkInline(w *widths, boxes []*box.Box, collapse bool) error 
 			}
 		case box.KindLineBreak:
 			w.endLine()
-		case box.KindInlineBlock, box.KindSVG:
+		case box.KindInlineBlock, box.KindSVG, box.KindImage:
 			s, err := l.intrinsic(c)
 			if err != nil {
 				return err

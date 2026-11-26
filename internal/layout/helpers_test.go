@@ -81,6 +81,8 @@ type opts struct {
 	scale    float64
 	limits   func(*budget.Limits)
 	envWidth float64
+	// boxes, when set, edits the box tree before layout.
+	boxes func(*box.Box)
 }
 
 type run struct {
@@ -138,6 +140,9 @@ func newRun(tb testing.TB, html string, o opts) *run {
 	root, err := box.Build(d, r, b)
 	if err != nil {
 		tb.Fatal(err)
+	}
+	if o.boxes != nil {
+		o.boxes(root)
 	}
 	sh := text.NewShaper(testFonts(tb), b)
 	p := NewPaginator(root, Config{Page: r.Page(style.PageContext{Number: 1}), Pages: func(name string) *style.PageStyle { return r.Page(style.PageContext{Name: name}) }, Scale: o.scale, Fonts: testFonts(tb), Shaper: sh, Budget: b, KeepTree: true})

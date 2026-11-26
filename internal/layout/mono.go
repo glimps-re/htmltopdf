@@ -241,7 +241,7 @@ func (l *layouter) atomUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 // shrink-to-fit in cbw (CSS 2.1 §10.3.9).
 func (l *layouter) atomWidth(b *box.Box, cbw float64) (float64, error) {
 	st := b.Style
-	if w, ok := svgPercentWidth(b, cbw); ok {
+	if w, ok := replacedAtomWidth(b, cbw); ok {
 		return w, nil
 	}
 	if st.Width.Kind == style.DimAuto {

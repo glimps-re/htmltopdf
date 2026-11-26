@@ -302,7 +302,7 @@ func (l *layouter) flatten(p *paragraph, boxes []*box.Box, decor style.TextDecor
 			}
 		case box.KindLineBreak:
 			p.units = append(p.units, unit{kind: uBreak})
-		case box.KindInlineBlock, box.KindSVG:
+		case box.KindInlineBlock, box.KindSVG, box.KindImage:
 			un, err := l.atomUnit(p, c, decor, cbw, rise)
 			if err != nil {
 				return err
