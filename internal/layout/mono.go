@@ -94,12 +94,19 @@ type atomBox struct {
 	// mid is the height of the middle of the lowercase letters above the
 	// baseline of the line, for vertical-align: middle.
 	mid float64
+	// h is the height the atom takes in its line and in the fit and cut tests:
+	// its border box height, or less when capped is set (see capAtom).
+	h      float64
+	capped bool
+	// ink is the extent of the content of a capped atom: its height never goes
+	// below it.
+	ink float64
 }
 
 // extents returns the height of the margin box above and below the baseline
 // of the line, for the alignment of a.
 func (a *atomBox) extents() (above, below float64) {
-	h := a.f.rect.H
+	h := a.h
 	switch a.valign {
 	case style.VAlignMiddle:
 		half := (a.mt + h + a.mb) / 2
@@ -113,7 +120,7 @@ func (a *atomBox) extents() (above, below float64) {
 // top returns the y of the border box for a line box of top y0, height h and
 // baseline at y0 + up.
 func (a *atomBox) top(y0, h, up float64) float64 {
-	fh := a.f.rect.H
+	fh := a.h
 	switch a.valign {
 	case style.VAlignTop:
 		return y0 + a.mt
@@ -150,7 +157,7 @@ func lineBottom(ln *lineFrag) float64 {
 	bottom := math.Max(ln.rect.Y+ln.rect.H, ln.baseline)
 	for i := range ln.items {
 		if a := ln.items[i].atom; a != nil {
-			bottom = math.Max(bottom, reachBottom(a.f))
+			bottom = math.Max(bottom, a.bottom(reachBottom))
 		}
 	}
 	return bottom
@@ -162,10 +169,155 @@ func lineFitBottom(ln *lineFrag) float64 {
 	bottom := ln.rect.Y + ln.rect.H
 	for i := range ln.items {
 		if a := ln.items[i].atom; a != nil {
-			bottom = math.Max(bottom, overflowBottom(a.f))
+			bottom = math.Max(bottom, a.bottom(overflowBottom))
 		}
 	}
 	return bottom
+}
+
+// bottom is the lowest edge of the atom for the fit and cut tests: of(a.f), or
+// the bottom of its capped height. A cut copy of the atom keeps its top in a.y.
+func (a *atomBox) bottom(of func(*frag) float64) float64 {
+	if a.capped {
+		return a.y + a.h
+	}
+	return of(a.f)
+}
+
+// capAtom sets a.h and a.base, the height the atom takes in its line and its
+// baseline (base when hasBase, else the bottom margin edge), after clamping its
+// vertical margins and vertical-align offset to ±page. It runs once a.f is
+// laid out; page <= 0 caps nothing.
+//
+// An atom taller than the page takes at most the room a page leaves its line,
+// and never less than the extent of its content (inkBottom): its fragment keeps
+// its full height, drawn and clipped by the page, while the text of an
+// inline-block still lands on pages. Without the cap, a hostile height, margin
+// or offset of 1e8 px makes a line, a flex line or a table row sliced over one
+// page per page height, and the page budget fails the render.
+func (a *atomBox) capAtom(page, strut, base float64, hasBase bool) {
+	if page > 0 {
+		a.mt, a.mb, a.rise = clampAbs(a.mt, page), clampAbs(a.mb, page), clampAbs(a.rise, page)
+	}
+	h := a.f.rect.H
+	a.h, a.base = h, h+a.mb
+	if hasBase {
+		a.base = base
+	}
+	if page <= 0 || h <= page {
+		return
+	}
+	room := page - math.Max(a.mt, 0) - math.Max(a.mb, 0)
+	if !a.spansLine() {
+		room -= strut
+	}
+	a.ink = inkBottom(a.f, page) - a.f.rect.Y
+	if c := math.Max(room, a.ink); c < h {
+		a.capped = true
+		a.setCap(c)
+	}
+}
+
+// setCap sets the capped height c of the atom and moves what depends on it.
+func (a *atomBox) setCap(c float64) {
+	a.h = c
+	// The baseline stays inside the capped box: below it, the extent under the
+	// baseline (h - base + mb) would be negative.
+	a.base = math.Min(a.base, c+a.mb)
+	liftLayers(a.f, a.y+c)
+}
+
+// shrinkCapped lowers the capped atoms of the line ln by over, down to the
+// extent of their content, so that a line placed below the top of an empty page
+// (under a margin) ends on it. Nothing changes when an atom cannot fit room,
+// the height left on the page, anyway (a capped one by its content): the line
+// is sliced, and a shrunk image would only lose its height. It reports whether
+// an atom changed: the line must then be built again.
+func (ln *lineOut) shrinkCapped(over, room float64) bool {
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil && (a.capped && a.ink > room || !a.capped && a.h > room) {
+			return false
+		}
+	}
+	changed := false
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil && a.capped {
+			if c := math.Max(a.ink, a.h-over); c < a.h {
+				a.setCap(c)
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
+func clampAbs(v, limit float64) float64 { return math.Max(-limit, math.Min(limit, v)) }
+
+// inkBottom is the lowest point, in the coordinates of f, of the content of f
+// that must land on a page: the glyphs of its lines (see textInk), the
+// atoms in them as their fit tests count them, the boxes of a specified height
+// to their bottom and, recursively, the content of the other boxes. The height
+// of f itself does not count, nor that of a replaced box, which the page clips.
+// It cannot reuse measure, which counts both. Nested atoms are not walked: their
+// bottom is cached or capped, so each fragment is walked once.
+func inkBottom(f *frag, page float64) float64 {
+	bottom := f.rect.Y
+	for _, ln := range f.lines {
+		for i := range ln.items {
+			switch it := &ln.items[i]; {
+			case it.text != nil:
+				bottom = math.Max(bottom, textInk(it.text, ln.rect.Y, page))
+			case it.atom != nil:
+				bottom = math.Max(bottom, it.atom.bottom(reachBottom))
+			}
+		}
+	}
+	for _, c := range f.children {
+		switch {
+		case c.box != nil && c.box.Replaced():
+			bottom = math.Max(bottom, c.rect.Y)
+		case c.box != nil && c.box.Style != nil && c.box.Style.Height.Kind != style.DimAuto:
+			bottom = math.Max(bottom, reachBottom(c))
+		default:
+			bottom = math.Max(bottom, inkBottom(c, page))
+		}
+	}
+	return bottom
+}
+
+// textInk is the bottom of the glyphs of t, in a line box of top top: its
+// baseline plus its size, when the baseline is within a page plus that size of
+// the line top. Past it, the leading of a hostile line-height (empty) put the
+// baseline there: the line counts one page, and its text is drawn where it is
+// only when the atom is placed whole.
+func textInk(t *display.Text, top, page float64) float64 {
+	if t.Baseline-top > page+t.Size {
+		return top + page
+	}
+	return t.Baseline + t.Size
+}
+
+// liftLayers moves up the absolute boxes in f that end below limit, the bottom
+// of a capped atom, so that they end at limit (or start at the top of f): the
+// page clips the atom there, and a layer is carried by the window of its top,
+// so one below it would never be drawn.
+func liftLayers(f *frag, limit float64) {
+	for _, ly := range f.abs {
+		top := ly.f.rect.Y
+		if to := math.Max(f.rect.Y, limit-math.Max(ly.f.rect.H, 1)); to < top {
+			moveFrag(ly.f, 0, to-top)
+		}
+	}
+	for _, c := range f.children {
+		liftLayers(c, limit)
+	}
+	for _, ln := range f.lines {
+		for i := range ln.items {
+			if a := ln.items[i].atom; a != nil && !a.capped {
+				liftLayers(a.f, limit)
+			}
+		}
+	}
 }
 
 // line returns the part of the line ln in the window [from, to), or nil.
@@ -230,10 +382,8 @@ func (l *layouter) atomUnit(p *paragraph, c *box.Box, decor style.TextDecoration
 	if err != nil {
 		return unit{}, err
 	}
-	a.base = a.f.rect.H + a.mb
-	if b, ok := lastBaseline(a.f); ok && !st.OverflowHidden {
-		a.base = b
-	}
+	base, hasBase := lastBaseline(a.f)
+	a.capAtom(l.pageH, p.strutBottom, base, hasBase && !st.OverflowHidden)
 	return unit{kind: uAtom, atom: a, w: a.ml + a.f.rect.W + a.mr}, nil
 }
 

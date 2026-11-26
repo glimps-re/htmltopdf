@@ -19,6 +19,9 @@ type layouter struct {
 	breaks []text.Break
 	width  float64 // page area width in layout px
 	bottom float64 // page area height in layout px
+	// pageH is the page area height, unlike bottom, which a scratch page or a
+	// column overrides: the cap of the atomic inlines.
+	pageH float64
 
 	// y is the cursor: the bottom of the last placed content. pend holds the
 	// margins that adjoin the cursor and are not applied yet.
@@ -83,7 +86,7 @@ type layouter struct {
 const scratchBottom = 4 * css.MaxLengthPx
 
 func newLayouter(root *box.Box, cfg Config, width, height float64) *layouter {
-	return &layouter{root: root, sh: cfg.Shaper, probe: newProbe(cfg), b: cfg.Budget, width: width, bottom: height, ext: make(map[extKey]extVal), primaries: make(map[*style.Computed]primary)}
+	return &layouter{root: root, sh: cfg.Shaper, probe: newProbe(cfg), b: cfg.Budget, width: width, bottom: height, pageH: height, ext: make(map[extKey]extVal), primaries: make(map[*style.Computed]primary)}
 }
 
 func (l *layouter) startPage(resumed bool) {

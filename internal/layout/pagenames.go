@@ -78,5 +78,5 @@ func (l *layouter) setPageArea(w, h float64) {
 		clear(l.stripes)
 		l.takeCutTables()
 	}
-	l.width, l.bottom = w, h
+	l.width, l.bottom, l.pageH = w, h, h
 }

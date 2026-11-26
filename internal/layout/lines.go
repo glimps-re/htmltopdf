@@ -42,6 +42,12 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			flushed = true
 		}
 		ext := l.lineExtent(&ln)
+		if over := l.y + ext - l.bottom; !l.unbounded && l.pageEmpty && over > cutEps && ln.shrinkCapped(over, l.bottom-l.y) {
+			if ln, next, _, err = l.nextLine(p, cur, inner.w); err != nil {
+				return complete, nil, err
+			}
+			ext = l.lineExtent(&ln)
+		}
 		// A margin can push the first line of a page past its bottom: it goes on the
 		// next page, where the margin is truncated, not out of sight.
 		if !l.unbounded && (l.y > l.bottom || l.y+ext > l.bottom && !l.pageEmpty) {
@@ -72,9 +78,16 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			p.releaseBefore(cur)
 			return partial, []level{{cur: cur, off: pulledOff}}, nil
 		}
-		if l.needsSlice(&ln, ext, off) {
+		if l.needsSlice(&ln, off) {
+			text := false
+			if from, to, ok := ln.sliceRange(l.bottom); ok {
+				// The baseline is past a page of empty leading: its text goes with
+				// the first slice, where the line starts, as on a line without atom.
+				text = off == 0 && (ln.top < from || ln.top >= to)
+				off, ext = math.Max(off, from), to
+			}
 			start := l.y
-			more, err := l.sliceLine(f, &ln, inner, p.align, start-off, ext)
+			more, err := l.sliceLine(f, &ln, inner, p.align, start-off, ext, text)
 			if err != nil {
 				return complete, nil, err
 			}
@@ -84,6 +97,8 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 				// At least 1 px per page: a slice of no height would not progress.
 				return partial, []level{{cur: cur, off: off + math.Max(l.bottom-start, 1)}}, nil
 			}
+		} else if raise := l.raiseFor(&ln, off); raise > 0 {
+			l.placeRaised(f, &ln, inner, p.align, raise)
 		} else {
 			l.place(f, &ln, inner, p.align)
 		}
@@ -109,12 +124,61 @@ func (l *layouter) place(f *frag, ln *lineOut, inner cbox, align style.TextAlign
 	l.pageEmpty = false
 }
 
+// raiseFor returns how far above the cursor the line ln starts when the
+// leading pushes a capped atom of it past the bottom of this empty page: the
+// capped box then ends on the page, or starts at its top when it is the taller.
+// A capped atom is not sliced (what its cap leaves out would be dropped), and
+// placed at the cursor its text would be past the page area. 0 for any other
+// line.
+func (l *layouter) raiseFor(ln *lineOut, off float64) float64 {
+	if l.unbounded || !l.pageEmpty || off > 0 {
+		return 0
+	}
+	capped := false
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil && a.capped {
+			capped = true
+			break
+		}
+	}
+	if !capped {
+		return 0
+	}
+	top, bottom := ln.atomSpan()
+	if l.y+bottom <= l.bottom+cutEps {
+		return 0
+	}
+	return math.Max(0, math.Min(top, l.y+bottom-l.bottom))
+}
+
+// placeRaised places the line ln raise above the cursor, its atoms on the
+// page. Its text, when that puts the baseline above the page, stays where the
+// line would start unraised, as on a tall line without atom.
+func (l *layouter) placeRaised(f *frag, ln *lineOut, inner cbox, align style.TextAlign, raise float64) {
+	y := l.y - raise
+	lf := l.build(ln, inner, align, y)
+	if lf.baseline < 0 {
+		text := textOnly(lf)
+		text.rect.Y += raise
+		text.baseline += raise
+		for i := range text.items {
+			text.items[i].text.Baseline += raise
+		}
+		lf = withoutText(lf)
+		f.lines = append(f.lines, text)
+	}
+	f.lines = append(f.lines, lf)
+	l.y = clampCoord(y + ln.height())
+	l.pageEmpty = false
+}
+
 // sliceLine places on the page the part of the line ln that fits it, for a line
-// taller than a page area (an atomic inline taller than a page: design §3.2,
-// a monolithic box is sliced). The line starts at y0, above the page when it
-// resumes; ext is its extent, overflow of its atoms included. It reports
-// whether part of it is left for the next page.
-func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0, ext float64) (bool, error) {
+// whose atoms are taller than a page area or overflow past its bottom (see
+// needsSlice). The line starts at y0, above the page when it resumes; ext is
+// its extent, overflow of its atoms included. With text, the text of the line
+// is placed too, wherever its baseline is: a slice range leaves it out of every
+// slice. It reports whether part of it is left for the next page.
+func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0, ext float64, text bool) (bool, error) {
 	end := y0 + ext
 	lf := l.build(ln, inner, align, y0)
 	piece, err := l.chargedCut(&frag{lines: []*lineFrag{lf}}, l.y, math.Min(end, l.bottom))
@@ -123,6 +187,9 @@ func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextA
 	}
 	f.lines = append(f.lines, piece.lines...)
 	l.pageEmpty = false
+	if text {
+		f.lines = append(f.lines, textOnly(lf))
+	}
 	if end > l.bottom+cutEps {
 		l.y = l.bottom
 		return true, nil
@@ -130,6 +197,32 @@ func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextA
 	// Past an overflow slice, the line box itself can end above the page.
 	l.y = math.Max(l.y, y0+ln.height())
 	return false, nil
+}
+
+// withoutText returns a copy of the line lf without its text items.
+func withoutText(lf *lineFrag) *lineFrag {
+	nl := *lf
+	nl.items = make([]lineItem, 0, len(lf.items))
+	for _, it := range lf.items {
+		if it.text == nil {
+			nl.items = append(nl.items, it)
+		}
+	}
+	return &nl
+}
+
+// textOnly returns a copy of the line lf holding its text items only.
+func textOnly(lf *lineFrag) *lineFrag {
+	nl := *lf
+	nl.items = nil
+	for _, it := range lf.items {
+		if it.text != nil {
+			c := *it.text
+			it.text = &c
+			nl.items = append(nl.items, it)
+		}
+	}
+	return &nl
 }
 
 // lineExtent is the extent of the line ln for the fit and slice tests: its
@@ -144,22 +237,74 @@ func (l *layouter) lineExtent(ln *lineOut) float64 {
 	}
 	for i := range ln.items {
 		if a := ln.items[i].atom; a != nil {
-			ext = math.Max(ext, a.top(0, h, ln.top)+overflowBottom(a.f)-a.f.rect.Y)
+			ext = math.Max(ext, a.top(0, h, ln.top)+a.bottom(overflowBottom)-a.y)
 		}
 	}
 	return ext
 }
 
-// needsSlice reports whether the line ln of extent ext, resumed at off, is
-// sliced on this empty page: an atomic inline taller than a page, a line that
-// resumes (it goes on being sliced), or one whose atom overflows past the page
-// bottom.
-func (l *layouter) needsSlice(ln *lineOut, ext, off float64) bool {
+// needsSlice reports whether the line ln, resumed at off, is sliced on this
+// empty page: a line that resumes (it goes on being sliced), one whose atoms
+// span more than a page area, or one with an atom that is not capped and does
+// not end on the page (taller than the room, overflowing the line, or pushed
+// down by the leading). Only the atoms count: a line without atom past the
+// page bottom is placed whole, and sliceRange keeps a line tall from its
+// leading from being sliced over it. A capped atom that fits a page is placed
+// whole and clipped: a slice would drop the text its cap leaves out.
+func (l *layouter) needsSlice(ln *lineOut, off float64) bool {
 	if l.unbounded || !l.pageEmpty || !ln.hasAtom() {
 		return false
 	}
-	overflows := ext > ln.height() && l.y-off+ext > l.bottom+cutEps
-	return ext > l.bottom || off > 0 || overflows
+	if off > 0 {
+		return true
+	}
+	h := ln.height()
+	top, bottom := math.Inf(1), math.Inf(-1)
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			t := a.top(0, h, ln.top)
+			b := t + a.bottom(overflowBottom) - a.y
+			if !a.capped && l.y+b > l.bottom+cutEps {
+				return true
+			}
+			top, bottom = math.Min(top, t), math.Max(bottom, b)
+		}
+	}
+	return bottom-top > l.bottom
+}
+
+// atomSpan returns the top and the bottom, overflow included, of the atoms of
+// the line ln relative to its top.
+func (ln *lineOut) atomSpan() (top, bottom float64) {
+	h := ln.height()
+	top, bottom = math.Inf(1), math.Inf(-1)
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			t := a.top(0, h, ln.top)
+			top, bottom = math.Min(top, t), math.Max(bottom, t+a.bottom(overflowBottom)-a.y)
+		}
+	}
+	return top, bottom
+}
+
+// sliceRange returns the part of the line ln a slice covers, relative to its
+// top, when its line-height leaves more than a page of empty leading around
+// its atoms: the atoms and the baseline when it is within a page of them. ok
+// is false for any other line, sliced over its whole extent. Without it, a
+// hostile line-height around a tall inline-block is sliced over one page per
+// page height of leading.
+func (ln *lineOut) sliceRange(page float64) (from, to float64, ok bool) {
+	top, bottom := ln.atomSpan()
+	if ln.height()-(bottom-top) <= page {
+		return 0, 0, false
+	}
+	if b := ln.top; b < top && b > top-page {
+		top = b
+	} else if b > bottom && b < bottom+page {
+		// The text of the line goes to the window that holds its baseline.
+		bottom = b + 1
+	}
+	return math.Max(top, 0), bottom, true
 }
 
 func (ln *lineOut) hasAtom() bool {
