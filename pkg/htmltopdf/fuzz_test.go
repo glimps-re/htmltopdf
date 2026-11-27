@@ -39,6 +39,10 @@ func FuzzRender(f *testing.F) {
 		"<div style='columns:3;column-gap:4px;column-rule:1px solid'><table><thead><tr><th>h</th></tr></thead>" + string(bytes.Repeat([]byte("<tr><td>r<br>s<br>t</td></tr>"), 60)) + "</table></div>",
 		"<div style='columns:2'><div style='columns:3'><p>nested a b c d e f</p><div style='columns:2'><p>deeper</p></div></div><p style='break-before:page'>x</p><p style='break-after:page'>y</p></div>",
 		"<div style='columns:3;column-rule:1px solid red'>" + reportHTML + "</div>",
+		"<p style='margin-left:-1e9px;position:relative;left:1e30px'>x y z</p>",
+		"<style>@page{size:1px 1px;margin:0}</style><div style='position:fixed;top:-1e9px;right:-1e9px'>a</div><p style='break-after:page'>b</p><p>c</p>",
+		"<div style='position:absolute;top:1e308px;left:-1e308px'>x</div><div style='transform:rotate(1deg);position:absolute;left:1e9px'>y</div>",
+		"<div style='overflow:hidden;width:0;height:0'><p style='margin-left:1e7px'>x</p></div><p style='color:transparent;margin-left:9e6px'>t</p>",
 	} {
 		f.Add([]byte(s))
 	}
@@ -48,6 +52,11 @@ func FuzzRender(f *testing.F) {
 			if h := tc.HTML(); len(h) < 64<<10 {
 				f.Add(h)
 			}
+		}
+	}
+	for _, tc := range testcorpus.OffPageCases() {
+		if h := tc.HTML(); len(h) < 64<<10 {
+			f.Add(h)
 		}
 	}
 	c, err := New(Options{Limits: Limits{
@@ -81,6 +90,7 @@ func FuzzRender(f *testing.F) {
 		if res == nil {
 			t.Fatal("nil Result")
 		}
+		checkOffPageWarnings(t, res.Warnings)
 		switch {
 		case err == nil:
 			if lost := layout.TextLost(tree, pages); lost != "" {
@@ -95,4 +105,28 @@ func FuzzRender(f *testing.F) {
 		}
 		_ = io.Discard
 	})
+}
+
+// checkOffPageWarnings: the Detail of text-off-page is one of the four sides,
+// never document text, with a positive count, once per side.
+func checkOffPageWarnings(t *testing.T, ws []Warning) {
+	t.Helper()
+	sides := map[string]bool{}
+	for _, w := range ws {
+		if w.Code != WarnTextOffPage {
+			continue
+		}
+		switch w.Detail {
+		case "left", "right", "above", "below":
+		default:
+			t.Fatalf("text-off-page Detail %q is not a side", w.Detail)
+		}
+		if w.Count < 1 {
+			t.Fatalf("text-off-page %q: count %d", w.Detail, w.Count)
+		}
+		if sides[w.Detail] {
+			t.Fatalf("text-off-page %q reported twice", w.Detail)
+		}
+		sides[w.Detail] = true
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/glimps-re/htmltopdf/internal/budget"
@@ -153,6 +154,9 @@ func Hostile(l budget.Limits) []Case {
 	cs = append(cs, valueCases()...)
 	cs = append(cs, tallAtomCases()...)
 	cs = append(cs, robustCases()...)
+	for _, c := range OffPageCases() {
+		cs = append(cs, c.Case)
+	}
 	return cs
 }
 
@@ -696,4 +700,123 @@ func tallAtomCases() []Case {
 		cs[i] = Case{Name: d.Name, Want: Success, HTML: func() []byte { return doc(style(TallAtomPageCSS), d.HTML) }}
 	}
 	return cs
+}
+
+// OffPageCase is a hostile document that places text outside the page, with
+// the text-off-page warning it must produce. Every marker is one unique word,
+// so each is one text run: a marker is either found in the PDF text or covered
+// by the warning. The offsets are far past any page size, so the expectations
+// hold for every page and margin configuration; the partial_* cases are
+// checked with the default and host-connector options only.
+type OffPageCase struct {
+	Case
+	// Detail is the only side that may be reported; empty means no
+	// text-off-page warning at all.
+	Detail string
+	// Runs is the number of runs reported, per page when Repeats is set.
+	Runs int
+	// AtLeast makes Runs a lower bound, for layouts that decide how many runs
+	// reach the page.
+	AtLeast bool
+	// Repeats marks a box repeated on every page.
+	Repeats bool
+	// Pages is the expected page count; 0 leaves it unchecked.
+	Pages int
+	// Markers are all the words of the document.
+	Markers []string
+	// Visible are the words that must be in the PDF text.
+	Visible []string
+	// Hidden are the words that must not be in the PDF text.
+	Hidden []string
+}
+
+// OffPageCases returns the off-page documents; Hostile includes their Case.
+func OffPageCases() []OffPageCase {
+	const huge = "5000px"
+	words := func(prefix string, n int) []string {
+		out := make([]string, n)
+		for i := range out {
+			out[i] = fmt.Sprintf("%s%d", prefix, i)
+		}
+		return out
+	}
+	single := func(m string) []string { return []string{m} }
+	build := func(name, body string, c OffPageCase) OffPageCase {
+		c.Case = Case{Name: "offpage_" + name, Want: Degraded, HTML: func() []byte { return doc("", body) }}
+		if c.Markers == nil {
+			c.Markers = append(slices.Clone(c.Visible), c.Hidden...)
+		}
+		return c
+	}
+	abs := func(css, text string) string {
+		return `<div style="position:absolute;` + css + `">` + text + `</div>`
+	}
+
+	var cells strings.Builder
+	cells.WriteString("<table><tr>")
+	columns := words("zqcell", maxColumns)
+	for _, w := range columns {
+		cells.WriteString("<td>" + w + "</td>")
+	}
+	cells.WriteString("</tr></table>")
+
+	var fixedDoc strings.Builder
+	fixedDoc.WriteString(`<div style="position:fixed;left:99999px">zqfixed</div>`)
+	pageWords := words("zqpage", 10)
+	for _, w := range pageWords {
+		fixedDoc.WriteString(`<p style="break-after:page">` + w + `</p>`)
+	}
+
+	nowrapWords := words("zqword", 400)
+	nowrapLine := strings.Join(nowrapWords, " ")
+
+	silent := build("partial_under_tolerance", `<div style="position:absolute;left:-5px;font-size:100px">i</div>`,
+		OffPageCase{Visible: single("i")})
+	silent.Want = Success
+
+	return []OffPageCase{
+		build("partial_nowrap_right", `<p style="white-space:nowrap">`+nowrapLine+`</p>`,
+			OffPageCase{Detail: "right", Runs: 1, Visible: nowrapWords}),
+		build("partial_nowrap_left", `<p style="white-space:nowrap;margin-left:-300px">`+nowrapLine+`</p>`,
+			OffPageCase{Detail: "left", Runs: 1, Visible: nowrapWords}),
+		silent,
+		build("partial_above", `<div style="position:absolute;top:-200px;font-size:300px;line-height:300px">i</div>`,
+			OffPageCase{Detail: "above", Runs: 1, Visible: single("i")}),
+		build("partial_below", `<div style="position:fixed;bottom:-150px;font-size:300px;line-height:300px">i</div>`,
+			OffPageCase{Detail: "below", Runs: 1, Repeats: true, Visible: single("i")}),
+		build("margin_left_5000", `<p style="margin-left:`+huge+`">`+strings.Join(words("zqmargin", 3), " ")+`</p>`,
+			OffPageCase{Detail: "right", Runs: 3, Hidden: words("zqmargin", 3)}),
+		build("fixed_left_99999", `<div style="position:fixed;left:99999px">zqfixedleft</div><p>zqnear</p>`,
+			OffPageCase{Detail: "right", Runs: 1, Repeats: true, Visible: single("zqnear"), Hidden: single("zqfixedleft")}),
+		build("fixed_every_page", fixedDoc.String(),
+			OffPageCase{Detail: "right", Runs: 1, Repeats: true, Pages: len(pageWords), Visible: pageWords, Hidden: single("zqfixed")}),
+		// Most cells lie past the page edge; how many fit depends on the page
+		// width and options, so Runs is a lower bound.
+		build("table_1000_columns", cells.String(),
+			OffPageCase{Detail: "right", Runs: maxColumns - 100, AtLeast: true, Markers: columns}),
+		build("absolute_below", abs("top:"+huge, "zqbelow"), OffPageCase{Detail: "below", Runs: 1, Hidden: single("zqbelow")}),
+		build("absolute_above", abs("top:-"+huge, "zqabove"), OffPageCase{Detail: "above", Runs: 1, Hidden: single("zqabove")}),
+		build("absolute_left", abs("left:-"+huge, "zqleft"), OffPageCase{Detail: "left", Runs: 1, Hidden: single("zqleft")}),
+		build("absolute_right", abs("right:-"+huge, "zqright"), OffPageCase{Detail: "right", Runs: 1, Hidden: single("zqright")}),
+		build("both_axes_right_below", abs("left:99999px;top:99999px", "zqcorner"),
+			OffPageCase{Detail: "right", Runs: 1, Hidden: single("zqcorner")}),
+		build("both_axes_left_below", abs("left:-99999px;top:99999px", "zqcorner"),
+			OffPageCase{Detail: "left", Runs: 1, Hidden: single("zqcorner")}),
+		build("negative_margin_left", `<p style="margin-left:-`+huge+`">zqnegative</p>`,
+			OffPageCase{Detail: "left", Runs: 1, Hidden: single("zqnegative")}),
+		build("relative_offset", `<p style="position:relative;left:99999px">zqrelative</p>`,
+			OffPageCase{Detail: "right", Runs: 1, Hidden: single("zqrelative")}),
+		build("overflow_hidden", `<div style="overflow:hidden"><p style="margin-left:`+huge+`">`+strings.Join(words("zqclip", 3), " ")+`</p></div>`,
+			OffPageCase{Detail: "right", Runs: 3, Hidden: words("zqclip", 3)}),
+		build("mixed_visible", `<p>zqnear</p><p style="margin-left:`+huge+`">zqfar</p>`,
+			OffPageCase{Detail: "right", Runs: 1, Visible: single("zqnear"), Hidden: single("zqfar")}),
+	}
+}
+
+// InkSweepDocument is a 300 px page with one 100 px word in an absolute box
+// whose top is top px. Sweeping top across the page edge moves the glyphs off
+// the page while the run box still touches it.
+func InkSweepDocument(top int) []byte {
+	return doc(style("@page{size:300px 300px;margin:0}"),
+		fmt.Sprintf(`<div style="position:absolute;top:%dpx;left:10px;font-size:100px;line-height:100px">zqink</div>`, top))
 }
