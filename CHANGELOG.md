@@ -19,11 +19,12 @@ uses [Semantic Versioning](https://semver.org/).
   corrupt one keeps its box, blank. `<img>` no longer warns `unsupported-element`.
 - Links: an image, inline `<svg>` or inline-block inside `<a href>` is clickable
   over its border box.
-- `WarnTextOffPage` (`text-off-page`): text that is not visible because it lies
-  entirely outside the page. `Detail` is the side (`left`, `right`, `above`,
-  `below`), never the text; `Count` is the number of runs. Text partly on the
-  page, transformed text and transparent text are not reported. Rendering is
-  unchanged; only `Result.Warnings` gains entries.
+- `WarnTextOffPage` (`text-off-page`): text that lies partly or entirely
+  outside the page. `Detail` is the side (`left`, `right`, `above`, `below`),
+  never the text; `Count` is the number of runs. A run that crosses an edge by at
+  most a tenth of its font size (6 pt at most), transformed text and transparent
+  text are not reported. Rendering is unchanged; only `Result.Warnings` gains
+  entries.
 
 ### Fixed
 - An inline box (inline-block, svg, image) taller than a page moves to the next

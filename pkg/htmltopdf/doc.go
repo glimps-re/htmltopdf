@@ -40,10 +40,10 @@
 //
 // What the engine does not support is ignored and reported in Result.Warnings
 // (unsupported properties, values, at-rules, selectors and elements, clamped
-// values, missing glyphs, text placed entirely outside the page, which is not
-// visible: WarnTextOffPage); a warning never fails the render. Approximations
-// (features drawn differently from a browser) are not all warned: docs/css-support.md
-// lists every one with its difference. Output is deterministic: the same input
+// values, missing glyphs, text placed partly or entirely outside the page:
+// WarnTextOffPage); a warning never fails the render. Approximations (features
+// drawn differently from a browser) are not all warned: docs/css-support.md lists
+// every one with its difference. Output is deterministic: the same input
 // and options give the same bytes.
 //
 // # Images

@@ -262,12 +262,15 @@ const (
 	// distinct images are held, count takes precedence: a further http: src
 	// warns count, not scheme.
 	WarnImageRejected WarningCode = "image-rejected"
-	// WarnTextOffPage is text that is not visible because it lies entirely
-	// outside the page, as positioned by the document (a large margin or offset,
-	// a fixed or absolute box, a table wider than the page). Detail is the side of
-	// the page it lies beyond: left, right, above or below; never the text. Count
-	// is the number of text runs. Text partly on the page, transformed text and
-	// transparent text are not reported.
+	// WarnTextOffPage is text that is partly or entirely outside the page, as
+	// positioned by the document (a large margin or offset, a fixed or absolute
+	// box, a table wider than the page, a long white-space: nowrap line). Detail
+	// is the side of the page it lies entirely beyond, else the side it crosses
+	// (the horizontal side first): left, right, above or below, never the text.
+	// Count is the number of text runs. A run that crosses an edge by no more
+	// than a tenth of its font size (at most 6 pt), transformed text and
+	// transparent text are not reported. The top of a run is measured at its
+	// capital height: accents and ascenders above it can be cut silently.
 	WarnTextOffPage WarningCode = "text-off-page"
 )
 

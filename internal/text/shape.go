@@ -160,6 +160,16 @@ func (s *Shaper) Extents(f *Face, size float32) (ascent, descent, lineGap float3
 	return ext.Ascender * k, -ext.Descender * k, ext.LineGap * k
 }
 
+// GlyphAdvance returns the advance of glyph id of f at size, without
+// letter-spacing, or 0 when f cannot be parsed.
+func (s *Shaper) GlyphAdvance(f *Face, id uint16, size float32) float32 {
+	ff := s.face(f)
+	if ff == nil || ff.Upem() == 0 {
+		return 0
+	}
+	return ff.HorizontalAdvance(font.GID(id)) * size / float32(ff.Upem())
+}
+
 func extendsCluster(prev, r rune) bool {
 	if r < 0x300 && prev != 0x200d {
 		return false

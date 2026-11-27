@@ -61,6 +61,12 @@ const (
 	// boxAscent and boxDescent bound the run box above and below the baseline.
 	boxAscent  = 1.0
 	boxDescent = lineBoxHeight - boxAscent
+	// textEdgeTolerance is how far, in font sizes, a run may cross a page edge
+	// without a warning, capped at textEdgeCap points so that large type is not
+	// hidden. The ink box comes from advances and font metrics, so overhangs are
+	// not measured: the tolerance keeps a run that only grazes an edge silent.
+	textEdgeTolerance = 0.1
+	textEdgeCap       = 6.0
 )
 
 // pollEvery is the number of display items between two context checks.
@@ -248,26 +254,38 @@ func (s *pageState) rect(r display.Rect) (ptRect, bool) {
 // onPage returns the rectangle with the given edges in points, ok false when it
 // is entirely off the page.
 func (s *pageState) onPage(x0, x1, yTop, yBottom float64) (ptRect, bool) {
-	if offPageSide(s.g, x0, x1, yTop, yBottom) != "" {
+	if offPageSide(s.g, edges{x0, x1, yTop, yBottom}, math.Inf(1)) != "" {
 		return ptRect{}, false
 	}
 	return ptRect{x: x0, y: yBottom, w: x1 - x0, h: yTop - yBottom}, true
 }
 
+// edges are the sides of a rectangle in PDF points, whose y axis points up.
+type edges struct{ x0, x1, yTop, yBottom float64 }
+
 // offPageSide returns the side of the page, as the reader sees it, that the
-// rectangle with the given edges lies entirely beyond: left, right, above or
-// below, horizontal first. The edges are in PDF points, whose y axis points up:
-// a top edge under 0 is below the page. It is empty when the rectangle touches
-// the page.
-func offPageSide(g Geometry, x0, x1, yTop, yBottom float64) string {
+// rectangle lies beyond: left, right, above or below. A side the rectangle lies
+// entirely beyond (a top edge under 0 is below the page) wins over a side it
+// crosses by more than tol, and horizontal wins over vertical. A tol of +Inf
+// reports only the sides it lies entirely beyond. It is empty otherwise.
+func offPageSide(g Geometry, r edges, tol float64) string {
+	w, h := g.Width*PxToPt, g.Height*PxToPt
 	switch {
-	case x1 < 0:
+	case r.x1 < 0:
 		return "left"
-	case x0 > g.Width*PxToPt:
+	case r.x0 > w:
 		return "right"
-	case yTop < 0:
+	case r.yTop < 0:
 		return "below"
-	case yBottom > g.Height*PxToPt:
+	case r.yBottom > h:
+		return "above"
+	case r.x0 < -tol:
+		return "left"
+	case r.x1 > w+tol:
+		return "right"
+	case r.yBottom < -tol:
+		return "below"
+	case r.yTop > h+tol:
 		return "above"
 	}
 	return ""
@@ -483,34 +501,57 @@ func (p *Painter) font(f *text.Face) (pdf.FontID, error) {
 	return id, nil
 }
 
-// inkExtent is how far the glyphs of a face reach above and below the baseline,
-// in font sizes.
-type inkExtent struct{ ascent, descent float64 }
+// inkExtent is how far the glyphs of a face reach above the baseline (to the
+// ascent, and to the capitals) and below it, in font sizes.
+type inkExtent struct{ ascent, cap, descent float64 }
 
 // inkOf returns the ink extent of f from its metrics, clamped to the run box.
 func (p *Painter) inkOf(f *text.Face) inkExtent {
 	if e, ok := p.ink[f]; ok {
 		return e
 	}
-	e := inkExtent{inkAscent, inkDescent}
+	e := inkExtent{inkAscent, inkAscent, inkDescent}
 	if info, ok := p.shaper.Info(f); ok && info.UnitsPerEm > 0 {
 		upem := float64(info.UnitsPerEm)
-		e = inkExtent{float64(info.Ascent) / upem, -float64(info.Descent) / upem}
+		e = inkExtent{float64(info.Ascent) / upem, float64(info.CapHeight) / upem, -float64(info.Descent) / upem}
 	}
 	e.ascent = max(0, min(e.ascent, boxAscent))
+	e.cap = max(0, min(e.cap, e.ascent))
 	e.descent = max(0, min(e.descent, boxDescent))
 	p.ink[f] = e
 	return e
 }
 
+// inkSpan returns the horizontal extent of the glyphs of the run, in px from
+// its origin. A negative letter-spacing moves the pen back, so the box of the
+// advances can be inverted and the last glyph can reach past it.
+func (s *pageState) inkSpan(it *display.Text, width float64) (lo, hi float64) {
+	first, last := it.Glyphs[0], it.Glyphs[len(it.Glyphs)-1]
+	penLast := width - float64(last.Advance)
+	size := float32(it.Size)
+	nominalFirst := float64(s.p.shaper.GlyphAdvance(it.Face, first.ID, size))
+	nominalLast := float64(s.p.shaper.GlyphAdvance(it.Face, last.ID, size))
+	return min(0, penLast), max(width, nominalFirst, penLast+nominalLast)
+}
+
 // inkSide returns the side of the page that the ink of the run lies entirely
-// beyond, or "" when it touches the page or a transform is active.
-func (s *pageState) inkSide(it *display.Text, width float64) string {
+// beyond or crosses by more than the tolerance, or "" when it stays within the
+// tolerance of the page or a transform is active. A run is entirely beyond a
+// side on its ascent, and crosses one on its capitals.
+func (s *pageState) inkSide(it *display.Text, lo, hi float64) string {
 	if s.xforms > 0 {
 		return ""
 	}
 	e := s.p.inkOf(it.Face)
-	return offPageSide(s.g, s.x(it.X), s.x(it.X+width), s.y(it.Baseline-e.ascent*it.Size), s.y(it.Baseline+e.descent*it.Size))
+	r := edges{
+		x0: s.x(it.X + lo), x1: s.x(it.X + hi),
+		yTop: s.y(it.Baseline - e.ascent*it.Size), yBottom: s.y(it.Baseline + e.descent*it.Size),
+	}
+	if side := offPageSide(s.g, r, math.Inf(1)); side != "" {
+		return side
+	}
+	r.yTop = s.y(it.Baseline - e.cap*it.Size)
+	return offPageSide(s.g, r, min(textEdgeTolerance*s.length(it.Size), textEdgeCap))
 }
 
 func (s *pageState) text(it *display.Text) {
@@ -518,10 +559,11 @@ func (s *pageState) text(it *display.Text) {
 		return
 	}
 	width := it.Width()
-	box := display.Rect{X: it.X, Y: it.Baseline - boxAscent*it.Size, W: width, H: lineBoxHeight * it.Size}
+	lo, hi := s.inkSpan(it, width)
+	box := display.Rect{X: it.X + lo, Y: it.Baseline - boxAscent*it.Size, W: hi - lo, H: lineBoxHeight * it.Size}
 	// The run is culled on its box, which only widens the ink; the warning is
 	// decided on the ink, so a culled run always warns.
-	side := s.inkSide(it, width)
+	side := s.inkSide(it, lo, hi)
 	if side != "" {
 		s.p.b.Warn(budget.WarnTextOffPage, side)
 	}

@@ -677,3 +677,19 @@ func BenchmarkShapeLongWord(b *testing.B) {
 		}
 	}
 }
+
+func TestGlyphAdvanceMatchesShaping(t *testing.T) {
+	s, _ := newShaper(t)
+	runs, err := s.Shape("H", sans, nil)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs %v, err %v", runs, err)
+	}
+	g := runs[0].Glyphs[0]
+	got := s.GlyphAdvance(runs[0].Face, g.ID, runs[0].Size)
+	if d := got - g.Advance; d > 0.01 || d < -0.01 || got <= 0 {
+		t.Fatalf("GlyphAdvance %v, shaped advance %v", got, g.Advance)
+	}
+	if got := s.GlyphAdvance(&Face{}, g.ID, 16); got != 0 {
+		t.Fatalf("unusable face: %v", got)
+	}
+}
