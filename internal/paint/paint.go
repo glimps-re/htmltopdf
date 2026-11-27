@@ -54,6 +54,13 @@ const (
 	lineThickness   = 0.07
 	// lineBoxHeight is the height of a text run's box, in font sizes.
 	lineBoxHeight = 1.4
+	// inkAscent and inkDescent are the extents of the ink above and below the
+	// baseline, in font sizes, for a face whose metrics cannot be read.
+	inkAscent  = 0.8
+	inkDescent = 0.25
+	// boxAscent and boxDescent bound the run box above and below the baseline.
+	boxAscent  = 1.0
+	boxDescent = lineBoxHeight - boxAscent
 )
 
 // pollEvery is the number of display items between two context checks.
@@ -75,6 +82,7 @@ type Painter struct {
 	shaper *text.Shaper
 	b      *budget.Budget
 	fonts  map[*text.Face]pdf.FontID
+	ink    map[*text.Face]inkExtent
 	glyphs []pdf.Glyph
 	// lastStops, lastLen and lastID memoize the shading of the last gradient.
 	lastStops  *css.ColorStop
@@ -106,7 +114,7 @@ func (p *Painter) Anchors() []Anchor { return p.anchors }
 // NewPainter returns a Painter that adds fonts to w, reads their metrics through
 // s and reports clamped values on b.
 func NewPainter(w *pdf.Writer, s *text.Shaper, b *budget.Budget) *Painter {
-	return &Painter{w: w, shaper: s, b: b, fonts: map[*text.Face]pdf.FontID{}, images: map[*raster.Source]imageState{}}
+	return &Painter{w: w, shaper: s, b: b, fonts: map[*text.Face]pdf.FontID{}, ink: map[*text.Face]inkExtent{}, images: map[*raster.Source]imageState{}}
 }
 
 // pdfColor converts a css color.
@@ -240,10 +248,29 @@ func (s *pageState) rect(r display.Rect) (ptRect, bool) {
 // onPage returns the rectangle with the given edges in points, ok false when it
 // is entirely off the page.
 func (s *pageState) onPage(x0, x1, yTop, yBottom float64) (ptRect, bool) {
-	if x1 < 0 || x0 > s.g.Width*PxToPt || yTop < 0 || yBottom > s.g.Height*PxToPt {
+	if offPageSide(s.g, x0, x1, yTop, yBottom) != "" {
 		return ptRect{}, false
 	}
 	return ptRect{x: x0, y: yBottom, w: x1 - x0, h: yTop - yBottom}, true
+}
+
+// offPageSide returns the side of the page, as the reader sees it, that the
+// rectangle with the given edges lies entirely beyond: left, right, above or
+// below, horizontal first. The edges are in PDF points, whose y axis points up:
+// a top edge under 0 is below the page. It is empty when the rectangle touches
+// the page.
+func offPageSide(g Geometry, x0, x1, yTop, yBottom float64) string {
+	switch {
+	case x1 < 0:
+		return "left"
+	case x0 > g.Width*PxToPt:
+		return "right"
+	case yTop < 0:
+		return "below"
+	case yBottom > g.Height*PxToPt:
+		return "above"
+	}
+	return ""
 }
 
 // path adds the rectangle, with elliptical corners when radii is not zero.
@@ -456,13 +483,48 @@ func (p *Painter) font(f *text.Face) (pdf.FontID, error) {
 	return id, nil
 }
 
+// inkExtent is how far the glyphs of a face reach above and below the baseline,
+// in font sizes.
+type inkExtent struct{ ascent, descent float64 }
+
+// inkOf returns the ink extent of f from its metrics, clamped to the run box.
+func (p *Painter) inkOf(f *text.Face) inkExtent {
+	if e, ok := p.ink[f]; ok {
+		return e
+	}
+	e := inkExtent{inkAscent, inkDescent}
+	if info, ok := p.shaper.Info(f); ok && info.UnitsPerEm > 0 {
+		upem := float64(info.UnitsPerEm)
+		e = inkExtent{float64(info.Ascent) / upem, -float64(info.Descent) / upem}
+	}
+	e.ascent = max(0, min(e.ascent, boxAscent))
+	e.descent = max(0, min(e.descent, boxDescent))
+	p.ink[f] = e
+	return e
+}
+
+// inkSide returns the side of the page that the ink of the run lies entirely
+// beyond, or "" when it touches the page or a transform is active.
+func (s *pageState) inkSide(it *display.Text, width float64) string {
+	if s.xforms > 0 {
+		return ""
+	}
+	e := s.p.inkOf(it.Face)
+	return offPageSide(s.g, s.x(it.X), s.x(it.X+width), s.y(it.Baseline-e.ascent*it.Size), s.y(it.Baseline+e.descent*it.Size))
+}
+
 func (s *pageState) text(it *display.Text) {
 	if len(it.Glyphs) == 0 || it.Color.A <= 0 || !(it.Size > 0) || math.IsInf(it.Size, 0) || it.Face == nil {
 		return
 	}
 	width := it.Width()
-	// The run box: from the ascent above the baseline to the descent below.
-	box := display.Rect{X: it.X, Y: it.Baseline - it.Size, W: width, H: lineBoxHeight * it.Size}
+	box := display.Rect{X: it.X, Y: it.Baseline - boxAscent*it.Size, W: width, H: lineBoxHeight * it.Size}
+	// The run is culled on its box, which only widens the ink; the warning is
+	// decided on the ink, so a culled run always warns.
+	side := s.inkSide(it, width)
+	if side != "" {
+		s.p.b.Warn(budget.WarnTextOffPage, side)
+	}
 	if _, ok := s.rect(box); !ok {
 		return
 	}

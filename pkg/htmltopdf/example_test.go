@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"strings"
 
@@ -156,4 +157,21 @@ func ExampleOptions_referenceConfiguration() {
 	}
 	fmt.Println(res.Pages, strings.Contains(pdf.String(), "/MediaBox [0 0 595.92 841.92]"))
 	// Output: 1 true
+}
+
+func ExampleConverter_Render_textOffPage() {
+	c, err := htmltopdf.New(htmltopdf.Options{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	res, err := c.Render(context.Background(), strings.NewReader(`<p style="margin-left:5000px">far away</p>`), io.Discard)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, w := range res.Warnings {
+		if w.Code == htmltopdf.WarnTextOffPage {
+			fmt.Println(w.Detail)
+		}
+	}
+	// Output: right
 }

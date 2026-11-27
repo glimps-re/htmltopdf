@@ -95,6 +95,7 @@ func TestWarningCodesMatchTheBudgetCodes(t *testing.T) {
 	public := []WarningCode{
 		WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
 		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback, WarnImageRejected,
+		WarnTextOffPage,
 	}
 	internal := map[string]bool{}
 	for _, c := range budget.WarningCodes() {

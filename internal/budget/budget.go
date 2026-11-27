@@ -86,8 +86,8 @@ var ErrInvalidCharge = errors.New("budget: invalid charge")
 // zero entry rejects any positive charge of that Kind.
 type Limits [NumKinds]int64
 
-// Defaults returns the default limits. The MaxWork default is provisional
-// until it is calibrated on the corpus.
+// Defaults returns the default limits. The Work default counts units of work;
+// it is not a bound on elapsed time, which is the job of the render timeout.
 func Defaults() Limits {
 	return Limits{
 		InputBytes:  2 << 20,
@@ -133,6 +133,7 @@ const (
 	WarnVarBudget           Code = "var-budget"
 	WarnShapingFallback     Code = "shaping-fallback"
 	WarnImageRejected       Code = "image-rejected"
+	WarnTextOffPage         Code = "text-off-page"
 )
 
 // WarningCodes returns every code, for the tests that compare it with the public list.
@@ -140,6 +141,7 @@ func WarningCodes() []Code {
 	return []Code{
 		WarnUnsupportedProperty, WarnInvalidValue, WarnUnsupportedAtRule, WarnUnsupportedSelector, WarnUnsupportedElement,
 		WarnBlockedLink, WarnMissingGlyph, WarnClamped, WarnVarBudget, WarnShapingFallback, WarnImageRejected,
+		WarnTextOffPage,
 	}
 }
 

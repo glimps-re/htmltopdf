@@ -19,6 +19,11 @@ uses [Semantic Versioning](https://semver.org/).
   corrupt one keeps its box, blank. `<img>` no longer warns `unsupported-element`.
 - Links: an image, inline `<svg>` or inline-block inside `<a href>` is clickable
   over its border box.
+- `WarnTextOffPage` (`text-off-page`): text that is not visible because it lies
+  entirely outside the page. `Detail` is the side (`left`, `right`, `above`,
+  `below`), never the text; `Count` is the number of runs. Text partly on the
+  page, transformed text and transparent text are not reported. Rendering is
+  unchanged; only `Result.Warnings` gains entries.
 
 ### Fixed
 - An inline box (inline-block, svg, image) taller than a page moves to the next
@@ -45,6 +50,9 @@ uses [Semantic Versioning](https://semver.org/).
   height (nested offsets summed), so that the text of a line stays on a page.
 
 ### Known issues
+- Text inside an absolutely positioned or fixed box can still be pushed below the
+  page by a huge `line-height` or offset; it is not visible and is reported as
+  `text-off-page`.
 - A huge empty `height`, padding, border or table height still adds pages until
   `MaxPages` fails the render.
 
