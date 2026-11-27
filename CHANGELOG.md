@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
 ### Added
 - Raster images: `<img>` whose `src` is a base64 `data:` URL holding a PNG or a
   JPEG is laid out as a replaced box (attributes, `width`/`height`, `min-`/`max-width`
@@ -23,8 +25,13 @@ uses [Semantic Versioning](https://semver.org/).
   outside the page. `Detail` is the side (`left`, `right`, `above`, `below`),
   never the text; `Count` is the number of runs. A run that crosses an edge by at
   most a tenth of its font size (6 pt at most), transformed text and transparent
-  text are not reported. Rendering is unchanged; only `Result.Warnings` gains
-  entries.
+  text are not reported. The warning itself changes no rendering.
+
+### Changed
+- The package is checked to cross-compile for Windows (amd64, arm64); it is tested
+  on Linux only. The `Limits.MaxWork` and `Limits.Timeout` documentation now
+  states that `MaxWork` counts work and does not bound time, and that image-heavy
+  documents may need a higher `MaxWork`.
 
 ### Fixed
 - An inline box (inline-block, svg, image) taller than a page moves to the next
@@ -32,8 +39,14 @@ uses [Semantic Versioning](https://semver.org/).
 - The text of a line is no longer pushed off the page by the margins or the
   `vertical-align` of an inline box, by `line-height`, or by `vertical-align` on
   text; a page break inside a flex or grid line, a table row or columns ends above
-  the text it would cut through (except a glyph taller than half the page, or
-  overlapping lines from a `line-height` below the font size).
+  the text it would cut through, including piles of overlapping lines from a
+  `line-height` below the font size (except a glyph taller than half the room left
+  on the page, which can still be cut).
+- Positioned text (`position: absolute` or `relative`) inside a line, table row or
+  flex or grid band that a page break slices is no longer dropped; it is drawn, or
+  reported as `text-off-page` when it lies outside the page.
+- Text with a negative `letter-spacing` whose advances end left of the page but
+  whose glyphs are on it is now drawn instead of being lost.
 
 ### Documented deviations from Chrome
 - A percent-encoded `data:` payload, or a C0 control, tab or newline inside
@@ -56,8 +69,12 @@ uses [Semantic Versioning](https://semver.org/).
   `text-off-page`.
 - A huge empty `height`, padding, border or table height still adds pages until
   `MaxPages` fails the render.
+- Keeping glyphs whole at a page break in a dense pile of overlapping lines adds
+  pages for that pile (about 40% more on the piles measured).
+- A single line box taller than about 4e7 px minus its position can lose that line
+  inside a table cell, flex item or inline-block.
 
-## [0.1.0]
+## [0.1.0] - 2026-11-25
 
 First release: a pure-Go HTML+CSS to PDF renderer for reports, built as four
 milestones (M1 to M4). The entry below lists what each added. `docs/css-support.md`
