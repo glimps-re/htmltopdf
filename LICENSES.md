@@ -41,10 +41,11 @@ pdfcpu and its dependencies must never be imported by library code:
 `testdata/fonts/` holds fonts under licenses that are not in the allowed list. The
 exception was approved by the project owner (design decision Q8) on these conditions:
 the fonts are used by tests only, are never embedded in the library or imported by
-library code (enforced by `TestNoLibraryCodeUsesTestFonts`), and travel with their
+library code (enforced by `TestLibraryCodeIsTestFree`), and travel with their
 license texts. Fonts are copied unmodified.
 
-Source: Debian packages `fonts-liberation` 1:2.1.5-3 and `fonts-dejavu-core` 2.37-8,
+Source: Debian packages `fonts-liberation` 1:2.1.5-3 and `fonts-dejavu-core`,
+`fonts-dejavu-extra` and `fonts-dejavu-mono` 2.37-8,
 files taken from `/usr/share/fonts/truetype/`; license texts from the packages'
 `/usr/share/doc/*/copyright`.
 
@@ -57,6 +58,9 @@ files taken from `/usr/share/fonts/truetype/`; license texts from the packages'
 | `DejaVuSans.ttf` | DejaVu Sans 2.37 | Bitstream Vera (`LICENSE-DejaVu.txt`) | `57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e` |
 | `DejaVuSans-Bold.ttf` | DejaVu Sans Bold 2.37 | Bitstream Vera | `a4c5bc453ca281d90ea079e596da7ae0dfeb5777497c29ec254e76d97ff6f890` |
 | `DejaVuSansMono.ttf` | DejaVu Sans Mono 2.37 | Bitstream Vera | `54bf827eb99404e8f430c330ad30f063334f637eba0109b6a18d4f566a8e9dd8` |
+| `DejaVuSerif.ttf` | DejaVu Serif 2.37 | Bitstream Vera | `8cb29f7db250ebb2551a6ce2c1e0bfd5a0eb520e9e233370db0493e82e1f36f7` |
+| `DejaVuSerif-Bold.ttf` | DejaVu Serif Bold 2.37 | Bitstream Vera | `aac3f559445d23f0f567a243f91f3f6ad6cb4b5cafa1521a3479fffe0637f0bd` |
+| `DejaVuSerif-Italic.ttf` | DejaVu Serif Italic 2.37 | Bitstream Vera | `d843bf414381dd64b89e6c7c954075657b74168521f02b30e11d308558eda1d2` |
 
 The Liberation fonts are the 2.x family under SIL OFL 1.1, not the GPL-licensed
 Liberation Sans Narrow.

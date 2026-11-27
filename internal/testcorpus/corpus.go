@@ -237,6 +237,9 @@ func HostConnectorFontFiles() []FontFile {
 		{"DejaVuSans.ttf", "DejaVu Sans"},
 		{"DejaVuSans-Bold.ttf", "DejaVu Sans"},
 		{"DejaVuSansMono.ttf", "DejaVu Sans Mono"},
+		{"DejaVuSerif.ttf", "DejaVu Serif"},
+		{"DejaVuSerif-Bold.ttf", "DejaVu Serif"},
+		{"DejaVuSerif-Italic.ttf", "DejaVu Serif"},
 	}
 }
 

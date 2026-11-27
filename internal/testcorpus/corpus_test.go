@@ -195,8 +195,8 @@ func TestHostConnectorReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fonts) != 7 {
-		t.Fatalf("got %d fonts, want 7", len(fonts))
+	if len(fonts) != 10 {
+		t.Fatalf("got %d fonts, want 10", len(fonts))
 	}
 	for i, f := range fonts {
 		if len(f.Data) < 4 || string(f.Data[:4]) != "\x00\x01\x00\x00" {
