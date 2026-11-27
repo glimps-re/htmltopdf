@@ -23,6 +23,10 @@ type frag struct {
 	// cut indexes the children and lines of a fragment cut on several pages;
 	// built on its first cut, relative to rect.Y like ovf.
 	cut *cutIndex
+	// laysOK tells that layLo and layHi are computed: the lowest and highest
+	// top of the layers under the fragment (see layerSpan), relative to rect.Y.
+	laysOK       bool
+	layLo, layHi float64
 	// border and padding are the used widths (top, right, bottom, left); the
 	// top ones belong to the first fragment only, the bottom ones to the last.
 	border, padding [4]float64

@@ -78,6 +78,59 @@ func reachBottom(f *frag) float64 {
 	return f.rect.Y + math.Max(f.rect.H, f.reach)
 }
 
+// layerSpan returns the lowest and highest top of the layers under f, relative
+// to f.rect.Y: its own, and those under its children and atoms; lo > hi when
+// there is none. The span of a child or atom with overflow: hidden is left out:
+// it clips them, and a cut that does not hold it cannot show them. That of f
+// itself counts whatever its overflow, for a cut of its own content. f must be
+// complete: the span is computed once, then O(1), like measure.
+func layerSpan(f *frag) (lo, hi float64) {
+	if f.laysOK {
+		return f.layLo, f.layHi
+	}
+	lo, hi = math.Inf(1), math.Inf(-1)
+	add := func(l, h, dy float64) {
+		l, h = l+dy, h+dy
+		// A NaN would make every test on the span false and hide the layers
+		// under it: the span then covers everything.
+		if math.IsNaN(l) {
+			l = math.Inf(-1)
+		}
+		if math.IsNaN(h) {
+			h = math.Inf(1)
+		}
+		lo, hi = math.Min(lo, l), math.Max(hi, h)
+	}
+	inner := func(c *frag) {
+		if !clips(c) {
+			l, h := layerSpan(c)
+			if l <= h || math.IsNaN(l) || math.IsNaN(h) {
+				add(l, h, c.rect.Y-f.rect.Y)
+			}
+		}
+	}
+	for _, a := range f.abs {
+		add(0, 0, a.f.rect.Y-f.rect.Y)
+	}
+	for _, c := range f.children {
+		inner(c)
+	}
+	for _, ln := range f.lines {
+		for i := range ln.items {
+			if a := ln.items[i].atom; a != nil {
+				inner(a.f)
+			}
+		}
+	}
+	f.layLo, f.layHi, f.laysOK = lo, hi, true
+	return lo, hi
+}
+
+// clips reports whether f has overflow: hidden.
+func clips(f *frag) bool {
+	return f.box != nil && f.box.Style != nil && f.box.Style.OverflowHidden
+}
+
 func measure(f *frag) {
 	if f.ovfOK {
 		return
@@ -94,10 +147,11 @@ func measure(f *frag) {
 	f.ovf, f.reach, f.ovfOK = fit-f.rect.Y, cut-f.rect.Y, true
 }
 
-// chargedCut is cutFrag for a band or line cut again on every page it spans:
-// what the cut looks at is charged to Work.
-func (l *layouter) chargedCut(f *frag, from, to float64) (*frag, error) {
-	piece, visits := cutCounted(f, from, to)
+// chargedCut is cutCounted for a band or line cut again on every page it spans:
+// what the cut looks at is charged to Work. first and last tell the first and
+// last piece of the slice, which also keep the layers above and below it.
+func (l *layouter) chargedCut(f *frag, from, to float64, first, last bool) (*frag, error) {
+	piece, visits := cutCounted(f, from, to, first, last)
 	return piece, l.b.Charge(budget.Work, visits)
 }
 
@@ -184,7 +238,7 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 			}
 			room := end - off
 			for _, fr := range s.frags {
-				piece, err := l.chargedCut(fr, off, end)
+				piece, err := l.chargedCut(fr, off, end, off == 0, false)
 				if err != nil {
 					return complete, nil, err
 				}
@@ -200,7 +254,7 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 		}
 		for _, fr := range s.frags {
 			if off > 0 {
-				if fr, err = l.chargedCut(fr, off, math.MaxFloat64); err != nil {
+				if fr, err = l.chargedCut(fr, off, math.MaxFloat64, false, true); err != nil {
 					return complete, nil, err
 				}
 			}

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("0+a{ yzBst00!b0<p>0<A stYle=\"displAY:inline-BloCk;height:19122pX\"><B stYle=\"position:ABsolute;top:19170pC\">0000")

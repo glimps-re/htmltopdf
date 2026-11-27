@@ -369,6 +369,7 @@ func textInk(t *display.Text, top, page float64) float64 {
 // page clips the atom there, and a layer is carried by the window of its top,
 // so one below it would never be drawn.
 func liftLayers(f *frag, limit float64) {
+	f.laysOK = false
 	for _, ly := range f.abs {
 		top := ly.f.rect.Y
 		if to := math.Max(f.rect.Y, limit-math.Max(ly.f.rect.H, 1)); to < top {

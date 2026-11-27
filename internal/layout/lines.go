@@ -81,7 +81,7 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 			return partial, []level{{cur: cur, off: pulledOff}}, nil
 		}
 		if l.needsSlice(&ln, off) {
-			text := false
+			text, first := false, off == 0
 			if from, to, ok := ln.sliceRange(l.bottom); ok {
 				// The baseline is past a page of empty leading: its text goes with
 				// the first slice, where the line starts, as on a line without atom.
@@ -89,7 +89,7 @@ func (l *layouter) lines(b *box.Box, f *frag, lv level, inner cbox, decor style.
 				off, ext = math.Max(off, from), to
 			}
 			start := l.y
-			more, stop, err := l.sliceLine(f, &ln, inner, p.align, start-off, ext, text)
+			more, stop, err := l.sliceLine(f, &ln, inner, p.align, start-off, ext, text, first)
 			if err != nil {
 				return complete, nil, err
 			}
@@ -175,9 +175,10 @@ func (l *layouter) placeRaised(f *frag, ln *lineOut, inner cbox, align style.Tex
 // starts at y0, above the page when it resumes; ext is its extent, overflow of
 // its atoms included. With text, the text of the line is placed too, its
 // glyphs from the top of the slice: a slice range leaves it out of every
-// slice, and at its own baseline it would be above or below the page. It
+// slice, and at its own baseline it would be above or below the page. The
+// first slice (first) and the last keep the layers above and below them. It
 // reports whether part of it is left for the next page.
-func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0, ext float64, text bool) (more bool, stop float64, err error) {
+func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextAlign, y0, ext float64, text, first bool) (more bool, stop float64, err error) {
 	end := y0 + ext
 	lf := l.build(ln, inner, align, y0)
 	whole := &frag{lines: []*lineFrag{lf}}
@@ -187,7 +188,7 @@ func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextA
 			return false, stop, err
 		}
 	}
-	piece, err := l.chargedCut(whole, l.y, math.Min(end, stop))
+	piece, err := l.chargedCut(whole, l.y, math.Min(end, stop), first, end <= stop+cutEps)
 	if err != nil {
 		return false, stop, err
 	}

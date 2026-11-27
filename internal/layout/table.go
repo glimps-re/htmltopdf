@@ -845,16 +845,25 @@ func countNodes(f *frag) int {
 // O(1) a box that ends above it, overflow included. It returns a copy of the
 // part of f between from and to, in the coordinates of f. A box that crosses a
 // cut is split in two pieces; a line belongs to the piece that holds its
-// baseline. The lines are copied, so the original can be cut again.
+// baseline. The lines are copied, so the original can be cut again. The piece
+// keeps the layers whose top is in the window, wherever their containing block.
 func cutFrag(f *frag, from, to float64) *frag {
-	piece, _ := cutCounted(f, from, to)
+	piece, _ := cutCounted(f, from, to, false, false)
 	return piece
 }
 
 // cutCounted is cutFrag that also returns the number of fragments and lines it
-// looked at and dropped, for the Work of a cut repeated on every page.
-func cutCounted(f *frag, from, to float64) (*frag, int64) {
-	c := cutter{from: from, to: to}
+// looked at and dropped, for the Work of a cut repeated on every page. The
+// first piece of a slice also keeps the layers above the window, and the last
+// one those below it.
+func cutCounted(f *frag, from, to float64, first, last bool) (*frag, int64) {
+	c := cutter{from: from, to: to, layerFrom: from, layerTo: to}
+	if first {
+		c.layerFrom = math.Inf(-1)
+	}
+	if last {
+		c.layerTo = math.Inf(1)
+	}
 	return c.frag(f), c.visits
 }
 
@@ -868,17 +877,27 @@ func inWindow(top, bottom, from, to float64) bool {
 // and drops.
 type cutter struct {
 	from, to float64
-	visits   int64
+	// layerFrom and layerTo bound the tops of the layers kept: the window, or
+	// unbounded past the first or last piece of a slice. An absolute box placed
+	// above or below every window is then still emitted, and reported off the
+	// page, instead of silently dropped.
+	layerFrom, layerTo float64
+	visits             int64
 }
 
 func (c *cutter) frag(f *frag) *frag {
 	children, lines := c.content(f)
-	return cutBox(f, c.from, c.to, children, lines)
+	return c.box(f, children, lines)
 }
 
 // content returns the pieces of the children and the lines of f in the
 // window. A child that ended above the window is kept only for the lines that
 // overflow it into the window (a fixed height smaller than its content).
+//
+// The layers whose top the cut keeps are kept wherever their containing block
+// is: a child or the atoms of a line outside the window give a carrier (see
+// carrier) when layers under them have their top in it. All the children and
+// lines are then looked at, not only those of the window.
 func (c *cutter) content(f *frag) ([]*frag, []*lineFrag) {
 	var ci, cj, li, lj int
 	if ix := f.index(); ix != nil {
@@ -887,46 +906,138 @@ func (c *cutter) content(f *frag) ([]*frag, []*lineFrag) {
 	} else {
 		cj, lj = len(f.children), len(f.lines)
 	}
+	carry := c.meets(f)
 	var children []*frag
+	visits := int64(cj - ci + lj - li)
+	if carry {
+		visits += int64(len(f.children) - (cj - ci) + len(f.lines) - (lj - li))
+		for _, ch := range f.children[:ci] {
+			children = c.appendCarrier(children, ch)
+		}
+	}
 	for _, ch := range f.children[ci:cj] {
 		ct, cb := ch.rect.Y, ch.rect.Y+ch.rect.H
 		switch {
 		case inWindow(ct, cb, c.from, c.to):
 			children = append(children, c.frag(ch))
+			continue
 		case ct < c.to && reachBottom(ch) > c.from-cutEps:
 			// cutEps: the memoized bottom comes back with rounding, and a line
 			// on from must not be skipped.
 			if cc, cl := c.content(ch); len(cc) > 0 || len(cl) > 0 {
-				children = append(children, cutBox(ch, c.from, c.to, cc, cl))
+				children = append(children, c.box(ch, cc, cl))
+				continue
 			}
+		}
+		if carry {
+			children = c.appendCarrier(children, ch)
+		}
+	}
+	if carry {
+		for _, ch := range f.children[cj:] {
+			children = c.appendCarrier(children, ch)
+		}
+		for _, ln := range f.lines[:li] {
+			children = c.atomCarriers(ln, children)
 		}
 	}
 	var lines []*lineFrag
 	for _, ln := range f.lines[li:lj] {
 		if nl := c.line(ln); nl != nil {
 			lines = append(lines, nl)
+		} else if carry {
+			children = c.atomCarriers(ln, children)
+		}
+	}
+	if carry {
+		for _, ln := range f.lines[lj:] {
+			children = c.atomCarriers(ln, children)
 		}
 	}
 	// The pieces are the output of the cut; what it looked at and dropped is
 	// the scan a cut repeated on every page pays.
-	c.visits += int64(cj - ci + lj - li - len(children) - len(lines))
+	c.visits += max(0, visits-int64(len(children)+len(lines)))
 	return children, lines
 }
 
-// cutBox returns the piece of the box f in the window, holding the given
-// content.
-func cutBox(f *frag, from, to float64, children []*frag, lines []*lineFrag) *frag {
-	top, bottom := f.rect.Y, f.rect.Y+f.rect.H
+// meets reports whether the layers under f can have their top among those the
+// cut keeps.
+func (c *cutter) meets(f *frag) bool {
+	lo, hi := layerSpan(f)
+	return lo <= hi && f.rect.Y+hi >= c.layerFrom && f.rect.Y+lo < c.layerTo
+}
+
+// carrier returns, for the fragment f that the window does not hold, a copy of
+// no height and no content (it draws nothing) holding the layers under f whose
+// top the cut keeps, with the boxes between, so that they keep the offset and
+// the rotation of their containing block; nil when there is none. Only the
+// subtrees whose layer span meets the bounds are walked, and each fragment
+// walked is charged.
+func (c *cutter) carrier(f *frag) *frag {
+	if clips(f) || !c.meets(f) {
+		return nil
+	}
+	// f and each child looked at; the atoms are charged by atomCarriers.
+	c.visits += 1 + int64(len(f.children))
+	var kids []*frag
+	for _, ch := range f.children {
+		kids = c.appendCarrier(kids, ch)
+	}
+	for _, ln := range f.lines {
+		kids = c.atomCarriers(ln, kids)
+	}
+	abs := cutLayers(f.abs, c.layerFrom, c.layerTo)
+	if len(kids) == 0 && len(abs) == 0 {
+		return nil
+	}
+	nf := copyUncached(f)
+	nf.rect.H = 0
+	nf.first, nf.last = false, false
+	nf.children, nf.lines, nf.abs, nf.rules = kids, nil, abs, nil
+	return nf
+}
+
+// copyUncached returns a copy of f without its memoized measures and cut
+// index: the copy holds other content.
+func copyUncached(f *frag) *frag {
 	nf := *f
-	nf.ovfOK, nf.cut = false, nil
+	nf.ovfOK, nf.laysOK, nf.cut = false, false, nil
+	return &nf
+}
+
+// appendCarrier appends to out the carrier of f, if any.
+func (c *cutter) appendCarrier(out []*frag, f *frag) []*frag {
+	if k := c.carrier(f); k != nil {
+		out = append(out, k)
+	}
+	return out
+}
+
+// atomCarriers appends to out the carriers of the atoms of the line ln, which
+// the window does not hold.
+func (c *cutter) atomCarriers(ln *lineFrag, out []*frag) []*frag {
+	for i := range ln.items {
+		if a := ln.items[i].atom; a != nil {
+			c.visits++
+			out = c.appendCarrier(out, a.f)
+		}
+	}
+	return out
+}
+
+// box returns the piece of the box f in the window, holding the given content.
+func (c *cutter) box(f *frag, children []*frag, lines []*lineFrag) *frag {
+	from, to := c.from, c.to
+	top, bottom := f.rect.Y, f.rect.Y+f.rect.H
+	nf := copyUncached(f)
 	nf.rect.Y = math.Max(top, from)
 	nf.rect.H = math.Max(0, math.Min(bottom, to)-nf.rect.Y)
 	nf.first = f.first && top >= from
 	// A box carried only for its overflow must not draw its bottom edge again.
 	nf.last = f.last && bottom <= to && inWindow(top, bottom, from, to)
-	nf.children, nf.lines, nf.abs = children, lines, cutLayers(f.abs, from, to)
+	nf.children, nf.lines, nf.abs = children, lines, cutLayers(f.abs, c.layerFrom, c.layerTo)
 	nf.rules = cutRules(f.rules, from, to)
-	return &nf
+	return nf
 }
 
 // tableRows lays out the rows of table b from lv.child on the current page. A
@@ -1018,7 +1129,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if at, err = l.cutEnd([]*frag{wrf}, work.from, at); err != nil {
 					return complete, nil, err
 				}
-				piece, err := l.chargedCut(wrf, work.from, at)
+				piece, err := l.chargedCut(wrf, work.from, at, work.from == 0, false)
 				if err != nil {
 					return complete, nil, err
 				}
@@ -1047,7 +1158,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if err := l.chargeCut(cur); err != nil {
 					return complete, nil, err
 				}
-				if piece, err = l.chargedCut(rf, cur.from, math.Inf(1)); err != nil {
+				if piece, err = l.chargedCut(rf, cur.from, math.Inf(1), false, true); err != nil {
 					return complete, nil, err
 				}
 				moveFrag(piece, inner.x-cur.x, -cur.from)
