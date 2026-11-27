@@ -397,6 +397,80 @@ func TestTextCutEnd(t *testing.T) {
 	}
 }
 
+func TestTextCutStart(t *testing.T) {
+	text := func(baseline, ascent float64) lineItem {
+		return lineItem{text: &display.Text{Baseline: baseline, Size: 16}, ascent: ascent}
+	}
+	line := func(y, h, baseline float64, items ...lineItem) *lineFrag {
+		return &lineFrag{rect: display.Rect{Y: y, H: h}, baseline: baseline, items: items}
+	}
+	// below is a line wholly below the start, looked at but never straddling.
+	below := line(320, 20, 335, text(335, 12))
+	cases := []struct {
+		name       string
+		lines      []*lineFrag
+		room, want float64
+	}{
+		{"nothing astride", []*lineFrag{below}, 300, 0},
+		{"deepest of the texts", []*lineFrag{line(280, 30, 305, text(305, 15)), line(270, 50, 310, text(310, 30)), below}, 300, 20},
+		{"over half the room", []*lineFrag{line(280, 30, 305, text(305, 15)), line(230, 100, 320, text(320, 80)), below}, 100, 10},
+		{"glyph taller than the room", []*lineFrag{line(260, 150, 400, text(400, 130)), below}, 100, 0},
+		{"NaN top", []*lineFrag{line(280, 30, 305, text(305, math.NaN())), below}, 300, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, visits := textCutStart(&frag{lines: c.lines}, 300, c.room, 300)
+			if got != c.want {
+				t.Errorf("depth %v, want %v", got, c.want)
+			}
+			if visits < 1 {
+				t.Errorf("%d visits, want the line below the start", visits)
+			}
+		})
+	}
+}
+
+// cutStart charges what textCutStart looks at to Work, and looks at nothing
+// in a scratch layout or at the start of the fragments.
+func TestCutStartChargesWork(t *testing.T) {
+	var lines []*lineFrag
+	for i := range 40 {
+		y := 290 + float64(i)
+		item := lineItem{text: &display.Text{Baseline: y + 14, Size: 16}, ascent: 12}
+		lines = append(lines, &lineFrag{rect: display.Rect{Y: y, H: 18}, baseline: y + 14, items: []lineItem{item}})
+	}
+	cases := []struct {
+		name       string
+		unbounded  bool
+		from, want float64
+		charged    bool
+	}{
+		{"scratch layout", true, 300, 0, false},
+		{"start of the fragments", false, 0, 0, false},
+		{"resumed", false, 300, 8, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			l := &layouter{b: testBudget(nil), bottom: 300, pageH: 300, unbounded: c.unbounded}
+			got, err := l.cutStart([]*frag{{lines: lines}}, c.from, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("lift %v, want %v", got, c.want)
+			}
+			_, visits := textCutStart(&frag{lines: lines}, c.from, 300, 300)
+			want := int64(0)
+			if c.charged {
+				want = visits
+			}
+			if used := l.b.Used(budget.Work); used != want || c.charged && used == 0 {
+				t.Errorf("Work %d, want %d", used, want)
+			}
+		})
+	}
+}
+
 // overlapGlyphs is a flex item of n lines whose glyphs overlap the lines above
 // (a line-height of 0.4 at 30 px), so that every page break goes through a
 // pile of glyphs.

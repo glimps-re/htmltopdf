@@ -458,6 +458,28 @@ func textCutEnd(f *frag, from, to, floor, page float64) (float64, int64) {
 	return end, visits
 }
 
+// textCutStart returns how far below the page top a window resuming f at from
+// starts, so that the texts the previous end cut through (baseline at or past
+// from, glyphs starting above it) are drawn whole: the depth of their highest
+// glyph top above from, 0 when there is none. room is the height left on the
+// page: a text deeper than half of it stays cut, so that the window keeps half
+// of the page, and so does a glyph taller than room, cut whatever the start
+// (as in textCutEnd). The count returned, for Work, is the items looked at in
+// the page below from.
+func textCutStart(f *frag, from, room, page float64) (float64, int64) {
+	// A pile of overlapping lines has no end between glyphs: the floor of
+	// textCutEnd then cuts through some, and their tops land here, above from.
+	var cands []straddle
+	visits := collectStraddles(f, from, from, page, &cands)
+	depth := 0.0
+	for _, c := range cands {
+		if d := from - c.top; d <= room/2 && c.baseline-c.top <= room {
+			depth = math.Max(depth, d)
+		}
+	}
+	return depth, visits
+}
+
 // straddle is a text that a window end can go through: the top of its glyphs,
 // lo the lowest end above which it does not straddle (its glyph top or its line
 // box top, the lower), and its baseline.

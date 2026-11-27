@@ -184,7 +184,7 @@ func (l *layouter) sliceLine(f *frag, ln *lineOut, inner cbox, align style.TextA
 	whole := &frag{lines: []*lineFrag{lf}}
 	stop = l.bottom
 	if end > stop+cutEps {
-		if stop, err = l.cutEnd([]*frag{whole}, l.y, stop); err != nil {
+		if stop, err = l.cutEnd([]*frag{whole}, l.y, stop, 0); err != nil {
 			return false, stop, err
 		}
 	}

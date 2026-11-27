@@ -1093,6 +1093,11 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 			cur = &rowState{idx: i, rf: rf, x: inner.x, ext: l.rowExtent(rf, consumed)}
 		}
 		tl.cur = nil
+		var lift float64
+		if lift, err = l.cutStart([]*frag{rf}, cur.from, l.y); err != nil {
+			return complete, nil, err
+		}
+		l.y += lift
 		ext := cur.ext
 		need := rowNeed(row, ext-cur.from, sv, i == len(rows)-1)
 		work, wrf, wconsumed, wext := cur, rf, consumed, ext
@@ -1111,9 +1116,11 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 			cut, at := l.chooseCut(row, work, placed, placedBody, emptyAtEntry, sv)
 			switch {
 			case cut == cutNothing:
+				l.y -= lift
 				delete(l.tables, b)
 				return nothing, nil, nil
 			case cut == cutBreak:
+				l.y -= lift
 				l.pend, l.truncate = margins{}, true
 				if work.from > 0 {
 					tl.cur = work
@@ -1126,7 +1133,7 @@ func (l *layouter) tableRows(b *box.Box, f *frag, lv level, inner cbox, decor st
 				if err := l.chargeCut(work); err != nil {
 					return complete, nil, err
 				}
-				if at, err = l.cutEnd([]*frag{wrf}, work.from, at); err != nil {
+				if at, err = l.cutEnd([]*frag{wrf}, work.from, at, lift); err != nil {
 					return complete, nil, err
 				}
 				piece, err := l.chargedCut(wrf, work.from, at, work.from == 0, false)

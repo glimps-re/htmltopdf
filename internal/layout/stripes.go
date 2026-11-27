@@ -157,16 +157,15 @@ func (l *layouter) chargedCut(f *frag, from, to float64, first, last bool) (*fra
 
 // cutEnd is textCutEnd for the fragments frags cut together in the window
 // [from, to): their common end, which leaves no text of any of them astride it
-// above the middle of the window.
+// above the middle of the window. lift is the room above the window that its
+// start left to the glyphs cut by the previous end (see cutStart): the middle
+// is that of the window and lift, so that every page still takes half of it.
 //
 // What it looks at is charged to Work.
-func (l *layouter) cutEnd(frags []*frag, from, to float64) (float64, error) {
-	page := l.pageH
-	if page <= 0 {
-		page = to - from
-	}
+func (l *layouter) cutEnd(frags []*frag, from, to, lift float64) (float64, error) {
+	page := l.cutPage(to - from)
 	// The floor comes from the whole window: it must not halve with every pass.
-	floor := from + math.Max((to-from)/2, cutEps)
+	floor := from + math.Max((to-from+math.Min(lift, to-from))/2, cutEps)
 	for changed := true; changed; {
 		changed = false
 		for _, f := range frags {
@@ -180,6 +179,39 @@ func (l *layouter) cutEnd(frags []*frag, from, to float64) (float64, error) {
 		}
 	}
 	return to, nil
+}
+
+// cutStart is textCutStart for the fragments frags resumed together at from,
+// with the room left on the page below the cursor y: how far below y their
+// window starts. Texts deeper than half of the room are left cut, not moved,
+// so that every page still takes half of it. 0 in a scratch layout, which is
+// never cut, and at the start of the fragments.
+//
+// What it looks at is charged to Work.
+func (l *layouter) cutStart(frags []*frag, from, y float64) (float64, error) {
+	room := l.bottom - y
+	if l.unbounded || from <= 0 || room <= 0 {
+		return 0, nil
+	}
+	page := l.cutPage(room)
+	depth := 0.0
+	for _, f := range frags {
+		d, visits := textCutStart(f, from, room, page)
+		if err := l.b.Charge(budget.Work, visits); err != nil {
+			return 0, err
+		}
+		depth = math.Max(depth, d)
+	}
+	return depth, nil
+}
+
+// cutPage is how far below a window the cut looks for glyphs: the page area
+// height, or fallback without a page.
+func (l *layouter) cutPage(fallback float64) float64 {
+	if l.pageH <= 0 {
+		return fallback
+	}
+	return l.pageH
 }
 
 // stripeExtent is the extent of band s for the fit and slice tests: its height,
@@ -220,6 +252,11 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 		if placed > 0 {
 			y = clampCoord(y + gap)
 		}
+		lift, err := l.cutStart(s.frags, off, y)
+		if err != nil {
+			return complete, nil, err
+		}
+		y += lift
 		top := y - off
 		ext := l.stripeExtent(s)
 		if !l.unbounded && y+ext-off > l.bottom+cutEps {
@@ -232,7 +269,7 @@ func (l *layouter) placeStripes(f *frag, lv level, n int, gap float64, lay func(
 			}
 			// A band taller than an empty page: the part that fits goes here.
 			l.b.Warn(budget.WarnClamped, "flex or grid line sliced")
-			end, err := l.cutEnd(s.frags, off, off+l.bottom-y)
+			end, err := l.cutEnd(s.frags, off, off+l.bottom-y, lift)
 			if err != nil {
 				return complete, nil, err
 			}
