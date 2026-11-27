@@ -33,8 +33,8 @@
 // and the elapsed time. Every limit has a default (see DefaultLimits); a render
 // that crosses one stops with a *LimitError, which matches ErrLimit. The limits
 // are the only protection against hostile input, so they should be lowered, not
-// raised, for untrusted documents. Memory use is bounded by them: pages are laid
-// out and written one at a time.
+// raised, for untrusted documents. MaxWork counts work, Timeout bounds time.
+// Memory use is bounded by them: pages are laid out and written one at a time.
 //
 // # Degradation
 //
@@ -51,11 +51,11 @@
 // nothing else is ever fetched or read. Each image has at most 16384 pixels per
 // side and 4194304 pixels in all; a render holds at most 64 distinct images
 // (identical src values are one image) and 16777216 pixels in all. Their
-// encoded bytes count against MaxInputBytes and their decoding against MaxWork.
-// Every image is decoded and re-encoded (PNG losslessly, JPEG at quality 95): no
-// byte of the input image reaches the PDF. A rejected image warns
-// WarnImageRejected and its alt text is drawn instead; one whose data fails to
-// decode (corrupt) keeps its box, blank.
+// encoded bytes count against MaxInputBytes and their decoding against MaxWork
+// (see Limits.MaxWork). Every image is decoded and re-encoded (PNG losslessly,
+// JPEG at quality 95): no byte of the input image reaches the PDF. A rejected
+// image warns WarnImageRejected and its alt text is drawn instead; one whose
+// data fails to decode (corrupt) keeps its box, blank.
 //
 // With RenderTemplate, html/template replaces a data: URL in src with
 // "#ZgotmplZ" unless the value has type template.URL: convert only image URLs
@@ -71,5 +71,6 @@
 // Options.Fonts and are trusted operator configuration.
 //
 // Only 64-bit platforms are supported: the PDF writer and the resource limits use
-// int values beyond 2^31.
+// int values beyond 2^31. The package cross-compiles for Windows (amd64 and
+// arm64, checked in CI); it is tested on Linux.
 package htmltopdf

@@ -27,4 +27,5 @@ fmt.Println(res.Pages, "page")
 `.github/workflows/go.yml` is the source of truth for triggers and versions. CI runs
 `go test ./...` without the race detector and needs no secret. The race suite
 (`go test -race ./...`) is a local gate: it takes minutes per package, so give it
-`-timeout 30m`.
+`-timeout 30m`. The workflow also cross-builds and vets for windows/amd64 and
+windows/arm64; tests run on Linux only.

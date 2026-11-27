@@ -111,10 +111,14 @@ type Limits struct {
 	// it reports Max = 16 MiB.
 	MaxOutputBytes int64
 	// MaxWork bounds the abstract work units a render may spend; default
-	// 100 000 000. A unit costs at most about 20 ns and the default is at least
-	// 20 times what the largest corpus document needs; docs/ lists what is charged.
+	// 100 000 000. It is a count, not a time bound: the cost of a unit varies
+	// by stage, so Timeout bounds the time. Decoding images is charged here: a
+	// document with many large images can approach the default; callers that
+	// expect such documents can raise it.
 	MaxWork int64
-	// Timeout is the wall-clock bound applied on top of ctx; default 60 s.
+	// Timeout is the wall-clock bound applied on top of ctx; default 60 s. It
+	// bounds the render's wall-clock time together with ctx; MaxWork is not a
+	// time bound.
 	Timeout time.Duration
 }
 
