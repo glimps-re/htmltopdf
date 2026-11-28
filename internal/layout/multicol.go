@@ -318,6 +318,9 @@ func (l *layouter) multicol(b *box.Box, f *frag, in []level, lv level, inner cbo
 		l.dropParagraph()
 	}()
 
+	colRoom := l.colRoom
+	l.colRoom = room
+	defer func() { l.colRoom = colRoom }()
 	apart := l.unbounded
 	glyphs := l.b.Used(budget.Glyphs)
 	pass, err := l.fillColumns(b, in, lv, resuming, inner, mc, y0, room, decor)

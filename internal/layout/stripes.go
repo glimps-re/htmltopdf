@@ -183,9 +183,9 @@ func (l *layouter) cutEnd(frags []*frag, from, to, lift float64) (float64, error
 
 // cutStart is textCutStart for the fragments frags resumed together at from,
 // with the room left on the page below the cursor y: how far below y their
-// window starts. Texts deeper than half of the room are left cut, not moved,
-// so that every page still takes half of it. 0 in a scratch layout, which is
-// never cut, and at the start of the fragments.
+// window starts, 0 in a scratch layout and at the start of the fragments.
+// Texts deeper than half of the room are left cut. It marks the layout sliced
+// when it leaves cut a text that a taller column (up to colRoom) would hold.
 //
 // What it looks at is charged to Work.
 func (l *layouter) cutStart(frags []*frag, from, y float64) (float64, error) {
@@ -196,11 +196,12 @@ func (l *layouter) cutStart(frags []*frag, from, y float64) (float64, error) {
 	page := l.cutPage(room)
 	depth := 0.0
 	for _, f := range frags {
-		d, visits := textCutStart(f, from, room, page)
+		d, cutH, visits := textCutStart(f, from, room, page)
 		if err := l.b.Charge(budget.Work, visits); err != nil {
 			return 0, err
 		}
 		depth = math.Max(depth, d)
+		l.sliced = l.sliced || cutH > 0 && cutH <= l.colRoom
 	}
 	return depth, nil
 }

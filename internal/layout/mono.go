@@ -458,26 +458,28 @@ func textCutEnd(f *frag, from, to, floor, page float64) (float64, int64) {
 	return end, visits
 }
 
-// textCutStart returns how far below the page top a window resuming f at from
-// starts, so that the texts the previous end cut through (baseline at or past
-// from, glyphs starting above it) are drawn whole: the depth of their highest
-// glyph top above from, 0 when there is none. room is the height left on the
-// page: a text deeper than half of it stays cut, so that the window keeps half
-// of the page, and so does a glyph taller than room, cut whatever the start
-// (as in textCutEnd). The count returned, for Work, is the items looked at in
-// the page below from.
-func textCutStart(f *frag, from, room, page float64) (float64, int64) {
+// textCutStart returns, for a window resuming f at from, the texts the previous
+// end cut through (baseline at or past from, glyphs starting above it): depth,
+// how far below the page top the window starts so that they are drawn whole
+// (the depth of their highest glyph top above from, 0 when there is none);
+// cutH, the height of the tallest text left cut, 0 when there is none; visits,
+// for Work, the items looked at in the page below from. room is the height
+// left on the page: a text deeper than half of it, or taller than it, is left
+// cut.
+func textCutStart(f *frag, from, room, page float64) (depth, cutH float64, visits int64) {
 	// A pile of overlapping lines has no end between glyphs: the floor of
 	// textCutEnd then cuts through some, and their tops land here, above from.
 	var cands []straddle
-	visits := collectStraddles(f, from, from, page, &cands)
-	depth := 0.0
+	visits = collectStraddles(f, from, from, page, &cands)
 	for _, c := range cands {
-		if d := from - c.top; d <= room/2 && c.baseline-c.top <= room {
+		d := from - c.top
+		if d <= room/2 && c.baseline-c.top <= room {
 			depth = math.Max(depth, d)
+		} else if d > cutEps {
+			cutH = math.Max(cutH, c.baseline-c.top)
 		}
 	}
-	return depth, visits
+	return depth, cutH, visits
 }
 
 // straddle is a text that a window end can go through: the top of its glyphs,

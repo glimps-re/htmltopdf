@@ -410,18 +410,19 @@ func TestTextCutStart(t *testing.T) {
 		name       string
 		lines      []*lineFrag
 		room, want float64
+		cutH       float64
 	}{
-		{"nothing astride", []*lineFrag{below}, 300, 0},
-		{"deepest of the texts", []*lineFrag{line(280, 30, 305, text(305, 15)), line(270, 50, 310, text(310, 30)), below}, 300, 20},
-		{"over half the room", []*lineFrag{line(280, 30, 305, text(305, 15)), line(230, 100, 320, text(320, 80)), below}, 100, 10},
-		{"glyph taller than the room", []*lineFrag{line(260, 150, 400, text(400, 130)), below}, 100, 0},
-		{"NaN top", []*lineFrag{line(280, 30, 305, text(305, math.NaN())), below}, 300, 0},
+		{"nothing astride", []*lineFrag{below}, 300, 0, 0},
+		{"deepest of the texts", []*lineFrag{line(280, 30, 305, text(305, 15)), line(270, 50, 310, text(310, 30)), below}, 300, 20, 0},
+		{"over half the room", []*lineFrag{line(280, 30, 305, text(305, 15)), line(230, 100, 320, text(320, 80)), below}, 100, 10, 80},
+		{"glyph taller than the room", []*lineFrag{line(260, 150, 400, text(400, 130)), below}, 100, 0, 130},
+		{"NaN top", []*lineFrag{line(280, 30, 305, text(305, math.NaN())), below}, 300, 0, 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, visits := textCutStart(&frag{lines: c.lines}, 300, c.room, 300)
-			if got != c.want {
-				t.Errorf("depth %v, want %v", got, c.want)
+			got, cutH, visits := textCutStart(&frag{lines: c.lines}, 300, c.room, 300)
+			if got != c.want || cutH != c.cutH {
+				t.Errorf("depth %v cutH %v, want %v %v", got, cutH, c.want, c.cutH)
 			}
 			if visits < 1 {
 				t.Errorf("%d visits, want the line below the start", visits)
@@ -459,7 +460,7 @@ func TestCutStartChargesWork(t *testing.T) {
 			if got != c.want {
 				t.Errorf("lift %v, want %v", got, c.want)
 			}
-			_, visits := textCutStart(&frag{lines: lines}, c.from, 300, 300)
+			_, _, visits := textCutStart(&frag{lines: lines}, c.from, 300, 300)
 			want := int64(0)
 			if c.charged {
 				want = visits

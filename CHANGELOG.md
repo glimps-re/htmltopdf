@@ -43,6 +43,9 @@ uses [Semantic Versioning](https://semver.org/).
   would cut through, including piles of overlapping lines from a
   `line-height` below the font size (except a glyph taller than half the room left
   on the page, which can still be cut).
+- Balanced columns are never shorter than a line of a table row or flex or grid
+  band that they slice: the line is no longer drawn above the top of its column
+  (or of the page), where it was silently lost.
 - Positioned text (`position: absolute` or `relative`) inside a line, table row or
   flex or grid band that a page break slices is no longer dropped; it is drawn, or
   reported as `text-off-page` when it lies outside the page.

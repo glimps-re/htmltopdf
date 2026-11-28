@@ -65,6 +65,10 @@ type layouter struct {
 	// pushes past the bottom of its column moves to the next one only if it
 	// fits there.
 	colTop float64
+	// colRoom is the room of the multi-column container being laid out, 0
+	// outside one: no column it balances is taller, so a text cut that is
+	// taller cannot be avoided by balancing.
+	colRoom float64
 	// sliced is set when a box with break-inside: avoid is split because it does
 	// not fit a page (or a column): a column height that does that is too short.
 	sliced bool
