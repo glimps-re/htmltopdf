@@ -1,0 +1,3 @@
+go test fuzz v1
+string("0<A stYle=displAY:fle\xff\xff\x7f\xffign-items:BAseline ><spAn stYle='font-siZe:170pC;mArgin:Auto 0pC Auto Auto'>0</spAn><spAn stYle=mArgin-left:Auto ></s\x00\x02n>0")
+string("\x7f")

@@ -307,6 +307,12 @@ func (l *layouter) primaryFace(st *style.Computed) (*text.Face, float32) {
 // from its top, out of sight.
 const maxRiseFraction = 0.25
 
+// tallBaselineFraction is the least depth, in page area heights, of the
+// baseline below the top of a line holding text taller than a page area: half
+// a page shows the bottom half of the tall glyphs and leaves the other half
+// for the descents of the line.
+const tallBaselineFraction = 0.5
+
 // clampRise returns the offset r clamped to ±maxRiseFraction of the page area
 // height, or to the length clamp without a page.
 func (l *layouter) clampRise(r float64) float64 {
@@ -733,14 +739,40 @@ func (l *layouter) finishLine(p *paragraph, ln *lineOut, segs []seg, strip bool)
 // rises of its spans, still add up to more than a page, which would put the
 // text out of sight on a page that clips the line. A line with atoms is
 // sliced instead.
+//
+// Items that do not fit a page area, or whose extents together do not, would
+// still push the baseline, and the other text of the line, below the page:
+// such a line keeps the extent of the items that fit, its baseline at least
+// tallBaselineFraction of a page area below its top. The glyphs sticking out
+// of it are cut; the items marked clip, whose boxes and links would cover the
+// lines around, are drawn within the line box.
 func (l *layouter) trimLeading(ln *lineOut) {
 	ex := ln.height() - l.pageH
 	if l.pageH <= 0 || ex <= 0 || ln.hasAtom() {
 		return
 	}
 	above, below := math.Inf(-1), math.Inf(-1)
+	tall := false
 	for i := range ln.items {
-		above, below = math.Max(above, ln.items[i].ascent), math.Max(below, ln.items[i].descent)
+		it := &ln.items[i]
+		if it.ascent > l.pageH || it.descent > l.pageH || it.ascent+it.descent > l.pageH {
+			tall = true
+			continue
+		}
+		above, below = math.Max(above, it.ascent), math.Max(below, it.descent)
+	}
+	if above+below > l.pageH {
+		above = math.Max(l.pageH-below, tallBaselineFraction*l.pageH)
+		tall = true
+	}
+	if tall {
+		ln.top = math.Min(ln.top, math.Max(above, tallBaselineFraction*l.pageH))
+		ln.bottom = math.Min(ln.bottom, math.Max(below, 0))
+		for i := range ln.items {
+			it := &ln.items[i]
+			it.clip = it.ascent > ln.top || it.descent > ln.bottom
+		}
+		return
 	}
 	if d := math.Min(ex, ln.top-above); d > 0 {
 		ln.top -= d

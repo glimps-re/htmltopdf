@@ -6,7 +6,7 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-11-27
+## [0.2.0] - 2026-11-28
 
 ### Added
 - Raster images: `<img>` whose `src` is a base64 `data:` URL holding a PNG or a
@@ -37,9 +37,10 @@ uses [Semantic Versioning](https://semver.org/).
 - An inline box (inline-block, svg, image) taller than a page moves to the next
   page once and is clipped there, instead of adding pages until `MaxPages`.
 - The text of a line is no longer pushed off the page by the margins or the
-  `vertical-align` of an inline box, by `line-height`, or by `vertical-align` on
-  text; a page break inside a flex or grid line, a table row or columns ends above
-  the text it would cut through, including piles of overlapping lines from a
+  `vertical-align` of an inline box, by `line-height`, by `vertical-align` on
+  text, or by a font or inline box taller than the page on the same line; a page
+  break inside a flex or grid line, a table row or columns ends above the text it
+  would cut through, including piles of overlapping lines from a
   `line-height` below the font size (except a glyph taller than half the room left
   on the page, which can still be cut).
 - Positioned text (`position: absolute` or `relative`) inside a line, table row or
@@ -62,6 +63,10 @@ uses [Semantic Versioning](https://semver.org/).
 - The leading of `line-height` is capped so that a line box is at most one page
   area tall, and `vertical-align: <length>` is clamped to ±¼ of the page area
   height (nested offsets summed), so that the text of a line stays on a page.
+- A font or inline box taller than the page area is cut to keep the rest of its
+  line on the page: its glyphs may overlap the lines above them; the part that
+  crosses the page edge is cut and reported as `text-off-page`; its background,
+  border and link stay within its line.
 
 ### Known issues
 - Text inside an absolutely positioned or fixed box can still be pushed below the

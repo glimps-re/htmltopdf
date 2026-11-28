@@ -86,4 +86,7 @@ type lineItem struct {
 	margin float64
 	// atom is set for an itemAtom.
 	atom *atomBox
+	// clip limits the background, border and link of the item to its line
+	// box: it sticks out of a line cut to a page area (see trimLeading).
+	clip bool
 }

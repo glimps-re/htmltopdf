@@ -249,7 +249,8 @@ func emitInlineBoxes(ln *lineFrag, out display.List) display.List {
 }
 
 func inlineBox(out display.List, st *style.Computed, ln *lineFrag, x0, x1 float64, hasStart, hasEnd bool, it *lineItem) display.List {
-	r := display.Rect{X: x0, Y: ln.baseline - it.ascent, W: x1 - x0, H: it.ascent + it.descent}
+	up, down := it.extents(ln)
+	r := display.Rect{X: x0, Y: ln.baseline - up, W: x1 - x0, H: up + down}
 	out = appendBackground(out, st, r, display.Radii{})
 	widths := [4]float64{
 		st.Border[style.Top].Width, st.Border[style.Right].Width, st.Border[style.Bottom].Width, st.Border[style.Left].Width,
@@ -261,6 +262,16 @@ func inlineBox(out display.List, st *style.Computed, ln *lineFrag, x0, x1 float6
 		widths[style.Right] = 0
 	}
 	return appendBorder(out, st, r, display.Radii{}, widths)
+}
+
+// extents returns how far the box of the item reaches above and below the
+// baseline of its line ln, within the line box when the item is marked clip.
+func (it *lineItem) extents(ln *lineFrag) (up, down float64) {
+	up, down = it.ascent, it.descent
+	if it.clip {
+		up, down = math.Min(up, ln.baseline-ln.rect.Y), math.Min(down, ln.rect.Bottom()-ln.baseline)
+	}
+	return up, down
 }
 
 // emitLinks adds one link per run of consecutive items with the same target.
@@ -281,7 +292,8 @@ func emitLinks(ln *lineFrag, out display.List) display.List {
 	}
 	for i := range ln.items {
 		it := &ln.items[i]
-		itHref, left, right, up, down := it.href, it.x, it.x+it.w, it.ascent, it.descent
+		up, down := it.extents(ln)
+		itHref, left, right := it.href, it.x, it.x+it.w
 		switch {
 		case it.kind == itemText:
 		case it.atom != nil && it.atom.f.box.Href != "":

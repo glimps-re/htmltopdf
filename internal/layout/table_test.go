@@ -341,32 +341,34 @@ func TestTableRowSplitsBetweenLines(t *testing.T) {
 	}
 }
 
-// A line taller than the page from its glyphs alone (line-height cannot make
-// it so: its leading is capped to the page) makes a row that is sliced.
+// A single line taller than the page makes a row that is sliced.
 func TestTableTallSingleLineRowIsSliced(t *testing.T) {
-	r := newRun(t, `<table style="width:400px"><tr><td style="font-size:2000px;line-height:1">x</table><p>after</p>`, opts{css: tableDoc})
+	r := newRun(t, `<table style="width:400px"><tr><td>x<span style="display:inline-block;width:10px;height:400px;vertical-align:150px"></span><span style="display:inline-block;width:10px;height:400px;vertical-align:-150px"></span></table><p>after</p>`, opts{css: tableDoc})
 	pages := r.all(t)
-	if len(pages) < 4 {
-		t.Fatalf("%d pages for a 2000 px row on 600 px pages", len(pages))
+	if len(pages) < 2 {
+		t.Fatalf("%d pages for a 700 px row on 600 px pages", len(pages))
 	}
-	baselines := 0
+	drawn := 0
 	for _, pg := range pages {
+		drawn += countText(pg, "x")
 		for _, td := range fragsOf([]*Page{pg}, "td") {
-			baselines += len(td.lines)
 			if td.rect.H > 600.01 {
 				t.Errorf("slice of %v px on a 600 px page", td.rect.H)
 			}
 		}
 	}
-	if baselines != 1 {
-		t.Errorf("the line is drawn %d times, want once", baselines)
+	if drawn != 1 {
+		t.Errorf("the text of the line is drawn %d times, want once", drawn)
+	}
+	if lost := TextLost(r.root, pages); lost != "" {
+		t.Errorf("text lost: %s", lost)
 	}
 	if ps := fragsOf(pages[len(pages)-1:], "p"); len(ps) != 1 {
 		t.Errorf("the paragraph after the table is not on the last page")
 	}
 	found := false
 	for _, w := range warningList(r.b) {
-		found = found || w.Code == budget.WarnClamped
+		found = found || w.Code == budget.WarnClamped && w.Detail == "table row sliced"
 	}
 	if !found {
 		t.Error("no warning for the sliced row")
